@@ -205,17 +205,18 @@ git checkout -- .
 skillshare pull
 ```
 
-### `merge conflicts`
+### `pull stopped: this machine and the remote both changed ...`
 
-**Cause:** 동일한 파일이 여러 머신에서 수정되었습니다.
+**Cause:** 동일한 파일이 두 머신에서 수정되었습니다. `pull`이 병합을 되돌렸으므로 저장소는 변경되지 않았습니다. `.metadata.json`만의 충돌은 자동으로 해결되므로 이 오류의 원인이 되지 않습니다.
 
 **Solution:**
 ```bash
 cd ~/.config/skillshare/skills
-git status                    # 충돌한 파일 확인
-# 충돌을 해결하기 위해 파일 수정
+git pull --no-rebase          # 병합을 다시 실행하고 충돌을 남겨 둠
+# 충돌한 파일 수정
 git add .
-git commit -m "Resolve conflicts"
+git commit --no-edit
+skillshare push
 skillshare sync
 ```
 
@@ -404,9 +405,9 @@ SSL 검증 비활성화는 보안 위험입니다. Option 1 또는 2를 사용�
 
 ## Update Errors
 
-### `git failed: Need to specify how to reconcile divergent branches`
+### `pull stopped: this machine and the remote both changed ...` (tracked 저장소)
 
-**Cause:** remote 브랜치가 로컬 tracked 복사본과 갈라졌습니다.
+**Cause:** tracked 저장소에 remote와 충돌하는 로컬 커밋이 있습니다. `update`는 갈라진 히스토리를 병합하지만, 충돌하는 파일이 있으면 중단되고 병합이 되돌려집니다.
 
 **Solution:**
 ```bash
@@ -415,7 +416,9 @@ skillshare update --force
 
 # 또는 수동으로 해결
 cd ~/.config/skillshare/skills/_repo-name
-git pull --rebase
+git pull --no-rebase
+# 충돌한 파일을 수정한 뒤
+git add . && git commit --no-edit
 ```
 
 :::tip

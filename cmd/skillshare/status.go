@@ -200,7 +200,7 @@ func dirExists(path string) bool {
 func printExtrasStatus(extras []config.ExtraConfig, sourceDirFn func(config.ExtraConfig) string) {
 	for _, extra := range extras {
 		sourceDir := sourceDirFn(extra)
-		files, err := sync.DiscoverExtraFiles(sourceDir)
+		files, err := sync.DiscoverExtraSource(sourceDir, extra.File)
 		if err != nil {
 			ui.Warning("  %s: source not found", extra.Name)
 			continue

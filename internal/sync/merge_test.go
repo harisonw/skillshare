@@ -492,6 +492,31 @@ func TestPruneOrphanLinks_ManifestCleanedAfterPrune(t *testing.T) {
 	}
 }
 
+func TestPruneOrphanLinks_HiddenManagedEntryPruned(t *testing.T) {
+	src, tgt := setupMergeTest(t, "alpha", ".system/example")
+	target := config.TargetConfig{Path: tgt, Mode: "merge"}
+
+	if _, err := SyncTargetMerge("test", target, src, false, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(filepath.Join(src, ".system"))
+
+	if _, err := PruneOrphanLinks(tgt, src, nil, nil, "test", "", false, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Lstat(filepath.Join(tgt, ".system__example")); !os.IsNotExist(err) {
+		t.Error(".system__example should have been pruned from target")
+	}
+	m, err := ReadManifest(tgt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.Managed[".system__example"]; ok {
+		t.Error(".system__example should have been removed from manifest after prune")
+	}
+}
+
 func TestPruneOrphanLinks_NonExistentTarget(t *testing.T) {
 	result, err := PruneOrphanLinks("/nonexistent", "/nonexistent/src", nil, nil, "test", "", false, false)
 	if err != nil {

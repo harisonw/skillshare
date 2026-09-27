@@ -458,7 +458,7 @@ func (m extrasListTUIModel) renderExtrasDetail(e extrasListEntry) string {
 			case "synced":
 				icon = "✓"
 				style = theme.Success()
-			case "drift":
+			case "drift", "modified":
 				icon = "△"
 				style = theme.Warning()
 				hasDrift = true
@@ -492,7 +492,7 @@ func (m extrasListTUIModel) renderExtrasDetail(e extrasListEntry) string {
 		b.WriteString("\n")
 		b.WriteString(theme.Title().Render("Files"))
 		b.WriteString("\n")
-		files := discoverExtraFileNames(e.SourceDir)
+		files := discoverExtraFileNames(e.SourceDir, e.File)
 		maxShow := 10
 		for i, f := range files {
 			if i >= maxShow {
@@ -510,8 +510,8 @@ func (m extrasListTUIModel) renderExtrasDetail(e extrasListEntry) string {
 	return b.String()
 }
 
-func discoverExtraFileNames(sourceDir string) []string {
-	files, err := sync.DiscoverExtraFiles(sourceDir)
+func discoverExtraFileNames(sourceDir, file string) []string {
+	files, err := sync.DiscoverExtraSource(sourceDir, file)
 	if err != nil {
 		return nil
 	}
@@ -804,7 +804,7 @@ func (m extrasListTUIModel) renderTargetMenu() string {
 
 // ─── Mode Picker ─────────────────────────────────────────────────────
 
-var extrasSyncModes = config.ExtraSyncModes
+var extrasSyncModes = config.ValidSyncModes // directory modes; import is set in config for single-file extras
 
 func (m extrasListTUIModel) openModePicker(extraName string, t extrasTargetInfo) (tea.Model, tea.Cmd) {
 	m.showModePicker = true
@@ -1027,7 +1027,7 @@ func (m extrasListTUIModel) doSync(name, targetPath string) (string, error) {
 				return "", fmt.Errorf("sync %s: %w", t.Path, specErr)
 			}
 		}
-		_, err := sync.SyncExtra(sourceDir, resolved, mode, false, false, t.Flatten, projectRoot, spec)
+		_, err := syncExtraTarget(*extra, t, sourceDir, resolved, mode, false, false, projectRoot, spec)
 		if err != nil {
 			return "", fmt.Errorf("sync %s: %w", t.Path, err)
 		}
@@ -1042,6 +1042,9 @@ func (m extrasListTUIModel) doCollect(name, targetPath string) (string, error) {
 		return "", err
 	}
 
+	if extra.File != "" {
+		return "", errSingleFileCollect
+	}
 	sourceDir := m.sourceFunc(*extra)
 	collected := 0
 	for _, t := range targets {

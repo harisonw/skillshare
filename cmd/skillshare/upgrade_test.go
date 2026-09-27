@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,12 +40,12 @@ func TestNeedsSudo_NonExistentDir(t *testing.T) {
 	}
 }
 
-func TestReexecWithSudo_NoSudoInPath(t *testing.T) {
+func TestUpgradeBinaryWithSudo_NoSudoInPath(t *testing.T) {
 	origPath := os.Getenv("PATH")
 	t.Setenv("PATH", "")
 	defer os.Setenv("PATH", origPath)
 
-	err := reexecWithSudo("/usr/local/bin/skillshare")
+	err := upgradeBinaryWithSudo("/usr/local/bin/skillshare", "0.22.0")
 	if err == nil {
 		t.Fatal("expected error when sudo is not in PATH")
 	}
@@ -53,7 +54,7 @@ func TestReexecWithSudo_NoSudoInPath(t *testing.T) {
 	}
 }
 
-func TestReexecWithSudo_ExecArgs(t *testing.T) {
+func TestUpgradeBinaryWithSudo_ExecArgs(t *testing.T) {
 	// Capture what execFunc receives
 	var gotPath string
 	var gotArgs []string
@@ -76,12 +77,12 @@ func TestReexecWithSudo_ExecArgs(t *testing.T) {
 	os.WriteFile(fakeSudo, []byte("#!/bin/sh\n"), 0755)
 	t.Setenv("PATH", dir)
 
-	// Override os.Args for the test
+	// The user's flags must not reach root: only the binary replacement runs there.
 	origArgs := os.Args
 	os.Args = []string{"skillshare", "upgrade", "--force"}
 	defer func() { os.Args = origArgs }()
 
-	err := reexecWithSudo("/usr/local/bin/skillshare")
+	err := upgradeBinaryWithSudo("/usr/local/bin/skillshare", "0.22.0")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestReexecWithSudo_ExecArgs(t *testing.T) {
 	if gotPath != fakeSudo {
 		t.Errorf("exec path = %q, want %q", gotPath, fakeSudo)
 	}
-	wantArgs := []string{"sudo", "/usr/local/bin/skillshare", "upgrade", "--force"}
+	wantArgs := []string{"sudo", "/usr/local/bin/skillshare", "upgrade", "--replace-binary=0.22.0"}
 	if len(gotArgs) != len(wantArgs) {
 		t.Fatalf("args = %v, want %v", gotArgs, wantArgs)
 	}
@@ -100,7 +101,7 @@ func TestReexecWithSudo_ExecArgs(t *testing.T) {
 	}
 }
 
-func TestReexecWithSudo_NonInteractiveWithoutTTY(t *testing.T) {
+func TestUpgradeBinaryWithSudo_NonInteractiveWithoutTTY(t *testing.T) {
 	var gotArgs []string
 	orig := execFunc
 	execFunc = func(_ string, argv []string, _ []string) error {
@@ -117,7 +118,7 @@ func TestReexecWithSudo_NonInteractiveWithoutTTY(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "sudo"), []byte("#!/bin/sh\n"), 0755)
 	t.Setenv("PATH", dir)
 
-	if err := reexecWithSudo("/usr/local/bin/skillshare"); err != nil {
+	if err := upgradeBinaryWithSudo("/usr/local/bin/skillshare", "0.22.0"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(gotArgs) < 2 || gotArgs[1] != "-n" {
@@ -125,7 +126,7 @@ func TestReexecWithSudo_NonInteractiveWithoutTTY(t *testing.T) {
 	}
 }
 
-func TestReexecWithSudo_PasswordNeededWithoutTTY(t *testing.T) {
+func TestUpgradeBinaryWithSudo_PasswordNeededWithoutTTY(t *testing.T) {
 	orig := execFunc
 	execFunc = func(string, []string, []string) error {
 		t.Error("must not exec sudo when it would need a password")
@@ -141,8 +142,26 @@ func TestReexecWithSudo_PasswordNeededWithoutTTY(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "sudo"), []byte("#!/bin/sh\nexit 1\n"), 0755)
 	t.Setenv("PATH", dir)
 
-	err := reexecWithSudo("/usr/local/bin/skillshare")
-	if err == nil || !strings.Contains(err.Error(), "sudo skillshare upgrade") {
-		t.Errorf("err = %v, want the terminal command hint", err)
+	err := upgradeBinaryWithSudo("/usr/local/bin/skillshare", "0.22.0")
+	if err == nil || !strings.Contains(err.Error(), "run in a terminal: skillshare upgrade") {
+		t.Errorf("err = %v, want the terminal command hint without a sudo prefix", err)
+	}
+}
+
+func TestUpgradeBinaryWithSudo_ChildFailureIsReturned(t *testing.T) {
+	orig := execFunc
+	execFunc = func(string, []string, []string) error { return errors.New("exit status 1") }
+	defer func() { execFunc = orig }()
+
+	origTTY := stdinIsTTY
+	stdinIsTTY = func() bool { return true }
+	defer func() { stdinIsTTY = origTTY }()
+
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "sudo"), []byte("#!/bin/sh\n"), 0755)
+	t.Setenv("PATH", dir)
+
+	if err := upgradeBinaryWithSudo("/usr/local/bin/skillshare", "0.22.0"); err == nil {
+		t.Error("expected the sudo child's failure to stop the upgrade")
 	}
 }

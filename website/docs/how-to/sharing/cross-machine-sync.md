@@ -177,7 +177,7 @@ skillshare pull
 
 **What happens:**
 ```
-git pull           # or fetch + reset on first pull
+git pull           # merges when both machines committed; fetch + merge or reset on first pull
 skillshare sync
 ```
 
@@ -238,12 +238,21 @@ git stash pop
 
 ### Merge conflicts
 
+When both machines committed, `pull` merges them. Conflicts in `.metadata.json` resolve automatically. A conflict in any other file stops the pull, undoes the merge, and names the files:
+
+```
+$ skillshare pull
+pull stopped: this machine and the remote both changed my-skill/SKILL.md; the merge was undone, resolve it with git in ~/.config/skillshare/skills
+```
+
+**Solution:**
 ```bash
 cd ~/.config/skillshare/skills
-git status                    # See conflicted files
-# Edit files to resolve
+git pull --no-rebase          # Redo the merge and keep the conflicts
+# Edit the conflicted files
 git add .
-git commit -m "Resolve conflicts"
+git commit --no-edit
+skillshare push
 skillshare sync
 ```
 

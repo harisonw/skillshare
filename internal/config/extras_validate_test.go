@@ -52,3 +52,9 @@ func TestValidateExtraName_NoDuplicate(t *testing.T) {
 		t.Errorf("ValidateExtraNameUnique(\"commands\", existing) = %v, want nil", err)
 	}
 }
+
+func TestValidateExtraName_CaseOnlyDifferenceIsDuplicate(t *testing.T) {
+	if err := ValidateExtraNameUnique("Rules", []ExtraConfig{{Name: "rules"}}); err == nil {
+		t.Error("ValidateExtraNameUnique(\"Rules\", [rules]) = nil, want error")
+	}
+}

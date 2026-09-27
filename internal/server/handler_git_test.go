@@ -436,6 +436,81 @@ func postPull(s *Server, body string) *httptest.ResponseRecorder {
 	return rr
 }
 
+func TestHandleGitStatus_ReportsBehindAfterFetch(t *testing.T) {
+	s, src := newTestServer(t)
+	initServerGitRepo(t, src)
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	testutil.RunGit(t, "", "init", "--bare", remote)
+	testutil.RunGit(t, src, "remote", "add", "origin", remote)
+	testutil.RunGit(t, src, "push", "-u", "origin", "HEAD")
+	pushRemoteFile(t, remote, "remote-skill/SKILL.md", "# remote\n")
+	testutil.RunGit(t, src, "fetch")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/git/status", nil)
+	rr := httptest.NewRecorder()
+	s.handler.ServeHTTP(rr, req)
+
+	var resp struct {
+		Behind int `json:"behind"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v (%s)", err, rr.Body.String())
+	}
+	if resp.Behind != 1 {
+		t.Fatalf("expected behind=1, got %d: %s", resp.Behind, rr.Body.String())
+	}
+}
+
+func TestHandlePush_RemoteAheadReportsPushRejected(t *testing.T) {
+	s, src := newTestServer(t)
+	initServerGitRepo(t, src)
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	testutil.RunGit(t, "", "init", "--bare", remote)
+	testutil.RunGit(t, src, "remote", "add", "origin", remote)
+	testutil.RunGit(t, src, "push", "-u", "origin", "HEAD")
+	pushRemoteFile(t, remote, "remote-skill/SKILL.md", "# remote\n")
+	addSkill(t, src, "local-skill")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/push", strings.NewReader(`{}`))
+	rr := httptest.NewRecorder()
+	s.handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict || !strings.Contains(rr.Body.String(), `"push_rejected"`) {
+		t.Fatalf("expected 409 push_rejected, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandlePull_PermissionDeniedLeavesTreeCleanAndNamesPath(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("test requires non-root user")
+	}
+	s, src := newTestServer(t)
+	initServerGitRepo(t, src)
+	addSkill(t, src, "skillshare")
+	testutil.RunGit(t, src, "add", "-A")
+	testutil.RunGit(t, src, "commit", "-m", "add skillshare")
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	testutil.RunGit(t, "", "init", "--bare", remote)
+	testutil.RunGit(t, src, "remote", "add", "origin", remote)
+	testutil.RunGit(t, src, "push", "-u", "origin", "HEAD")
+	pushRemoteFile(t, remote, ".metadata.json", "{}\n")
+	pushRemoteFile(t, remote, "skillshare/SKILL.md", "# newer\n")
+	// As left by a sudo upgrade: this user can no longer replace files here.
+	locked := filepath.Join(src, "skillshare")
+	if err := os.Chmod(locked, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+
+	rr := postPull(s, `{}`)
+	if !strings.Contains(rr.Body.String(), `"permission_denied"`) || !strings.Contains(rr.Body.String(), src) {
+		t.Fatalf("expected permission_denied naming %s, got %d: %s", src, rr.Code, rr.Body.String())
+	}
+	if status := testutil.RunGit(t, src, "status", "--porcelain", "-uall"); status != "" {
+		t.Fatalf("expected no pull residue to block the next pull, got:\n%s", status)
+	}
+}
+
 func TestHandlePull_FirstPullConflictCanBeForced(t *testing.T) {
 	s, src := newTestServer(t)
 	initServerGitRepo(t, src)

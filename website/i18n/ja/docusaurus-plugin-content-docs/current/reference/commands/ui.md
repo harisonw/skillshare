@@ -88,13 +88,13 @@ skillshare ui start --clear-cache
 |------|-------------|
 | **Dashboard** | Skill、Agent、Extras、MCP サーバー、Plugin、Target の件数、および対応が必要な項目 |
 | **Sync** | 書き込む前に、Target ごとにすべての変更をプレビュー。含める項目を選択（Skills、Agents、Extras、MCP）。Target 内で編集されたファイルは、**Force** がオンでない限り保持される。Target にのみ存在する項目は、ここから Source に collect し戻せる。各 sync は最初に Target フォルダをバックアップする |
-| **Git Sync** | Source リポジトリのコミットとプッシュ、remote にまだないコミットのプッシュ、プルを実行。プルはリポジトリのスコープ（`skills`、`agents`、`extras`、または `root`）が保持するものを sync する。詳細は [`pull`](/docs/reference/commands/pull) を参照。最初のプルが remote とマージできない場合、remote ブランチでローカルファイルを置き換える force pull を提案する |
+| **Git Sync** | Source リポジトリのコミットとプッシュ、remote にまだないコミットのプッシュ、プルを実行。ページを開くと remote から fetch するため、**Pull** には remote にあるコミット数が表示される。プルはリポジトリのスコープ（`skills`、`agents`、`extras`、または `root`）が保持するものを sync する。詳細は [`pull`](/docs/reference/commands/pull) を参照。remote に新しいコミットがあるためにプッシュが拒否された場合、エラーに **Pull** が表示される。最初のプルが remote とマージできない場合、remote ブランチでローカルファイルを置き換える force pull を提案する |
 | **Hubs** | Skills ページから移動。**Browse** は hub をフィルタしてそこからインストール、**My hubs** はインストール済み Skill からインデックスを組み立て、検証してエクスポートする。[`hub`](/docs/reference/commands/hub) を参照 |
-| **Skills** / **Agents** | インストール済みの項目、**Updates** タブ、**Trash** タブ。Skills にはさらに、Target のコンテキストに Skill が追加するトークン数を見積もる **Analyze** タブがある。**Install** は GitHub を検索するか、URL やパスからインストールする。**+ New Skill** は作成ウィザードを開く。`disable-model-invocation: true` を持つ Skill は、一覧・タイル・詳細ページで **manual only** タグが付く。これは [`list`](/docs/reference/commands/list) で `M` キーが切り替えるのと同じ状態。Skill エディタでは、**Add field** が各フロントマターフィールドの説明を表示する。**Sync skills** / **Sync agents** はプレビューしてから、その種類だけをすべての Target に sync する。update、アンインストール、collect の後に表示される **Sync Now** からも同じダイアログが開く |
-| **Extras** | Skill と一緒に sync される rules、commands、その他のフォルダ |
+| **Skills** / **Agents** | インストール済みの項目、**Updates** タブ、**Trash** タブ。Skills にはさらに、Target のコンテキストに Skill が追加するトークン数を見積もる **Analyze** タブがある。**Install** は GitHub を検索するか、URL やパスからインストールする。**+ New Skill** は作成ウィザードを開く。一覧とカードビューは **Folder**（tracked repo、`frontend/react` のようなフォルダ、または **Root**）でフィルタでき、**Folder** でグループ化もできる。Root が先頭で、残りのフォルダは名前の A→Z 順。**tree** ビューは左に source のフォルダ、右に詳細を表示する。フォルダや Skill をクリックして選択し、Cmd/Ctrl クリックで選択に追加、Shift クリックで範囲選択、Skill をダブルクリックで開く。右側では、選択したものすべてを 1 つのスイッチで有効・無効にし、targets を設定し（tracked repo とそのサブフォルダも含む）、各 Skill を個別のスイッチ付きで一覧する。tracked repo では **Update repo** と **Uninstall repo** も使える。`disable-model-invocation: true` を持つ Skill は、一覧・タイル・詳細ページで **manual only** タグが付く。これは [`list`](/docs/reference/commands/list) で `M` キーが切り替えるのと同じ状態。Skill エディタでは、**Add field** が各フロントマターフィールドの説明を表示する。**Sync skills** / **Sync agents** はプレビューしてから、その種類だけをすべての Target に sync する。update、アンインストール、collect の後に表示される **Sync Now** からも同じダイアログが開く |
+| **Extras** | **フォルダー**: Skill と一緒に sync される rules、commands、その他のフォルダ。**AGENTS.md**: global モードでは共有 `AGENTS.md` と、それを使う Target。Project では Project の `./AGENTS.md` と、各 Target がそれを読み込めるか。[1 つの AGENTS.md をツール間で共有する](../../how-to/daily-tasks/sharing-instructions.md)を参照 |
 | **MCP** | サーバーごとに 1 行表示され、sync 先の Agent がトグルとして並ぶ。**サーバーを追加** は URL、コマンド、貼り付けたスニペット、またはファイルを受け付ける。**target からインポート** はインストール済みの Agent が既に持っているものを読み込む。各サーバーのメニューには **各 Agent に書き込まれる設定を表示** があり、未保存の編集を含む Agent ごとのネイティブ設定を表示する。コンフリクトでは **その Agent からインポート** か **ソースで上書き** を選べ、バックアップは復元前にプレビューできる。`pi-mcp-adapter` を使う Pi サーバーでは、サーバーのダイアログに **Direct tools** と、[`piOptions`](./mcp.md#pi-options) を JSON で受け付ける **その他の adapter 設定** の入力欄もある。**デフォルト** は `mcp.targets` と `mcp.directTools` を編集する。Sync ボックスの **Sync MCP** は保留中の変更を一覧表示し、MCP の設定ファイルだけを書き込み、それぞれのバックアップを保存する。 |
 | **Plugins** | Plugin ごとに 1 行表示され、その Agent がトグルとして並ぶ。行を展開すると、そのソースが対応する他の Agent も一覧され、いずれかにチェックを入れるとインストールのプレビューが表示される。行のメニューから sync、update、削除ができ、Skillshare がレビューしたローカルコピーを読み取り専用で閲覧する **View files** も開ける。[Manage plugins across tools](/docs/how-to/daily-tasks/sharing-plugins) を参照 |
-| **Targets** | ステータス付きの Target 一覧。**ターゲットを追加** では **別のアカウント** も選べます。すでに使っている Agent の 2 つ目の config フォルダで、書き込み先のプレビューが付きます。各 Target のページで include/exclude フィルタを編集し、ローカルのみの Skill を Source に collect し戻せる。一覧には各 Agent が受け取る MCP サーバー数も表示される。MCP 設定ファイルを持つ Target には **MCP** タブがあり、サーバーごとに 1 行で選ぶ。クリックするとすぐ保存され、**Sync all targets** ですべての Target の MCP ファイルに書き込まれる |
+| **Targets** | ステータス付きの Target 一覧。**ターゲットを追加** では **別のアカウント** も選べます。すでに使っている Agent の 2 つ目の config フォルダで、書き込み先のプレビューが付きます。各 Target のページで include/exclude フィルタを編集し、ローカルのみの Skill を Source に collect し戻せる。一覧には各 Agent が受け取る MCP サーバー数も表示される。MCP 設定ファイルを持つ Target には **MCP** タブがあり、サーバーごとに 1 行で選ぶ。クリックするとすぐ保存され、**Sync all targets** ですべての Target の MCP ファイルに書き込まれる。各 Target には、そのファイル名のタブ（**CLAUDE.md**、**GEMINI.md**、**AGENTS.md** など）もあり、読み込み順を表示し、ファイルを編集し、`AGENTS.md` に変換できる |
 | **Projects** | global mode のみ。global config が sync する project フォルダーで、[`projects`](/docs/reference/targets/configuration#projects) と [`mcp.projects`](./mcp.md#projects-in-the-dashboard) から一覧される。**プロジェクトを追加** はフォルダー、その target、sync する内容を指定する。各 project には **Skills** と **Agents** タブがあり、フィルター、プレビュー、書き込まれるフォルダーを表示する。**MCP** タブでは、そのフォルダー内で global サーバーをオフにしたり、その project 独自のサーバーを追加したりできる。**Sync project** はプレビューしてから、その project の skills、agents、MCP だけを sync する。すでに project フォルダーを指している Target は変換できる |
 | **Audit** | Skill と Agent のセキュリティスキャン。重大度別の検出結果を表示。**Rules** タブでは、カテゴリごとにすべてのルールを閲覧できる: ルールをオフにする、重大度を変更する、カテゴリ全体に重大度を適用する、スキャンプロファイル（`default`、`strict`、`permissive`）を選ぶ、カスタム `audit-rules.yaml` のエディタを開く、のいずれかができる |
 | **Settings** | タブ分け: **General**（Source パス、sync モード、外観）、**Backup**（スナップショットと復元）、**Log**（操作履歴）、**Health**（[`doctor`](/docs/reference/commands/doctor) と同じチェック）、**Extensions**（sync 時のファイル変換）、**Files**（`config.yaml`、`.skillignore`、`.agentignore` の直接編集） |
@@ -127,6 +127,7 @@ Project mode（`-p`）で実行すると、ダッシュボードは以下のよ�
 - **Available targets** は Project レベルの Target（例: プロジェクトルートからの相対パス `.claude/skills/`）を一覧する
 - **Targets** は Project の MCP サーバーを数えて切り替え、Project 自身のファイル（`.mcp.json` など）に書き込む。Claude Code、OpenCode、Kilo Code、Pi では **MCP** タブに、グローバルサーバーをこの Project でオフにするスイッチも表示される
 - **Install** は Project 設定の `skills:` エントリを自動的に整合させる
+- **Extras -> AGENTS.md** は共有ファイルではなく Project の `./AGENTS.md` を編集し、自身のファイルしか読まない Target 向けに小さな修正を提案する
 
 ## UI プレビュー
 
@@ -156,9 +157,9 @@ Web ダッシュボードは `/api/` に REST API を公開しています。す
 | DELETE | `/api/targets/{name}` | Target を削除 |
 | POST | `/api/sync` | sync を実行（`dryRun`、`force`、`kind`、`project` に対応。`project` は宣言済みの project ルートで、sync をその project の Target に限定する）。`dryRun` が指定されていない限り、まず Target をバックアップする |
 | POST | `/api/git/commit` | Source リポジトリからプッシュせずにローカル git commit を作成 |
-| GET | `/api/git/status` | まだプッシュされていないコミット（`ahead`）を含む、Source リポジトリの状態 |
-| POST | `/api/push` | 変更をコミットしてからプッシュ。初回プッシュ時は upstream を設定する |
-| POST | `/api/pull` | プルしてから、リポジトリのスコープが保持するものを sync する。最初のプルがマージできない場合、エラーコード `merge_failed` で失敗する。`force: true` で再試行すると、remote ブランチでローカルファイルを置き換える |
+| GET | `/api/git/status` | まだプッシュされていないコミット（`ahead`）と、最後の fetch 時点でまだプルしていない upstream のコミット（`behind`）を含む、Source リポジトリの状態。fetch は行わない |
+| POST | `/api/push` | 変更をコミットしてからプッシュ。初回プッシュ時は upstream を設定する。remote にこのリポジトリにないコミットがある場合、`409` とエラーコード `push_rejected` で失敗する。プルしてから再度プッシュする |
+| POST | `/api/pull` | プルしてから、リポジトリのスコープが保持するものを sync する。分岐した履歴はマージされる。`.metadata.json` の競合は自動で解決され、それ以外の競合ではマージを取り消して失敗する。最初のプルがマージできない場合、エラーコード `merge_failed` で失敗する。`force: true` で再試行すると、remote ブランチでローカルファイルを置き換える |
 | GET | `/api/diff` | Source と Target 間の差分 |
 | GET | `/api/search?q=` | GitHub で Skill を検索 |
 | POST | `/api/install` | ソースから Skill をインストール |

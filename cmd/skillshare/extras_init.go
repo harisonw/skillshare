@@ -104,6 +104,9 @@ func cmdExtrasInit(args []string) error {
 	if err := config.ValidateExtraFlatten(flatten, syncMode); err != nil {
 		return err
 	}
+	if syncMode == "import" {
+		return fmt.Errorf("import mode requires a single-file extra (set file: on the extra in config)")
+	}
 
 	if mode == modeProject {
 		if sourceOverride != "" {

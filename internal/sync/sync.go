@@ -766,8 +766,8 @@ func PruneOrphanLinksWithSkills(opts PruneOptions) (*PruneResult, error) {
 	for _, entry := range entries {
 		name := entry.Name()
 
-		// Skip hidden files
-		if utils.IsHidden(name) {
+		// Skip hidden files unless skillshare manages them
+		if manifest.SkipsHidden(name) {
 			continue
 		}
 
@@ -978,9 +978,10 @@ func CheckStatusMerge(targetPath, sourcePath string) (TargetStatus, int, int) {
 	linkedCount := 0
 	localCount := 0
 
+	manifest, _ := ReadManifest(targetPath)
 	entries, _ := os.ReadDir(targetPath)
 	for _, entry := range entries {
-		if utils.IsHidden(entry.Name()) {
+		if manifest.SkipsHidden(entry.Name()) {
 			continue
 		}
 		skillPath := filepath.Join(targetPath, entry.Name())

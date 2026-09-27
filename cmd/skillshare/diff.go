@@ -736,8 +736,9 @@ func collectMergeDiff(r *targetDiffResult, targetPath string, sourceSkills map[s
 		return
 	}
 
+	manifest, _ := sync.ReadManifest(targetPath)
 	for _, e := range entries {
-		if utils.IsHidden(e.Name()) {
+		if manifest.SkipsHidden(e.Name()) {
 			continue
 		}
 		skillPath := filepath.Join(targetPath, e.Name())

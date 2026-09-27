@@ -170,8 +170,12 @@ type Host struct {
 	Installed   []Installed `json:"installed"`
 }
 
-// fail records a failure and buckets it by its cause.
+// fail records a failure and buckets it by its cause. A failed inventory call leaves
+// Installed nil, which encodes as null and breaks the dashboard's list.
 func (h *Host) fail(err error) {
+	if h.Installed == nil {
+		h.Installed = []Installed{}
+	}
 	h.Error = err.Error()
 	h.ErrorKey = ""
 	h.Status = HostBlocked

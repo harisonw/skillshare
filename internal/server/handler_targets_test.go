@@ -74,6 +74,36 @@ func TestHandleAddTarget_Success(t *testing.T) {
 	}
 }
 
+func TestHandleAddTarget_SavesInstructionFile(t *testing.T) {
+	s, _ := newTestServer(t)
+	body := `{"name":"myagent","path":"/tmp/myagent/skills","instructions":{"path":"~/.myagent/AGENTS.md","import":true}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/targets", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+	s.handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if got := s.cfg.Targets["myagent"].Instructions; got == nil || got.Path != "~/.myagent/AGENTS.md" || !got.Import {
+		t.Errorf("instructions = %+v, want ~/.myagent/AGENTS.md with import", got)
+	}
+}
+
+func TestHandleAddTarget_RejectsRelativeInstructionFile(t *testing.T) {
+	s, _ := newTestServer(t)
+	body := `{"name":"myagent","path":"/tmp/myagent/skills","instructions":{"path":"AGENTS.md"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/targets", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+	s.handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if _, exists := s.cfg.Targets["myagent"]; exists {
+		t.Error("target was added despite the invalid instruction file")
+	}
+}
+
 func TestHandleAddTarget_MissingName(t *testing.T) {
 	s, _ := newTestServer(t)
 	body := `{"path":"/tmp/test"}`

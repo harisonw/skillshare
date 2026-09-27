@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/tailscale/hujson"
@@ -379,19 +380,42 @@ func (s *Service) ImportClient(target string) ([]Candidate, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, exists, _, err := safeRead(path)
-	if err != nil {
-		return nil, err
+	paths := []string{path}
+	if format == "pi" {
+		paths = append(paths, piExtensionPath(path))
 	}
-	if !exists {
+	items, found := []Candidate{}, false
+	seen := map[string]bool{}
+	for _, path := range paths {
+		data, exists, _, err := safeRead(path)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			continue
+		}
+		found = true
+		read, err := Import(format, data, "")
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range read {
+			// mcp-adapter.json comes first and wins a name both files define.
+			if seen[item.Name] {
+				continue
+			}
+			seen[item.Name] = true
+			item.From = target
+			if format == "pi" && path == paths[0] {
+				// Only pi-mcp-adapter reads this file, so it does identify the extension.
+				item.Server.PiExtension = "pi-mcp-adapter"
+				item.Warnings = slices.DeleteFunc(item.Warnings, func(w string) bool { return w == piExtensionWarning })
+			}
+			items = append(items, item)
+		}
+	}
+	if !found {
 		return nil, fmt.Errorf("no MCP configuration found for %s in this scope", target)
-	}
-	items, err := Import(format, data, "")
-	if err != nil {
-		return nil, err
-	}
-	for i := range items {
-		items[i].From = target
 	}
 	return items, nil
 }
@@ -428,7 +452,7 @@ func (s *Service) FindUnmanaged(source *Source) []Unmanaged {
 		return nil
 	}
 	found := []Unmanaged{}
-	scan := func(target, format, path, root string, defined map[string]Server) {
+	scanFile := func(target, format, path, root string, defined map[string]Server) {
 		data, exists, _, err := safeRead(path)
 		if err != nil || !exists {
 			return
@@ -446,6 +470,13 @@ func (s *Service) FindUnmanaged(source *Source) []Unmanaged {
 		}
 		if len(names) > 0 {
 			found = append(found, Unmanaged{Target: target, Project: root, Path: path, Names: names})
+		}
+	}
+	// Pi's two files belong to different extensions, and ImportClient reads both.
+	scan := func(target, format, path, root string, defined map[string]Server) {
+		scanFile(target, format, path, root, defined)
+		if format == "pi" {
+			scanFile(target, format, piExtensionPath(path), root, defined)
 		}
 	}
 	paths := s.ClientPaths()

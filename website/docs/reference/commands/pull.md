@@ -80,6 +80,31 @@ skillshare pull
 git stash pop
 ```
 
+## When Both Machines Committed
+
+If this machine has commits the remote lacks and the remote has commits this machine lacks, `pull` merges the two histories into a merge commit, then syncs. Push afterwards to share the merge.
+
+Both machines rewrite `.metadata.json` whenever they install or update a skill, so it often conflicts. `pull` resolves those conflicts on its own: each skill's entry is merged separately, and when both machines changed the same entry, the one with the later `installed_at` wins.
+
+A conflict in any other file stops the pull, undoes the merge, and names the files:
+
+```bash
+$ skillshare pull
+git pull failed
+pull stopped: this machine and the remote both changed my-skill/SKILL.md; the merge was undone, resolve it with git in ~/.config/skillshare/skills
+```
+
+The repository is left as it was before the pull. To resolve the conflict yourself:
+
+```bash
+cd ~/.config/skillshare/skills
+git pull --no-rebase             # redo the merge and keep the conflicts
+# edit the conflicted files, then
+git add . && git commit --no-edit
+skillshare push
+skillshare sync
+```
+
 ## First Pull with Existing Skills
 
 On first pull (no upstream yet), if both local and remote already contain skill directories,

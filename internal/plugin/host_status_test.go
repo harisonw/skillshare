@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -36,6 +37,34 @@ func TestHostStatusSeparatesAMissingCLIFromOtherFailures(t *testing.T) {
 				t.Fatalf("key = %q, want %q", h.ErrorKey, tc.key)
 			}
 		})
+	}
+}
+
+// A host whose inventory fails still has to list nothing, not null, or the dashboard
+// cannot draw the page for the Agents that answered.
+func TestFailedInventoryStillEncodesAnEmptyList(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("OPENCODE_CONFIG", "")
+	t.Setenv("OPENCODE_CONFIG_DIR", "")
+	t.Setenv("OPENCODE_CONFIG_CONTENT", "")
+	writePluginFile(t, home, ".config/opencode/opencode.json", "{}")
+	writePluginFile(t, home, ".config/opencode/opencode.jsonc", "{}")
+	s := &Service{ConfigPath: filepath.Join(home, "config.yaml"), StateDir: filepath.Join(home, "state")}
+	s.Run = func(_ context.Context, _ string, _ []string, _ string, args ...string) ([]byte, error) {
+		return []byte("1.18.32"), nil
+	}
+	h := s.host(context.Background(), "opencode")
+	if h.Status != HostBlocked {
+		t.Fatalf("status = %q (error %q), want %q", h.Status, h.Error, HostBlocked)
+	}
+	data, err := json.Marshal(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"installed":[]`) {
+		t.Fatalf("installed not an empty list: %s", data)
 	}
 }
 

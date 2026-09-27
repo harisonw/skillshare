@@ -80,6 +80,31 @@ skillshare pull
 git stash pop
 ```
 
+## 两台机器都有新 commit 时 {#when-both-machines-committed}
+
+如果本机有 remote 没有的 commit，而 remote 也有本机没有的 commit，`pull` 会把两边的历史合并成一个 merge commit，然后执行 sync。之后再 push，把合并结果分享出去。
+
+两台机器在安装或更新 skill 时都会改写 `.metadata.json`，所以它经常发生冲突。`pull` 会自动解决这类冲突：每个 skill 的条目分别合并；如果两台机器都改了同一个条目，以 `installed_at` 较新的一方为准。
+
+其他文件发生冲突时，`pull` 会停止、撤销合并，并列出冲突的文件：
+
+```bash
+$ skillshare pull
+git pull failed
+pull stopped: this machine and the remote both changed my-skill/SKILL.md; the merge was undone, resolve it with git in ~/.config/skillshare/skills
+```
+
+仓库会保持在 pull 之前的状态。要自己解决冲突：
+
+```bash
+cd ~/.config/skillshare/skills
+git pull --no-rebase             # 重新合并并保留冲突
+# 编辑冲突文件，然后
+git add . && git commit --no-edit
+skillshare push
+skillshare sync
+```
+
 ## 首次拉取且已有 Skills
 
 在首次拉取时（尚未有 upstream），如果本地和 remote 都已经包含 skill 目录，

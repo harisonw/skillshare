@@ -27,6 +27,35 @@ type targetAlsoScans struct {
 	Project []string `yaml:"project,omitempty"`
 }
 
+// targetInstructions is the instruction file (CLAUDE.md, AGENTS.md, ...) a
+// target's runtime reads. Import marks runtimes that follow an @path line, so a
+// managed import line can replace a symlink.
+type targetInstructions struct {
+	Global  string `yaml:"global,omitempty"`
+	Project string `yaml:"project,omitempty"`
+	Import  bool   `yaml:"import,omitempty"`
+	// SameAs names the target whose global file this one also reads.
+	SameAs string `yaml:"same_as,omitempty"`
+	// MaxChars is the length past which the runtime cuts the global file.
+	MaxChars int `yaml:"max_chars,omitempty"`
+	// ProjectFallback is the file read in a project that has no Project file.
+	ProjectFallback string `yaml:"project_fallback,omitempty"`
+	// Rules is a directory of extra .md files the runtime loads as well.
+	Rules targetPathPair `yaml:"rules,omitempty"`
+}
+
+// InstructionsTarget is a target's instruction file. Path (and Rules) are
+// tilde-expanded in global mode and relative to the project root in project
+// mode. Fallback is set in project mode only.
+type InstructionsTarget struct {
+	Path     string
+	Import   bool
+	SameAs   string
+	MaxChars int
+	Fallback string
+	Rules    string
+}
+
 type targetSpec struct {
 	Name string `yaml:"name"`
 	// Detect is the tool's install directory (e.g. ~/.codex). Only needed for
@@ -35,11 +64,12 @@ type targetSpec struct {
 	Detect string `yaml:"detect,omitempty"`
 	// ConfigDir is the directory the Agent keeps its files in, where the Agent can be told to
 	// use another one (CLAUDE_CONFIG_DIR). A target may then be such another directory.
-	ConfigDir string          `yaml:"config_dir,omitempty"`
-	Skills    targetPathPair  `yaml:"skills"`
-	Agents    targetPathPair  `yaml:"agents,omitempty"`
-	AlsoScans targetAlsoScans `yaml:"also_scans,omitempty"`
-	Aliases   []string        `yaml:"aliases,omitempty"`
+	ConfigDir    string             `yaml:"config_dir,omitempty"`
+	Skills       targetPathPair     `yaml:"skills"`
+	Agents       targetPathPair     `yaml:"agents,omitempty"`
+	AlsoScans    targetAlsoScans    `yaml:"also_scans,omitempty"`
+	Instructions targetInstructions `yaml:"instructions,omitempty"`
+	Aliases      []string           `yaml:"aliases,omitempty"`
 }
 
 type targetsFile struct {
@@ -177,6 +207,85 @@ func lookupAgentTarget(name string, project bool) (TargetConfig, bool) {
 		return TargetConfig{Path: normalizeTargetPath(path)}, true
 	}
 	return TargetConfig{}, false
+}
+
+// LookupInstructions returns the instruction file of a target name or alias.
+// It reports false for unknown targets and targets without that file.
+func LookupInstructions(name string, project bool) (InstructionsTarget, bool) {
+	specs, err := loadTargetSpecs()
+	if err != nil {
+		return InstructionsTarget{}, false
+	}
+	for _, spec := range specs {
+		if !targetSpecMatchesName(spec, name) {
+			continue
+		}
+		return specInstructions(spec, project)
+	}
+	return InstructionsTarget{}, false
+}
+
+func specInstructions(spec targetSpec, project bool) (InstructionsTarget, bool) {
+	in := spec.Instructions
+	it := InstructionsTarget{Path: in.Global, Import: in.Import, SameAs: in.SameAs, MaxChars: in.MaxChars, Rules: in.Rules.Global}
+	if project {
+		it = InstructionsTarget{Path: in.Project, Import: in.Import, Fallback: in.ProjectFallback, Rules: in.Rules.Project}
+	}
+	if it.Path == "" {
+		return InstructionsTarget{}, false
+	}
+	it.Path, it.Rules, it.Fallback = normalizeTargetPath(it.Path), normalizeTargetPath(it.Rules), normalizeTargetPath(it.Fallback)
+	return it, true
+}
+
+// TargetInstructions returns the instruction file of a configured target. A
+// target that is another config directory of an Agent reads the Agent's file
+// moved into that directory; a target expanded from projects has none.
+func TargetInstructions(name string, tc TargetConfig, project bool) (InstructionsTarget, bool) {
+	if tc.ProjectRoot() != "" {
+		return InstructionsTarget{}, false
+	}
+	if tc.Instructions != nil && strings.TrimSpace(tc.Instructions.Path) != "" {
+		return customInstructions(*tc.Instructions, project), true
+	}
+	if tc.Agent == "" || tc.ConfigDir == "" || project {
+		return LookupInstructions(name, project)
+	}
+	spec, ok := globalSpec(tc.Agent)
+	if !ok || spec.ConfigDir == "" {
+		return InstructionsTarget{}, false
+	}
+	it, ok := specInstructions(spec, false)
+	if !ok {
+		return InstructionsTarget{}, false
+	}
+	base, dir := normalizeTargetPath(spec.ConfigDir), expandPath(tc.ConfigDir)
+	move := func(path string) string {
+		rel, err := filepath.Rel(base, path)
+		if path == "" || err != nil || strings.HasPrefix(rel, "..") {
+			return ""
+		}
+		return filepath.Join(dir, rel)
+	}
+	if it.Path = move(it.Path); it.Path == "" {
+		return InstructionsTarget{}, false
+	}
+	// An account's file is its own, never another target's.
+	it.Rules, it.SameAs = move(it.Rules), ""
+	return it, true
+}
+
+// customInstructions turns a user-set instruction file into an
+// InstructionsTarget: tilde-expanded in global mode, left relative to the
+// project root in project mode (instructions.Resolve joins it).
+func customInstructions(ic TargetInstructionsConfig, project bool) InstructionsTarget {
+	path := strings.TrimSpace(ic.Path)
+	if project {
+		path = filepath.Clean(filepath.FromSlash(path))
+	} else {
+		path = filepath.Clean(normalizeTargetPath(path))
+	}
+	return InstructionsTarget{Path: path, Import: ic.Import}
 }
 
 // AlsoScansGlobal returns the additional filesystem paths a target's runtime

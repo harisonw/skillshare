@@ -231,6 +231,33 @@ Codex reads the shared `~/.agents/skills` as well, but an account owns only its 
 
 `mode`, `include`, `exclude` and the other target settings work as on any target. A `skills.path` or `agents.path` you write yourself wins over the derived one. The target name can also be used as an [MCP target](/docs/reference/commands/mcp#accounts) and as a [plugin target](/docs/reference/commands/plugin#accounts).
 
+#### Instruction file {#target-instructions}
+
+skillshare knows the instruction file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, ...) of
+many built-in targets. For any other tool, `instructions` tells it which file the
+tool reads, so the dashboard can show and edit it and attach
+[shared AGENTS.md files](../../how-to/daily-tasks/sharing-instructions.md). A value
+set here takes the place of the built-in file.
+
+```yaml
+targets:
+  myagent:
+    path: ~/.myagent/skills
+    instructions:
+      path: ~/.myagent/AGENTS.md
+      import: true        # the tool follows @path lines
+```
+
+| Field | Description |
+|-------|-------------|
+| `instructions.path` | The file the tool reads. In the global config, an absolute path or one that starts with `~/`. In a project config, a path relative to the project root, such as `.myagent/AGENTS.md`. It must name a file, not a directory |
+| `instructions.import` | `true` when the tool follows `@path` lines. It can then use several shared files at once, each added as one import line. Default `false`: the tool uses one shared file, linked in place of its own |
+
+The dashboard writes this field from the **Custom target** dialog when you add the
+target, or later from the target's instruction tab. It refuses to change or remove
+it while the target uses shared files. Removing it doesn't delete
+the file.
+
 ### `include` / `exclude` (target filters) {#include--exclude-target-filters}
 
 Use per-target filters to control which skills are synced in **merge and copy modes**.
@@ -510,10 +537,12 @@ extras:
 |-------|----------|-------------|
 | `name` | Yes | Extra identifier |
 | `source` | No | Custom source directory for this extra (overrides `extras_source` and default) |
+| `file` | No | Sync only this file from the source directory: a plain file name such as `AGENTS.md`. See [single-file extras](../commands/extras.md#single-file-extras) |
 | `targets` | Yes | List of target paths |
 | `targets[].path` | Yes | Destination directory |
-| `targets[].mode` | No | `merge` (default), `copy`, or `symlink` |
-| `targets[].flatten` | No | When `true`, sync subdirectory files directly into target root (cannot use with `symlink`) |
+| `targets[].mode` | No | `merge` (default), `copy`, or `symlink`; `import` for single-file extras only |
+| `targets[].as` | No | File name in the target for a single-file extra (default: the `file` name) |
+| `targets[].flatten` | No | When `true`, sync subdirectory files directly into target root (cannot use with `symlink` or `file`) |
 
 `extras_source` is auto-populated to the default path (`~/.config/skillshare/extras/`) on `skillshare init` or first `extras init`. Override it to use a custom location for all extras.
 
@@ -843,6 +872,9 @@ Supports two YAML forms:
 |------|---------|-------------|
 | **String** | `- claude` | Known target, default path and merge mode |
 | **Object** | `- name: x, path: ..., mode: ..., include: [...], exclude: [...]` | Custom path, mode override, or per-target filters |
+
+An object entry can also set [`instructions`](#target-instructions), with a path
+relative to the project root.
 
 ### `skills` (project)
 

@@ -231,6 +231,30 @@ Codex는 공유되는 `~/.agents/skills`도 읽지만, 계정은 자기 디렉�
 
 `mode`, `include`, `exclude` 및 그 밖의 target 설정은 다른 target과 동일하게 동작합니다. 직접 작성한 `skills.path`나 `agents.path`는 파생된 경로보다 우선합니다. target 이름은 [MCP target](/docs/reference/commands/mcp#accounts)과 [plugin target](/docs/reference/commands/plugin#accounts)으로도 사용할 수 있습니다.
 
+#### 지침 파일 {#target-instructions}
+
+skillshare는 많은 내장 target의 지침 파일(`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, ...)을
+알고 있습니다. 그 밖의 도구에는 `instructions`로 도구가 읽는 파일을 알려 주면, 대시보드에서
+그 파일을 보고 편집하며 [공유 AGENTS.md](../../how-to/daily-tasks/sharing-instructions.md)를
+연결할 수 있습니다. 여기서 설정한 값은 내장 파일을 대신합니다.
+
+```yaml
+targets:
+  myagent:
+    path: ~/.myagent/skills
+    instructions:
+      path: ~/.myagent/AGENTS.md
+      import: true        # the tool follows @path lines
+```
+
+| Field | Description |
+|-------|-------------|
+| `instructions.path` | 도구가 읽는 파일. global config에서는 절대 경로이거나 `~/`로 시작하는 경로. 프로젝트 config에서는 `.myagent/AGENTS.md`처럼 프로젝트 루트 기준 상대 경로. 디렉터리가 아니라 파일이어야 함 |
+| `instructions.import` | 도구가 `@path` 줄을 따르면 `true`. 이때 여러 공유 파일을 동시에 쓸 수 있으며, 파일마다 import 줄 하나가 추가됨. 기본값 `false`: 도구는 공유 파일 하나를 쓰며, 자체 파일 자리에 링크됨 |
+
+대시보드는 target을 추가할 때 **사용자 지정 대상** 대화 상자에서, 또는 나중에 target의 지침 탭에서 이 필드를 작성합니다. target이 공유 파일을 사용하는 동안에는
+변경하거나 제거하지 않습니다. 제거해도 파일은 삭제되지 않습니다.
+
 ### `include` / `exclude` (target filters) {#include--exclude-target-filters}
 
 **merge 및 copy 모드**에서 어떤 skill이 동기화될지 제어하려면 Target별 필터를 사용하세요.
@@ -510,10 +534,12 @@ extras:
 |-------|----------|-------------|
 | `name` | Yes | Extra 식별자 |
 | `source` | No | 이 extra를 위한 Custom source 디렉터리 (`extras_source`와 기본값을 재정의) |
+| `file` | No | source 디렉터리에서 이 파일만 동기화: `AGENTS.md` 같은 단순한 파일 이름. [single-file extras](../commands/extras.md#single-file-extras) 참고 |
 | `targets` | Yes | Target 경로 목록 |
 | `targets[].path` | Yes | 대상 디렉터리 |
-| `targets[].mode` | No | `merge` (기본값), `copy`, 또는 `symlink` |
-| `targets[].flatten` | No | `true`이면 하위 디렉터리 파일을 Target 루트로 직접 동기화 (`symlink`와 함께 사용 불가) |
+| `targets[].mode` | No | `merge` (기본값), `copy`, 또는 `symlink`. `import`는 single-file extra 전용 |
+| `targets[].as` | No | single-file extra에서 target 쪽 파일 이름 (기본값: `file` 이름) |
+| `targets[].flatten` | No | `true`이면 하위 디렉터리 파일을 Target 루트로 직접 동기화 (`symlink` 또는 `file`과 함께 사용 불가) |
 
 `extras_source`는 `skillshare init` 또는 첫 `extras init` 시 기본 경로(`~/.config/skillshare/extras/`)로 자동 채워집니다. 모든 extra에 custom 위치를 사용하려면 이 값을 재정의하세요.
 
@@ -843,6 +869,8 @@ audit:
 |------|---------|-------------|
 | **String** | `- claude` | 알려진 Target, 기본 경로와 merge 모드 |
 | **Object** | `- name: x, path: ..., mode: ..., include: [...], exclude: [...]` | Custom 경로, 모드 재정의, 또는 Target별 필터 |
+
+Object 항목에는 프로젝트 루트 기준 상대 경로로 [`instructions`](#target-instructions)도 설정할 수 있습니다.
 
 ### `skills` (project)
 

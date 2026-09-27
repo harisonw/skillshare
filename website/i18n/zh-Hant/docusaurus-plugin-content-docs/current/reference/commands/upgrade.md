@@ -95,9 +95,9 @@ skillshare sync  # 分發到所有 targets
 Downloading v0.21.4...  3.2 MB / 9.1 MB
 ```
 
-若執行檔位於受保護的目錄（例如 `/usr/local/bin`），skillshare 會自動以 `sudo` 重新執行升級 — 不需要手動加上前綴。
+若執行檔位於受保護的目錄（例如 `/usr/local/bin`），skillshare 只會用 `sudo` 替換執行檔 — 不需要手動加上前綴。內建 skill、UI 資源與紀錄仍以你的身分寫入，所以不要用 `sudo` 執行整個升級：這會在 skill 來源目錄留下 root 擁有的檔案，之後 `git pull` 會出現 `Permission denied`。
 
-沒有終端機可以輸入密碼時（Dashboard 的 **立即更新** 按鈕、CI），升級會立刻停止，並提示你改在終端機執行 `sudo skillshare upgrade`，不會一直等待輸入。已快取的 `sudo` 憑證與 `NOPASSWD` 設定仍會直接升級，不會出現提示。
+沒有終端機可以輸入密碼時（Dashboard 的 **立即更新** 按鈕、CI），升級會立刻停止，並提示你改在終端機執行 `skillshare upgrade`，不會一直等待輸入。已快取的 `sudo` 憑證與 `NOPASSWD` 設定仍會直接升級，不會出現提示。
 
 ### Web UI 資源
 

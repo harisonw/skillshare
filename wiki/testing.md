@@ -1,0 +1,110 @@
+# Build, Test, and E2E
+
+Use when building, running the skillshare CLI, executing Go or frontend tests, reproducing bugs, using the devcontainer/ssenv, or creating and running E2E runbooks.
+
+## Execution Boundary
+
+The host is macOS; the project verification environment is the Linux devcontainer. Run these inside the devcontainer:
+
+- `ss` and `skillshare` commands;
+- `go build`, `go test`, `make test`, and `make check`;
+- dashboard and website package scripts;
+- bug reproductions and E2E runbooks.
+
+The host may be used for source edits, `git status/diff/log`, read-only searches, `python3 scripts/ai-context.py check`, and documentation checks that do not execute the product binary.
+
+## Devcontainer
+
+```sh
+make devc          # start, initialize, and enter
+make devc-up       # start without opening a shell
+make devc-status
+make devc-down
+```
+
+For programmatic access, resolve the container first:
+
+```sh
+CONTAINER=$(docker compose -f .devcontainer/docker-compose.yml ps -q skillshare-devcontainer)
+```
+
+If it is empty, stop and ask the user to run `make devc-up` before executing product commands. The source tree is bind-mounted at `/workspace`. The `ss` wrapper automatically builds current source, so ordinary CLI verification does not need a separate `make build`.
+
+## Narrow Verification First
+
+Change to `/workspace` inside the container:
+
+```sh
+docker exec "$CONTAINER" bash -lc 'cd /workspace && go test ./internal/<package>/... -count=1'
+docker exec "$CONTAINER" bash -lc 'cd /workspace && go test ./tests/integration -run TestName -count=1'
+docker exec "$CONTAINER" bash -lc 'cd /workspace && make test-unit'
+docker exec "$CONTAINER" bash -lc 'cd /workspace && make test-int'
+docker exec "$CONTAINER" bash -lc 'cd /workspace && make check'
+```
+
+Start with the specific package or test that proves the change. Broaden only when new risk, failure evidence, or a release gate requires it. Base retries on new evidence and distinguish pre-existing failures from regressions.
+
+## Stateful CLI Isolation
+
+Use a fresh `ssenv` for tests that modify configuration or state:
+
+```sh
+ENV_NAME="task-<descriptive-id>"
+docker exec "$CONTAINER" ssenv create "$ENV_NAME" --init
+docker exec "$CONTAINER" ssenv enter "$ENV_NAME" -- ss status --json
+```
+
+Rules:
+
+- Create a fresh environment for every E2E run; never reuse stale state.
+- `ssenv` isolates only `HOME`. `/tmp` and other system paths are shared, so runbooks must use unique paths or clean an exact target first.
+- Use `bash -c` for multi-command sequences and `cd /workspace` before Go commands.
+- `--init` already performs global initialization and creates the default `rules` extra; a runbook must not assume an empty environment.
+- Report the environment after execution. Delete or preserve it for debugging according to user direction; never discard requested evidence silently.
+
+## E2E Runbooks
+
+Runbooks live in `ai_docs/tests/*_runbook.md` and are executed by mdproof. Before creating or changing one:
+
+1. Read `ai_docs/tests/mdproof.json` when present and `.mdproof/lessons-learned.md`.
+2. Verify every command and flag against source or `--help` inside the container.
+3. Use YAML-free Markdown with Scope, Environment, Steps, and Pass Criteria.
+4. Give every step a `bash` block and a machine-checkable `Expected` section.
+5. Prefer `--json` or `--format json` with `jq:` assertions over unstable human-readable text.
+
+Execute a runbook with:
+
+```sh
+docker exec "$CONTAINER" /workspace/.devcontainer/ensure-mdproof.sh
+docker exec "$CONTAINER" env SKILLSHARE_DEV_ALLOW_WORKSPACE_PROJECT=1 \
+  ssenv enter "$ENV_NAME" -- \
+  mdproof --report json /workspace/ai_docs/tests/<runbook>.md
+```
+
+Do not abort the whole runbook after the first failed step. Preserve every step result, then classify the failure:
+
+- **Runbook bug:** stale flag, path, or assertion.
+- **Product bug:** CLI behavior contradicts source or acceptance criteria.
+- **Environment issue:** container, network, credential, or shared-path state.
+
+## Runbook Quality Checklist
+
+- Verify every flag against `cmd/skillshare/` or `--help`.
+- Verify project-init and global-init flag sets separately.
+- `registry.yaml` appears only after install/reconcile; installed resources do not belong in `config.yaml`.
+- Project state uses `.skillshare/` and global state uses the configuration directory.
+- Audit customization uses rule IDs, not pattern-group names.
+- Expected results use actual substrings, exit codes, regular expressions, `jq:`, or snapshots rather than prose wishes.
+- Prefer `jq:` for JSON assertions; `log --json` emits JSONL, not an array.
+- Never append YAML with a non-idempotent bare `cat >>`; prefer the CLI or full replacement.
+- Writing through a symlink changes its target. Remove the exact symlink first or use another filename when a local file is required.
+- Clean exact `/tmp` targets at the beginning of a step.
+- Never assume a repository name equals an installed skill name; verify with `ss list --json`.
+
+## Frontend and Website Verification
+
+Start the dashboard through the devcontainer `ui` command. Run website package commands according to `website/AGENTS.md`. Visual changes require inspected screenshots in addition to builds and tests. Load `frontend` for design-specific checks.
+
+## Reporting
+
+Report the exact commands, pass/fail status, failure location, and limitations. Starting a command is not proof of success. Never disable tests, hooks, audits, or trust prompts to obtain a pass.

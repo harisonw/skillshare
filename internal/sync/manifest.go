@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"skillshare/internal/utils"
 )
 
 // ManifestFile is the filename for the sync manifest.
@@ -42,6 +44,20 @@ func ReadManifest(targetPath string) (*Manifest, error) {
 		m.Mtimes = make(map[string]int64)
 	}
 	return &m, nil
+}
+
+// SkipsHidden reports whether a target scan should skip name. Hidden entries
+// are skipped unless the manifest records them as managed (e.g. a source skill
+// under ".system/" synced as ".system__example").
+func (m *Manifest) SkipsHidden(name string) bool {
+	if !utils.IsHidden(name) {
+		return false
+	}
+	if m == nil {
+		return true
+	}
+	_, managed := m.Managed[name]
+	return !managed
 }
 
 // WriteManifest writes the manifest to a target directory.

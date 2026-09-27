@@ -1,12 +1,14 @@
-import { useState, useRef, useEffect, useCallback, useId, type ReactNode } from 'react';
+import { Fragment, useState, useRef, useEffect, useCallback, useId, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, X } from 'lucide-react';
 
 export interface SelectOption {
   value: string;
   label: string;
   description?: string;
   icon?: ReactNode;
+  /** Heading shown above the first of consecutive options that share it. */
+  group?: string;
 }
 
 interface SelectProps {
@@ -26,6 +28,11 @@ interface SelectProps {
   disabled?: boolean;
   /** Muted text shown before the value inside the trigger, e.g. "Sort". */
   prefix?: string;
+  /**
+   * A filter chip instead of a field: at `clearValue` it shows only `prefix`;
+   * otherwise it fills in, shows the value and gets a clear button labelled `clearLabel`.
+   */
+  chip?: { clearValue: string; clearLabel: string };
 }
 
 const selectTriggerSizes = {
@@ -41,7 +48,7 @@ interface DropdownPos {
   bottom?: number;
 }
 
-export function Select({ label, ariaLabel, value = '', onChange, values, onChangeValues, placeholder, options, className = '', size = 'md', disabled = false, prefix }: SelectProps) {
+export function Select({ label, ariaLabel, value = '', onChange, values, onChangeValues, placeholder, options, className = '', size = 'md', disabled = false, prefix, chip }: SelectProps) {
   const labelId = useId();
   const [open, setOpen] = useState(false);
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -178,6 +185,13 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
   // eslint-disable-next-line react-hooks/exhaustive-deps -- isOn reads value and values
   }, [open, focusIdx, options, value, values, select, openMenu]);
 
+  const toggle = () => {
+    if (disabled) return;
+    if (open) { setOpen(false); }
+    else { openMenu(); setFocusIdx(options.findIndex((o) => isOn(o.value))); }
+  };
+  const chipSet = chip && value !== chip.clearValue;
+
   return (
     <div ref={triggerRef} className={`relative ${className}`}>
       {label && (
@@ -185,14 +199,33 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
           {label}
         </label>
       )}
+      {chip ? (
+        <span className={`ss-chip ${chipSet ? 'set' : ''} ${open ? 'open' : ''}`}>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={toggle}
+            onKeyDown={handleKeyDown}
+            className="flex items-center gap-1.5 min-w-0 outline-none"
+            role="combobox"
+            aria-label={ariaLabel}
+            aria-expanded={open}
+            aria-haspopup="listbox"
+          >
+            <span className={chipSet ? 'p shrink-0' : 'shrink-0'}>{prefix}</span>
+            {chipSet ? <span className="truncate">{selectedLabel}</span> : <ChevronDown size={13} strokeWidth={2} className="shrink-0" />}
+          </button>
+          {chipSet && (
+            <button type="button" className="x" aria-label={chip.clearLabel} onClick={() => onChange?.(chip.clearValue)}>
+              <X size={12} strokeWidth={2.4} />
+            </button>
+          )}
+        </span>
+      ) : (
       <button
         type="button"
         disabled={disabled}
-        onClick={() => {
-          if (disabled) return;
-          if (open) { setOpen(false); }
-          else { openMenu(); setFocusIdx(options.findIndex((o) => isOn(o.value))); }
-        }}
+        onClick={toggle}
         onKeyDown={handleKeyDown}
         className={`ss-inp w-full justify-between text-left outline-none ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${selectTriggerSizes[size]} ${open ? 'border-accent' : ''}`}
         role="combobox"
@@ -216,6 +249,7 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
           className={`shrink-0 text-ink-3 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
       </button>
+      )}
       {open && pos && createPortal(
         <ul
           ref={listRef}
@@ -237,12 +271,14 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
           {options.map((opt, i) => {
             const isSelected = isOn(opt.value);
             const isFocused = i === focusIdx;
+            const heading = opt.group && opt.group !== options[i - 1]?.group ? opt.group : '';
             return (
+              <Fragment key={opt.value}>
+              {heading && <li role="presentation" className="px-2 pt-2 pb-1 text-xs font-semibold text-ink-3">{heading}</li>}
               <li
-                key={opt.value}
                 role="option"
                 aria-selected={isSelected}
-                className={`min-h-8 px-2 py-1.5 rounded-[7px] cursor-pointer flex items-center gap-2 ${isFocused ? 'bg-sel text-sel-ink' : isSelected ? 'text-ink' : 'text-ink-2'}`}
+                className={`min-h-8 shrink-0 px-2 py-1.5 rounded-[7px] cursor-pointer flex items-center gap-2 ${isFocused ? 'bg-sel text-sel-ink' : isSelected ? 'text-ink' : 'text-ink-2'}`}
                 onMouseEnter={() => setFocusIdx(i)}
                 onMouseDown={(e) => { e.preventDefault(); select(opt.value); }}
               >
@@ -261,6 +297,7 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
                   )}
                 </span>
               </li>
+              </Fragment>
             );
           })}
         </ul>,

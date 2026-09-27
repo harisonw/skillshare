@@ -96,9 +96,9 @@ look like a hang. The Web UI assets below show the same.
 Downloading v0.21.4...  3.2 MB / 9.1 MB
 ```
 
-If the binary is in a protected directory (e.g., `/usr/local/bin`), skillshare automatically re-runs the upgrade with `sudo` — no manual prefix needed.
+If the binary is in a protected directory (e.g., `/usr/local/bin`), skillshare asks `sudo` to replace only the binary — no manual prefix needed. The built-in skill, UI assets, and logs are still written as you, so don't run the whole upgrade with `sudo`: that leaves root-owned files in your skills source, and a later `git pull` fails with `Permission denied`.
 
-When there is no terminal to ask for a password on (the dashboard's **Update now** button, CI), the upgrade stops right away and tells you to run `sudo skillshare upgrade` in a terminal instead of waiting for input. Cached `sudo` credentials and `NOPASSWD` setups still upgrade without a prompt.
+When there is no terminal to ask for a password on (the dashboard's **Update now** button, CI), the upgrade stops right away and tells you to run `skillshare upgrade` in a terminal instead of waiting for input. Cached `sudo` credentials and `NOPASSWD` setups still upgrade without a prompt.
 
 ### Web UI Assets
 

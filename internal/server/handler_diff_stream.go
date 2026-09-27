@@ -198,7 +198,7 @@ func (s *Server) computeTargetDiff(name string, target config.TargetConfig, disc
 	manifest, _ := ssync.ReadManifest(sc.Path)
 	for _, entry := range entries {
 		eName := entry.Name()
-		if utils.IsHidden(eName) {
+		if manifest.SkipsHidden(eName) {
 			continue
 		}
 		if _, keepLegacy := legacyNames[eName]; keepLegacy {

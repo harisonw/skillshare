@@ -90,7 +90,7 @@ func agentFieldsChanged(target string, current, want map[string]any) bool {
 	return false
 }
 
-// Pi's extensions share a destination, but not transport or credential syntax.
+// Pi's extensions differ in file, transport and credential syntax.
 // Sync config only: installing or starting either extension remains explicit.
 func renderPi(s Server) (map[string]any, error) {
 	if s.PiExtension == "" {

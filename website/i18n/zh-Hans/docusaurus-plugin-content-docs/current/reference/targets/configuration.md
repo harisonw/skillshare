@@ -231,6 +231,29 @@ Codex 也会读取共享的 `~/.agents/skills`，但一个账号只拥有它自�
 
 `mode`、`include`、`exclude` 以及其他 Target 设置的用法与任何 Target 相同。你自己写的 `skills.path` 或 `agents.path` 优先于推导出的路径。Target 名称也可以用作 [MCP target](/docs/reference/commands/mcp#accounts) 和 [plugin target](/docs/reference/commands/plugin#accounts)。
 
+#### 指示文件 {#target-instructions}
+
+skillshare 知道许多内置 target 的指示文件（`CLAUDE.md`、`AGENTS.md`、`GEMINI.md` 等）。
+对于其他工具，`instructions` 告诉 skillshare 该工具读取哪个文件，这样控制台就能显示和编辑它，
+并接上[共享 AGENTS.md](../../how-to/daily-tasks/sharing-instructions.md)。这里设置的值会取代内置的文件。
+
+```yaml
+targets:
+  myagent:
+    path: ~/.myagent/skills
+    instructions:
+      path: ~/.myagent/AGENTS.md
+      import: true        # 该工具会展开 @path 行
+```
+
+| 字段 | 说明 |
+|-------|-------------|
+| `instructions.path` | 该工具读取的文件。在全局配置中，是绝对路径或以 `~/` 开头的路径。在项目配置中，是相对于项目根目录的路径，例如 `.myagent/AGENTS.md`。必须指向文件，不能是目录 |
+| `instructions.import` | 该工具会展开 `@path` 行时设为 `true`。此时它可以同时使用多份共享文件，每份以一行 import 加入。默认为 `false`：该工具只使用一份共享文件，以链接取代它自己的文件 |
+
+控制台会在添加 target 时从 **自定义目标** 对话框写入这个字段，之后也可以在 target 的文件标签页中修改。当 target 正在使用共享文件时，控制台会拒绝更改或移除它。
+移除它不会删除文件。
+
 ### `include` / `exclude`（Target 过滤器） {#include--exclude-target-filters}
 
 使用逐 Target 的过滤器，控制在 **merge 和 copy 模式**下哪些 Skill 会被 sync。
@@ -510,10 +533,12 @@ extras:
 |-------|----------|-------------|
 | `name` | 是 | Extra 标识符 |
 | `source` | 否 | 该 extra 的自定义 Source 目录（覆盖 `extras_source` 和默认值） |
+| `file` | 否 | 只同步 source 目录中的这个文件：单纯的文件名，例如 `AGENTS.md`。参见[单文件 extras](../commands/extras.md#single-file-extras) |
 | `targets` | 是 | Target 路径列表 |
 | `targets[].path` | 是 | 目标目录 |
-| `targets[].mode` | 否 | `merge`（默认）、`copy` 或 `symlink` |
-| `targets[].flatten` | 否 | 为 `true` 时，将子目录文件直接 sync 到 Target 根目录（不能与 `symlink` 同时使用） |
+| `targets[].mode` | 否 | `merge`（默认）、`copy` 或 `symlink`；`import` 仅用于单文件 extras |
+| `targets[].as` | 否 | 单文件 extra 在 target 中的文件名（默认：`file` 的名称） |
+| `targets[].flatten` | 否 | 为 `true` 时，将子目录文件直接 sync 到 Target 根目录（不能与 `symlink` 或 `file` 同时使用） |
 
 `extras_source` 会在 `skillshare init` 或首次 `extras init` 时自动填充为默认路径（`~/.config/skillshare/extras/`）。可覆盖它以对所有 extras 使用自定义位置。
 
@@ -843,6 +868,8 @@ audit:
 |------|---------|-------------|
 | **字符串** | `- claude` | 已知 Target，使用默认路径和 merge 模式 |
 | **对象** | `- name: x, path: ..., mode: ..., include: [...], exclude: [...]` | 自定义路径、模式覆盖，或逐 Target 过滤器 |
+
+对象形式的条目也可以设置 [`instructions`](#target-instructions)，路径相对于项目根目录。
 
 ### `skills`（项目）
 

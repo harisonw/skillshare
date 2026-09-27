@@ -1,0 +1,31 @@
+# skillshare Wiki Router
+
+The wiki stores development background, procedures, references, and history, but no task needs all of it at once. Rules that apply to every task live in the root `AGENTS.md`. `docs/ai-context.json` is the only source of truth for topic-to-source mappings.
+
+```sh
+python3 scripts/ai-context.py list
+python3 scripts/ai-context.py <topic>
+```
+
+## Task Routing
+
+| Topic | Use when | Main sources |
+|---|---|---|
+| `architecture` | Tracing repository structure, data flow, or CLI/Web API boundaries | `architecture.md` |
+| `cli-development` | Adding or changing Go CLI commands, flags, handlers, TUIs, or mutating behavior | `cli-development.md` |
+| `testing` | Building, testing, reproducing bugs, using the devcontainer/ssenv, or running E2E runbooks | `testing.md`, `CONTRIBUTING.md` |
+| `frontend` | Changing React, CSS, layout, or visual behavior in the dashboard or website | `frontend.md`, `website/AGENTS.md` |
+| `documentation` | Updating README files, website docs, flags, translations, or the built-in skill | `documentation.md`, `CONTRIBUTING.md` |
+| `release` | Writing changelogs or release notes, bumping versions, tagging, or releasing | `release.md` |
+| `audit` | Running read-only consistency audits | `audit.md` |
+| `ai-context` | Maintaining router topics, budgets, and orphan checks | `ai-context.md` |
+
+Run `python3 scripts/ai-context.py check` after changing topics. This table is the human entry point; the JSON configuration controls what the loader renders.
+
+## History (Milestone Logs; Read on Demand)
+
+No milestone logs have been moved yet. When adding `wiki/history/<milestone>.md`, add a row to this table.
+
+| File | Contents |
+|---|---|
+| — | None yet |

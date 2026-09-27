@@ -67,6 +67,8 @@ targets: [claude, cursor]
 
 **동작:** 화이트리스트 — 해당 Skill은 나열된 Target에만 Sync됩니다. 필드를 생략하면 모든 Target에 Sync됩니다. `metadata.targets`와 최상위 `targets`가 모두 존재하는 경우 `metadata.targets`가 우선합니다.
 
+**Tracked repo:** dashboard에서 tracked repo 안의 skill에 설정한 targets는 해당 SKILL.md가 아니라 source의 `.metadata.json`에 저장됩니다. 그래서 clone은 깨끗하게 유지되고 `update`도 정상적으로 동작합니다. 이 설정은 skill의 `metadata.targets`보다 우선합니다.
+
 **별칭(Alias):** Target 이름은 별칭을 지원합니다. `claude`는 `claude-code`로 설정된 Target과도 일치합니다. [Supported Targets](/docs/reference/targets/supported-targets)를 참고하세요.
 
 📖 [Skill format — targets field](/docs/understand/skill-format#targets)

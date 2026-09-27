@@ -15,8 +15,15 @@ type clientFormat struct {
 	stdioOnly                                     bool
 }
 
+// piExtensionPath is the file pi-mcp-extension reads, next to pi-mcp-adapter's. Since its
+// 3.0 the adapter reads mcp-adapter.json and leaves mcp.json to Pi's built-in MCP support,
+// so nativePath gives the adapter's file. Refs: #298.
+func piExtensionPath(adapterPath string) string {
+	return filepath.Join(filepath.Dir(adapterPath), "mcp.json")
+}
+
 var clientFormats = map[string]clientFormat{
-	"pi":             {key: "mcpServers", urlKey: "url", globalPath: ".pi/agent/mcp.json", projectPath: ".pi/mcp.json"},
+	"pi":             {key: "mcpServers", urlKey: "url", globalPath: ".pi/agent/mcp-adapter.json", projectPath: ".pi/mcp-adapter.json"},
 	"amp":            {key: "amp.mcpServers", urlKey: "url", refPrefix: "${", globalPath: ".config/amp/settings.json", projectPath: ".amp/settings.json"},
 	"claude-desktop": {key: "mcpServers", urlKey: "url", stdioOnly: true},
 	"cline":          {key: "mcpServers", localType: "stdio", remoteType: "streamableHttp", urlKey: "url", refPrefix: "${env:"},
@@ -111,7 +118,7 @@ func (s *Service) additionalClientPath(target string, format clientFormat) (stri
 			if !filepath.IsAbs(dir) {
 				return "", fmt.Errorf("PI_CODING_AGENT_DIR must be absolute")
 			}
-			return filepath.Join(dir, "mcp.json"), nil
+			return filepath.Join(dir, "mcp-adapter.json"), nil
 		}
 	case "copilot":
 		if dir := s.ConfigDirs["copilot"]; dir != "" {

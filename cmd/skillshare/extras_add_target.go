@@ -116,6 +116,9 @@ func cmdExtrasAddTarget(args []string) error {
 	if syncMode != "" {
 		et.Mode = syncMode
 	}
+	if err := config.ValidateExtraConfig(config.ExtraConfig{Name: name, File: extras[idx].File, Targets: []config.ExtraTargetConfig{et}}); err != nil {
+		return err
+	}
 	extras[idx].Targets = append(extras[idx].Targets, et)
 
 	if err := saveFn(); err != nil {

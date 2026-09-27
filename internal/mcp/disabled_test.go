@@ -27,9 +27,9 @@ func TestDisabledTurnsOffGlobalServerInProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	for file, want := range map[string]string{
-		"opencode.json": `{"mcp":{"docs":{"enabled":false}}}`,
-		"kilo.jsonc":    `{"mcp":{"docs":{"enabled":false}}}`,
-		".pi/mcp.json":  `{"mcpServers":{"docs":{"disabled":true}}}`,
+		"opencode.json":        `{"mcp":{"docs":{"enabled":false}}}`,
+		"kilo.jsonc":           `{"mcp":{"docs":{"enabled":false}}}`,
+		".pi/mcp-adapter.json": `{"mcpServers":{"docs":{"disabled":true}}}`,
 	} {
 		data, err := os.ReadFile(filepath.Join(s.ProjectRoot, file))
 		if err != nil {

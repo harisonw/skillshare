@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -114,17 +113,10 @@ func pullFromRemote(cfg *config.Config, dryRun, force bool) error {
 		}
 	} else {
 		spinner.Update("Running git pull...")
-		cmd = exec.Command("git", "pull")
-		cmd.Dir = source
-		if len(authEnv) > 0 {
-			cmd.Env = append(os.Environ(), authEnv...)
-		}
-		pullOutput, err := cmd.CombinedOutput()
-		if err != nil {
+		if _, err := gitops.PullWithEnv(source, authEnv); err != nil {
 			spinner.Fail("git pull failed")
-			outStr := string(pullOutput)
-			fmt.Print(outStr)
-			hintGitRemoteError(outStr)
+			fmt.Println(err.Error())
+			hintGitRemoteError(err.Error())
 			return fmt.Errorf("git pull failed: %w", err)
 		}
 	}

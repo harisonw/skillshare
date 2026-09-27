@@ -69,7 +69,7 @@ skillshare push
 ## Variations
 
 - **登录时自动 Sync**：在你的 shell 配置文件（`.bashrc` / `.zshrc`）中添加 `skillshare pull && skillshare sync`
-- **冲突解决**：如果两台机器修改了同一个 Skill，`pull` 会使用 git merge — 请在 Source 目录中解决冲突
+- **冲突解决**：`pull` 会合并两台机器的 commit，并自动解决 `.metadata.json` 的冲突。如果两台机器编辑了同一个 Skill 文件，`pull` 会停止、撤销合并并列出该文件 — 请在 Source 目录中用 git 解决
 - **选择性 Sync**：在 `config.yaml` 中使用每个 Target 的 `include` / `exclude` 过滤器，控制哪些 Skill Sync 到每台机器
 
 ## Related

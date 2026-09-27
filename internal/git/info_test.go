@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"skillshare/internal/install"
 )
 
 // initTestRepo creates a temporary git repo with one commit
@@ -509,6 +511,147 @@ func TestPullWithProgress(t *testing.T) {
 	}
 	if info.AfterHash == info.BeforeHash {
 		t.Fatalf("expected before/after hash to differ")
+	}
+}
+
+// divergeFromRemote commits remoteFile on another clone and pushes it, then
+// commits localFile in repo without pushing, as two machines syncing would.
+func divergeFromRemote(t *testing.T, remote, repo string, remoteFile, localFile [2]string) {
+	t.Helper()
+	other := cloneRepo(t, remote)
+	for _, c := range []struct {
+		dir  string
+		file [2]string
+	}{{other, remoteFile}, {repo, localFile}} {
+		runGit(t, c.dir, "config", "user.email", "test@test.com")
+		runGit(t, c.dir, "config", "user.name", "test")
+		if err := os.WriteFile(filepath.Join(c.dir, c.file[0]), []byte(c.file[1]), 0644); err != nil {
+			t.Fatal(err)
+		}
+		runGit(t, c.dir, "add", "-A")
+		runGit(t, c.dir, "commit", "-m", "edit "+c.file[0])
+	}
+	runGit(t, other, "push", "origin", "HEAD:main")
+}
+
+func TestPullWithProgress_MergesDivergedHistory(t *testing.T) {
+	remote := createBareRemoteWithBranch(t, "main", map[string]string{"README.md": "# v1\n"})
+	repo := cloneRepo(t, remote)
+	divergeFromRemote(t, remote, repo, [2]string{"remote.md", "r\n"}, [2]string{"local.md", "l\n"})
+
+	if _, err := PullWithProgress(repo, nil, nil); err != nil {
+		t.Fatalf("expected diverged pull to merge, got: %v", err)
+	}
+	for _, f := range []string{"remote.md", "local.md"} {
+		if _, err := os.Stat(filepath.Join(repo, f)); err != nil {
+			t.Errorf("expected %s after merge: %v", f, err)
+		}
+	}
+}
+
+func TestPullWithProgress_ConflictLeavesRepoClean(t *testing.T) {
+	remote := createBareRemoteWithBranch(t, "main", map[string]string{"README.md": "# v1\n"})
+	repo := cloneRepo(t, remote)
+	divergeFromRemote(t, remote, repo, [2]string{"README.md", "# remote\n"}, [2]string{"README.md", "# local\n"})
+
+	if _, err := PullWithProgress(repo, nil, nil); err == nil {
+		t.Fatal("expected a conflicting pull to fail")
+	}
+	if status := runGit(t, repo, "status", "--porcelain"); status != "" {
+		t.Fatalf("expected the merge to be aborted, got status:\n%s", status)
+	}
+}
+
+// blockedPull pushes a remote commit that edits a.txt, adds added.txt, and
+// edits sub/b.txt, then makes sub/ read-only so the pull fails partway: git
+// writes a.txt and added.txt before it cannot unlink sub/b.txt.
+func blockedPull(t *testing.T) string {
+	t.Helper()
+	if os.Getuid() == 0 {
+		t.Skip("test requires non-root user")
+	}
+	remote := createBareRemoteWithBranch(t, "main", map[string]string{
+		"a.txt": "a1\n", "sub/b.txt": "b1\n",
+	})
+	repo := cloneRepo(t, remote)
+	other := cloneRepo(t, remote)
+	runGit(t, other, "config", "user.email", "test@test.com")
+	runGit(t, other, "config", "user.name", "test")
+	for name, body := range map[string]string{"a.txt": "a2\n", "added.txt": "new\n", "sub/b.txt": "b2\n"} {
+		if err := os.WriteFile(filepath.Join(other, name), []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runGit(t, other, "add", "-A")
+	runGit(t, other, "commit", "-m", "remote edits")
+	runGit(t, other, "push", "origin", "HEAD:main")
+
+	sub := filepath.Join(repo, "sub")
+	if err := os.Chmod(sub, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(sub, 0755) })
+	return repo
+}
+
+func TestPullWithProgress_FailedCheckoutLeavesNoResidue(t *testing.T) {
+	repo := blockedPull(t)
+
+	if _, err := PullWithProgress(repo, nil, nil); err == nil {
+		t.Fatal("expected the pull to fail on the read-only directory")
+	}
+	if status := runGit(t, repo, "status", "--porcelain", "-uall"); status != "" {
+		t.Fatalf("expected the partial checkout to be undone, got status:\n%s", status)
+	}
+}
+
+func TestPullWithProgress_FailedCheckoutKeepsLocalEdits(t *testing.T) {
+	repo := blockedPull(t)
+	notes := filepath.Join(repo, "notes.txt")
+	if err := os.WriteFile(notes, []byte("mine\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := PullWithProgress(repo, nil, nil); err == nil {
+		t.Fatal("expected the pull to fail on the read-only directory")
+	}
+	if got, err := os.ReadFile(notes); err != nil || string(got) != "mine\n" {
+		t.Fatalf("expected the local edit to survive, got %q (%v)", got, err)
+	}
+}
+
+func TestPullWithProgress_ResolvesMetadataConflict(t *testing.T) {
+	meta := func(entries string) string {
+		return `{"version": 1, "entries": {` + entries + `}}` + "\n"
+	}
+	shared := func(at string) string {
+		return `"shared": {"source": "github.com/o/r/shared", "installed_at": "` + at + `"}`
+	}
+	remote := createBareRemoteWithBranch(t, "main", map[string]string{
+		".metadata.json": meta(shared("2026-01-01T00:00:00Z")),
+	})
+	repo := cloneRepo(t, remote)
+	divergeFromRemote(t, remote, repo,
+		[2]string{".metadata.json", meta(shared("2026-03-01T00:00:00Z") + `, "remote-only": {"source": "r"}`)},
+		[2]string{".metadata.json", meta(shared("2026-02-01T00:00:00Z") + `, "local-only": {"source": "l"}`)})
+
+	if _, err := PullWithProgress(repo, nil, nil); err != nil {
+		t.Fatalf("expected a metadata-only conflict to resolve, got: %v", err)
+	}
+	store, err := install.LoadMetadata(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"remote-only", "local-only"} {
+		if !store.Has(name) {
+			t.Errorf("expected entry %q after merge", name)
+		}
+	}
+	if got := store.Get("shared").InstalledAt.Format("2006-01-02"); got != "2026-03-01" {
+		t.Errorf("expected the later installed_at to win, got %s", got)
+	}
+	if status := runGit(t, repo, "status", "--porcelain"); status != "" {
+		t.Fatalf("expected the merge to be committed, got status:\n%s", status)
 	}
 }
 

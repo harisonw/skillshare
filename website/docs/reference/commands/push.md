@@ -95,9 +95,11 @@ Push failed
 
 Solution:
 ```bash
-skillshare pull    # Get remote changes
+skillshare pull    # Merge remote changes with yours
 skillshare push    # Push your changes
 ```
+
+`pull` merges the remote commits with the ones you have not pushed yet, so the second `push` goes through. See [When Both Machines Committed](/docs/reference/commands/pull#when-both-machines-committed) for what happens if both sides changed the same file.
 
 ## Workflow
 

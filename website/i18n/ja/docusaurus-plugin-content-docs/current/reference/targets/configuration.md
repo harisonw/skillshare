@@ -233,6 +233,30 @@ Codex は共有の `~/.agents/skills` も読み込みますが、アカウント
 
 `mode`、`include`、`exclude` などの Target 設定は、他の Target と同じように機能します。自分で書いた `skills.path` や `agents.path` は、導き出されたパスより優先されます。Target 名は [MCP Target](/docs/reference/commands/mcp#accounts) や [plugin Target](/docs/reference/commands/plugin#accounts) としても使えます。
 
+#### ツールが読むファイル {#target-instructions}
+
+skillshare は多くの組み込み Target が読むファイル（`CLAUDE.md`、`AGENTS.md`、`GEMINI.md` など）を
+把握しています。それ以外のツールでは、`instructions` でそのツールが読むファイルを指定すると、
+ダッシュボードでそのファイルを表示・編集し、[共有 AGENTS.md](../../how-to/daily-tasks/sharing-instructions.md)
+をつなげられるようになります。ここで設定した値は、組み込みのファイルの代わりに使われます。
+
+```yaml
+targets:
+  myagent:
+    path: ~/.myagent/skills
+    instructions:
+      path: ~/.myagent/AGENTS.md
+      import: true        # ツールが @path 行に従う
+```
+
+| フィールド | 説明 |
+|-------|-------------|
+| `instructions.path` | ツールが読むファイル。グローバル Config では絶対パスか `~/` で始まるパス。プロジェクト Config では `.myagent/AGENTS.md` のようなプロジェクトルートからの相対パス。ディレクトリではなくファイルを指定すること |
+| `instructions.import` | ツールが `@path` 行に従う場合は `true`。複数の共有ファイルを同時に使え、それぞれ 1 行の import として追加される。デフォルトは `false`: ツールは 1 つの共有ファイルを使い、自身のファイルの代わりにリンクされる |
+
+ダッシュボードは、Target を追加するときの **カスタムターゲット** ダイアログ、または後から Target のファイルのタブでこのフィールドを書き込みます。Target が共有ファイルを
+使っている間は、変更や削除を拒否します。このフィールドを削除してもファイルは削除されません。
+
 ### `include` / `exclude`（Target フィルター） {#include--exclude-target-filters}
 
 **merge および copy モード** でどの Skill を Sync するかを制御するには、Target 単位のフィルターを
@@ -534,10 +558,12 @@ extras:
 |-------|----------|--------------|
 | `name` | はい | Extra の識別子 |
 | `source` | いいえ | この Extra 用のカスタム Source ディレクトリ（`extras_source` とデフォルトを上書き） |
+| `file` | いいえ | Source ディレクトリからこのファイルだけを Sync する: `AGENTS.md` のような単純なファイル名。[単一ファイルの Extras](../commands/extras.md#single-file-extras) を参照 |
 | `targets` | はい | Target パスのリスト |
 | `targets[].path` | はい | 宛先ディレクトリ |
-| `targets[].mode` | いいえ | `merge`（デフォルト）、`copy`、または `symlink` |
-| `targets[].flatten` | いいえ | `true` の場合、サブディレクトリのファイルを Target のルートに直接 Sync する（`symlink` とは併用不可） |
+| `targets[].mode` | いいえ | `merge`（デフォルト）、`copy`、または `symlink`。`import` は単一ファイルの Extras でのみ使用可 |
+| `targets[].as` | いいえ | 単一ファイルの Extra における Target 内のファイル名（デフォルト: `file` の名前） |
+| `targets[].flatten` | いいえ | `true` の場合、サブディレクトリのファイルを Target のルートに直接 Sync する（`symlink` または `file` とは併用不可） |
 
 `extras_source` は `skillshare init` または最初の `extras init` 実行時に、デフォルトのパス
 （`~/.config/skillshare/extras/`）に自動的に設定されます。すべての Extra に対してカスタムの場所を
@@ -902,6 +928,8 @@ audit:
 |------|---------|-------------|
 | **文字列** | `- claude` | 既知の Target、デフォルトパスと merge モード |
 | **オブジェクト** | `- name: x, path: ..., mode: ..., include: [...], exclude: [...]` | カスタムパス、モードの上書き、または Target 単位のフィルター |
+
+オブジェクトのエントリでは [`instructions`](#target-instructions) も設定でき、パスはプロジェクトルートからの相対パスで指定します。
 
 ### `skills`（プロジェクト）
 

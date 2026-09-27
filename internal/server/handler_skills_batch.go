@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"skillshare/internal/install"
 	"skillshare/internal/resource"
 	ssync "skillshare/internal/sync"
 	"skillshare/internal/utils"
@@ -79,6 +80,12 @@ func (s *Server) handleBatchSetTargets(w http.ResponseWriter, r *http.Request) {
 		path string
 	}
 	var updatedSkills []updatedSkill
+	overridden := false
+
+	var values []string
+	if req.Target != "" {
+		values = []string{req.Target}
+	}
 
 	// Acquire write lock only for the file-write loop.
 	s.mu.Lock()
@@ -88,37 +95,54 @@ func (s *Server) handleBatchSetTargets(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Skip disabled skills and tracked-repo members
-		if d.Disabled || d.IsInRepo {
+		// Skip disabled skills
+		if d.Disabled {
 			skipped++
 			continue
 		}
 
-		skillMDPath := filepath.Join(d.SourcePath, "SKILL.md")
-		var values []string
-		if req.Target != "" {
-			values = []string{req.Target}
+		// Tracked-repo members keep their SKILL.md untouched so the clone
+		// stays clean for update; the targets live in .metadata.json.
+		if d.IsInRepo {
+			s.skillsStore.SetTargetOverride(relPath, values)
+			overridden = true
+			updated++
+			continue
 		}
 
+		skillMDPath := filepath.Join(d.SourcePath, "SKILL.md")
 		if err := utils.SetFrontmatterList(skillMDPath, "metadata.targets", values); err != nil {
 			errors = append(errors, d.FlatName+": "+err.Error())
 			continue
 		}
 
-		updatedSkills = append(updatedSkills, updatedSkill{
-			name: filepath.Base(d.SourcePath),
-			path: d.SourcePath,
-		})
+		if name := filepath.Base(d.SourcePath); s.skillsStore.HasFileHashes(name) {
+			updatedSkills = append(updatedSkills, updatedSkill{name: name, path: d.SourcePath})
+		}
 		updated++
+	}
+	// Save the overrides before unlocking: every API request reloads skillsStore
+	// from disk, so an override left unsaved here can be dropped by the next one.
+	if overridden {
+		s.skillsStore.Save(s.cfg.EffectiveSkillsSource()) //nolint:errcheck
 	}
 	s.mu.Unlock()
 
-	// Recompute file hashes outside the lock so reads aren't blocked.
+	// Recompute file hashes outside the lock so reads aren't blocked; the
+	// store itself is only touched under the lock.
+	hashes := make(map[string]map[string]string, len(updatedSkills))
 	for _, sk := range updatedSkills {
-		s.skillsStore.RefreshHashes(sk.name, sk.path)
+		if h, err := install.ComputeFileHashes(sk.path); err == nil {
+			hashes[sk.name] = h
+		}
 	}
-	if len(updatedSkills) > 0 {
+	if len(hashes) > 0 {
+		s.mu.Lock()
+		for name, h := range hashes {
+			s.skillsStore.SetFileHashes(name, h)
+		}
 		s.skillsStore.Save(s.cfg.EffectiveSkillsSource()) //nolint:errcheck
+		s.mu.Unlock()
 	}
 
 	s.writeOpsLog("batch-set-targets", "ok", start, map[string]any{
@@ -172,28 +196,47 @@ func (s *Server) handleSetSkillTargets(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if d.IsInRepo {
-			writeError(w, http.StatusBadRequest, "cannot set target on tracked-repo skill; manage targets on the repo instead")
-			return
-		}
-
-		skillMDPath := filepath.Join(d.SourcePath, "SKILL.md")
 		var values []string
 		if req.Target != "" {
 			values = []string{req.Target}
 		}
 
-		s.mu.Lock()
-		err := utils.SetFrontmatterList(skillMDPath, "metadata.targets", values)
-		s.mu.Unlock()
+		if d.IsInRepo {
+			// Tracked-repo members keep their SKILL.md untouched so the clone
+			// stays clean for update; the targets live in .metadata.json.
+			s.mu.Lock()
+			s.skillsStore.SetTargetOverride(d.RelPath, values)
+			err := s.skillsStore.Save(s.cfg.EffectiveSkillsSource())
+			s.mu.Unlock()
 
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to update skill: "+err.Error())
-			return
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to update skill: "+err.Error())
+				return
+			}
+		} else {
+			skillMDPath := filepath.Join(d.SourcePath, "SKILL.md")
+
+			s.mu.Lock()
+			err := utils.SetFrontmatterList(skillMDPath, "metadata.targets", values)
+			s.mu.Unlock()
+
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to update skill: "+err.Error())
+				return
+			}
+
+			s.mu.RLock()
+			refresh := s.skillsStore.HasFileHashes(d.RelPath)
+			s.mu.RUnlock()
+			if refresh {
+				if hashes, err := install.ComputeFileHashes(d.SourcePath); err == nil {
+					s.mu.Lock()
+					s.skillsStore.SetFileHashes(d.RelPath, hashes)
+					s.skillsStore.Save(s.cfg.EffectiveSkillsSource()) //nolint:errcheck
+					s.mu.Unlock()
+				}
+			}
 		}
-
-		s.skillsStore.RefreshHashes(d.RelPath, d.SourcePath)
-		s.skillsStore.Save(s.cfg.EffectiveSkillsSource()) //nolint:errcheck
 
 		s.writeOpsLog("set-skill-targets", "ok", start, map[string]any{
 			"name":   name,

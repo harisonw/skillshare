@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"skillshare/internal/install"
+	ssync "skillshare/internal/sync"
 	"skillshare/internal/utils"
 )
 
@@ -272,5 +274,141 @@ func TestHandleSetSkillTargets_NotFound(t *testing.T) {
 
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// --- Tracked-repo skills ---
+
+const trackedSkillRel = "_caveman/plugins/caveman/skills/cavecrew"
+
+// addTrackedRepoSkill creates a committed git repo "_caveman" holding one skill
+// whose frontmatter targets cursor.
+func addTrackedRepoSkill(t *testing.T, sourceDir string) string {
+	t.Helper()
+	repoDir := filepath.Join(sourceDir, "_caveman")
+	skillDir := filepath.Join(sourceDir, filepath.FromSlash(trackedSkillRel))
+	os.MkdirAll(skillDir, 0755)
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: cavecrew\nmetadata:\n  targets:\n    - cursor\n---\n# cavecrew"), 0644)
+	initGitRepo(t, repoDir)
+	return repoDir
+}
+
+// effectiveTargets returns the targets discovery reports for relPath.
+func effectiveTargets(t *testing.T, sourceDir, relPath string) []string {
+	t.Helper()
+	skills, err := ssync.DiscoverSourceSkillsAll(sourceDir)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	for _, d := range skills {
+		if d.RelPath == relPath {
+			return d.Targets
+		}
+	}
+	t.Fatalf("skill %s not discovered", relPath)
+	return nil
+}
+
+func setSkillTarget(t *testing.T, s *Server, name, target string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPatch, "/api/resources/"+name+"/targets", bytes.NewBufferString(`{"target":"`+target+`"}`))
+	req.SetPathValue("name", name)
+	rr := httptest.NewRecorder()
+	s.handleSetSkillTargets(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleSetSkillTargets_TrackedRepoSkill_OverridesWithoutDirtyingRepo(t *testing.T) {
+	s, src := newTestServer(t)
+	repoDir := addTrackedRepoSkill(t, src)
+
+	setSkillTarget(t, s, "cavecrew", "claude")
+
+	if got := effectiveTargets(t, src, trackedSkillRel); len(got) != 1 || got[0] != "claude" {
+		t.Errorf("expected effective targets [claude], got %v", got)
+	}
+	if out := runGit(t, repoDir, "status", "--porcelain"); len(out) != 0 {
+		t.Errorf("expected clean tracked repo, got:\n%s", out)
+	}
+}
+
+func TestHandleSetSkillTargets_TrackedRepoSkill_EmptyTargetMeansAll(t *testing.T) {
+	s, src := newTestServer(t)
+	addTrackedRepoSkill(t, src)
+
+	setSkillTarget(t, s, "cavecrew", "")
+
+	// Must not fall back to the repo's frontmatter [cursor].
+	if got := effectiveTargets(t, src, trackedSkillRel); got != nil {
+		t.Errorf("expected all targets (nil), got %v", got)
+	}
+}
+
+func TestHandleBatchSetTargets_TrackedRepoSkills(t *testing.T) {
+	s, src := newTestServer(t)
+	repoDir := addTrackedRepoSkill(t, src)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/resources/batch/targets", bytes.NewBufferString(`{"folder":"_caveman","target":"claude"}`))
+	rr := httptest.NewRecorder()
+	s.handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp batchSetTargetsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Updated != 1 || resp.Skipped != 0 {
+		t.Errorf("expected updated=1 skipped=0, got updated=%d skipped=%d", resp.Updated, resp.Skipped)
+	}
+	if got := effectiveTargets(t, src, trackedSkillRel); len(got) != 1 || got[0] != "claude" {
+		t.Errorf("expected effective targets [claude], got %v", got)
+	}
+	if out := runGit(t, repoDir, "status", "--porcelain"); len(out) != 0 {
+		t.Errorf("expected clean tracked repo, got:\n%s", out)
+	}
+}
+
+func TestHandleUninstallRepo_RemovesTargetOverrides(t *testing.T) {
+	s, src := newTestServer(t)
+	addTrackedRepoSkill(t, src)
+	setSkillTarget(t, s, "cavecrew", "claude")
+	s.skillsStore.SetTargetOverride("_other/skill", []string{"cursor"})
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/repos/_caveman", nil)
+	req.SetPathValue("name", "_caveman")
+	rr := httptest.NewRecorder()
+	s.handleUninstallRepo(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	overrides := install.LoadTargetOverrides(src)
+	if _, ok := overrides[trackedSkillRel]; ok {
+		t.Errorf("expected override for %s to be removed, got %v", trackedSkillRel, overrides)
+	}
+	if _, ok := overrides["_other/skill"]; !ok {
+		t.Errorf("expected override of another repo to survive, got %v", overrides)
+	}
+}
+
+func TestHandleBatchUninstall_RemovesTargetOverrides(t *testing.T) {
+	s, src := newTestServer(t)
+	addTrackedRepoSkill(t, src)
+	setSkillTarget(t, s, "cavecrew", "claude")
+
+	b, _ := json.Marshal(batchUninstallRequest{Names: []string{"_caveman"}, Force: true})
+	req := httptest.NewRequest(http.MethodPost, "/api/uninstall", bytes.NewReader(b))
+	rr := httptest.NewRecorder()
+	s.handleBatchUninstall(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	if overrides := install.LoadTargetOverrides(src); len(overrides) != 0 {
+		t.Errorf("expected no target overrides after uninstall, got %v", overrides)
 	}
 }

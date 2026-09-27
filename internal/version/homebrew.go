@@ -70,4 +70,9 @@ func FetchBrewLatestVersion() (string, error) {
 
 // SudoUpgradeHint is the command shown when an upgrade needs a password but
 // has no terminal to ask on. The dashboard matches on it to explain the failure.
-const SudoUpgradeHint = "sudo skillshare upgrade"
+// It has no sudo prefix: the CLI elevates only the binary replacement, while a
+// fully root upgrade leaves root-owned skill files that later break git pull.
+const SudoUpgradeHint = "skillshare upgrade"
+
+// SudoUpgradeHintPrefix precedes SudoUpgradeHint in the CLI error.
+const SudoUpgradeHintPrefix = "run in a terminal: "

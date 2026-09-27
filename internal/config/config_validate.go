@@ -49,6 +49,9 @@ func ValidateConfig(cfg *Config) (warnings []string, err error) {
 
 	// Per-target validation
 	for name, target := range cfg.Targets {
+		if err := ValidateTargetInstructions(target.Instructions, false); err != nil {
+			errs = append(errs, fmt.Sprintf("target %q: %v", name, err))
+		}
 		sc := target.SkillsConfig()
 		if !IsValidSyncMode(sc.Mode) {
 			errs = append(errs, fmt.Sprintf("target %q: invalid sync mode %q (valid: %s)", name, sc.Mode, strings.Join(ValidSyncModes, ", ")))
@@ -70,6 +73,8 @@ func ValidateConfig(cfg *Config) (warnings []string, err error) {
 			errs = append(errs, validateTargetPath(name, ExpandPath(path))...)
 		}
 	}
+
+	errs = append(errs, validateExtras(cfg.Extras)...)
 
 	if len(errs) > 0 {
 		return warnings, errors.New(strings.Join(errs, "; "))
@@ -100,6 +105,9 @@ func ValidateProjectConfig(cfg *ProjectConfig, projectRoot string) (warnings []s
 		errs = append(errs, fmt.Sprintf("invalid project target naming %q (valid: %s)", cfg.TargetNaming, strings.Join(ValidTargetNamings, ", ")))
 	}
 	for _, entry := range cfg.Targets {
+		if err := ValidateTargetInstructions(entry.Instructions, true); err != nil {
+			errs = append(errs, fmt.Sprintf("target %q: %v", entry.Name, err))
+		}
 		sc := entry.SkillsConfig()
 		if !IsValidSyncMode(sc.Mode) {
 			errs = append(errs, fmt.Sprintf("target %q: invalid sync mode %q (valid: %s)", entry.Name, sc.Mode, strings.Join(ValidSyncModes, ", ")))
@@ -139,10 +147,60 @@ func ValidateProjectConfig(cfg *ProjectConfig, projectRoot string) (warnings []s
 		}
 	}
 
+	errs = append(errs, validateExtras(cfg.Extras)...)
+
 	if len(errs) > 0 {
 		return warnings, errors.New(strings.Join(errs, "; "))
 	}
 	return warnings, nil
+}
+
+// ValidateTargetInstructions checks a user-set instruction file: a file path,
+// absolute or ~/ in global mode, relative to the project root in project mode.
+// A nil config is valid.
+func ValidateTargetInstructions(ic *TargetInstructionsConfig, project bool) error {
+	if ic == nil {
+		return nil
+	}
+	path := strings.TrimSpace(ic.Path)
+	switch {
+	case path == "":
+		return errors.New("instructions.path is empty")
+	case strings.HasSuffix(path, "/") || strings.HasSuffix(path, `\`):
+		return fmt.Errorf("instructions.path %q must name a file, not a directory", path)
+	case project && (filepath.IsAbs(path) || strings.HasPrefix(path, "~")):
+		return fmt.Errorf("instructions.path %q must be relative to the project root", path)
+	case !project && !filepath.IsAbs(path) && !strings.HasPrefix(path, "~/"):
+		return fmt.Errorf("instructions.path %q must be absolute or start with ~/", path)
+	}
+	return nil
+}
+
+// validateExtras checks extras that use single-file settings. Directory extras
+// are left to sync, which already reports their per-target errors.
+func validateExtras(extras []ExtraConfig) []string {
+	var errs []string
+	for _, extra := range extras {
+		if !usesSingleFileSettings(extra) {
+			continue
+		}
+		if err := ValidateExtraConfig(extra); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	return errs
+}
+
+func usesSingleFileSettings(extra ExtraConfig) bool {
+	if extra.File != "" {
+		return true
+	}
+	for _, t := range extra.Targets {
+		if t.As != "" || t.Mode == "import" {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveProjectTargetPath returns an absolute path for a project target.

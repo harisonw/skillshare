@@ -95,9 +95,11 @@ Push failed
 
 解決方法:
 ```bash
-skillshare pull    # remote の変更を取得
+skillshare pull    # remote の変更を自分の変更とマージ
 skillshare push    # 自分の変更をプッシュ
 ```
+
+`pull` は remote のコミットを、まだプッシュしていない自分のコミットとマージするため、2回目の `push` は成功します。両方で同じファイルを変更していた場合の動作は [両方のマシンでコミットした場合](/docs/reference/commands/pull#when-both-machines-committed) を参照してください。
 
 ## ワークフロー
 

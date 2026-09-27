@@ -205,17 +205,18 @@ git checkout -- .
 skillshare pull
 ```
 
-### `merge conflicts`
+### `pull stopped: this machine and the remote both changed ...`
 
-**原因：** 同一个文件在多台机器上都被编辑过。
+**原因：** 同一个文件在两台机器上都被编辑过。`pull` 已撤销合并，所以仓库没有变化。只有 `.metadata.json` 冲突时不会出现这个错误，它会被自动解决。
 
 **解决方式：**
 ```bash
 cd ~/.config/skillshare/skills
-git status                    # 查看冲突文件
-# 编辑文件以解决冲突
+git pull --no-rebase          # 重新合并并保留冲突
+# 编辑冲突文件
 git add .
-git commit -m "Resolve conflicts"
+git commit --no-edit
+skillshare push
 skillshare sync
 ```
 
@@ -404,9 +405,9 @@ GIT_SSL_NO_VERIFY=true skillshare install https://gitlab.internal.company.com/te
 
 ## Update Errors
 
-### `git failed: Need to specify how to reconcile divergent branches`
+### `pull stopped: this machine and the remote both changed ...`（tracked 仓库）
 
-**原因：** 远程分支与你本地 tracked 副本产生了分歧。
+**原因：** tracked 仓库里有本地 commit，与远程发生冲突。`update` 会合并分歧的历史，但遇到冲突的文件会停止，并撤销合并。
 
 **解决方式：**
 ```bash
@@ -415,7 +416,9 @@ skillshare update --force
 
 # 或手动解决
 cd ~/.config/skillshare/skills/_repo-name
-git pull --rebase
+git pull --no-rebase
+# 编辑冲突文件，然后
+git add . && git commit --no-edit
 ```
 
 :::tip

@@ -31,6 +31,9 @@ type ProjectTargetEntry struct {
 	Skills *ResourceTargetConfig
 	Agents *ResourceTargetConfig
 
+	// Instructions is the user-set instruction file (relative to the project root).
+	Instructions *TargetInstructionsConfig
+
 	wasMigrated         bool   // true if flat fields were migrated during unmarshal; not serialized
 	defaultTargetNaming string `yaml:"-"`
 }
@@ -49,6 +52,8 @@ func (t *ProjectTargetEntry) UnmarshalYAML(value *yaml.Node) error {
 		Exclude []string              `yaml:"exclude"`
 		Skills  *ResourceTargetConfig `yaml:"skills"`
 		Agents  *ResourceTargetConfig `yaml:"agents"`
+
+		Instructions *TargetInstructionsConfig `yaml:"instructions"`
 	}
 	if err := value.Decode(&decoded); err != nil {
 		return err
@@ -60,6 +65,7 @@ func (t *ProjectTargetEntry) UnmarshalYAML(value *yaml.Node) error {
 	t.Exclude = decoded.Exclude
 	t.Skills = decoded.Skills
 	t.Agents = decoded.Agents
+	t.Instructions = decoded.Instructions
 
 	// Migrate legacy flat fields into Skills sub-key.
 	hasFlatFields := t.Path != "" || t.Mode != "" || len(t.Include) > 0 || len(t.Exclude) > 0
@@ -102,15 +108,19 @@ func (t ProjectTargetEntry) MarshalYAML() (interface{}, error) {
 	hasMode := strings.TrimSpace(t.Mode) != ""
 	hasInclude := len(t.Include) > 0
 	hasExclude := len(t.Exclude) > 0
+	hasInstructions := t.Instructions != nil
 
 	// New format: write skills/agents sub-keys
-	if hasSkills || hasAgents {
+	if hasSkills || hasAgents || hasInstructions {
 		obj := map[string]any{"name": t.Name}
 		if hasSkills {
 			obj["skills"] = t.Skills
 		}
 		if hasAgents {
 			obj["agents"] = t.Agents
+		}
+		if hasInstructions {
+			obj["instructions"] = t.Instructions
 		}
 		return obj, nil
 	}
@@ -517,6 +527,10 @@ func ResolveProjectTargets(projectRoot string, cfg *ProjectConfig) (map[string]T
 				Include:      append([]string(nil), sc.Include...),
 				Exclude:      append([]string(nil), sc.Exclude...),
 			},
+		}
+		if entry.Instructions != nil {
+			ic := *entry.Instructions
+			tc.Instructions = &ic
 		}
 
 		// Resolve Agents sub-key: from entry config or builtin defaults.

@@ -47,6 +47,13 @@ export const queryKeys = {
   templates: ['templates'] as const,
   skillPreview: (req: object) => ['skill-preview', req] as const,
   extras: ['extras'] as const,
+  instructions: {
+    all: ['instructions'] as const,
+    target: (name: string) => ['instructions', 'target', name] as const,
+    shared: ['instructions', 'shared'] as const,
+    sharedContent: (name: string) => ['instructions', 'shared', name] as const,
+    project: ['instructions', 'project'] as const,
+  },
   mcp: ['mcp'] as const,
   plugins: ['plugins'] as const,
   // Under `plugins`, so invalidating that key refreshes both.

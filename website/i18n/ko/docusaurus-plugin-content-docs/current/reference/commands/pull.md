@@ -80,6 +80,31 @@ skillshare pull
 git stash pop
 ```
 
+## 두 머신 모두 커밋한 경우 {#when-both-machines-committed}
+
+이 머신에 remote에 없는 커밋이 있고 remote에도 이 머신에 없는 커밋이 있으면, `pull`은 두 히스토리를 병합 커밋으로 합친 뒤 sync합니다. 병합 결과를 공유하려면 이후에 push하세요.
+
+두 머신 모두 Skill을 설치하거나 업데이트할 때마다 `.metadata.json`을 다시 쓰기 때문에 이 파일에서 충돌이 자주 발생합니다. `pull`은 이런 충돌을 스스로 해결합니다. 각 Skill의 항목을 따로 병합하며, 두 머신이 같은 항목을 변경한 경우 `installed_at`이 더 늦은 쪽이 적용됩니다.
+
+그 외의 파일에서 충돌이 발생하면 pull이 중단되고, 병합이 되돌려지며, 해당 파일이 표시됩니다:
+
+```bash
+$ skillshare pull
+git pull failed
+pull stopped: this machine and the remote both changed my-skill/SKILL.md; the merge was undone, resolve it with git in ~/.config/skillshare/skills
+```
+
+저장소는 pull 이전 상태 그대로 남습니다. 충돌을 직접 해결하려면:
+
+```bash
+cd ~/.config/skillshare/skills
+git pull --no-rebase             # 병합을 다시 실행하고 충돌을 남겨 둠
+# 충돌한 파일을 편집한 뒤
+git add . && git commit --no-edit
+skillshare push
+skillshare sync
+```
+
 ## 기존 Skill이 있는 상태에서의 첫 Pull
 
 첫 pull 시(아직 upstream이 없는 경우), local과 remote 양쪽에 이미 skill 디렉터리가 있다면

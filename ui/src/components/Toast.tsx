@@ -6,11 +6,14 @@ interface Toast {
   message: string;
   type: 'success' | 'error' | 'warning' | 'info';
   title?: string;
+  key?: string;
   exiting?: boolean;
 }
 
 interface ToastOptions {
   title?: string;
+  /** A new toast replaces any shown toast with the same key instead of stacking under it. */
+  key?: string;
 }
 
 interface ToastContextValue {
@@ -119,7 +122,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const addToast = useCallback((message: string, type: Toast['type'] = 'info', opts?: ToastOptions) => {
     const id = nextId++;
-    setToasts((prev) => [...prev, { id, message, type, title: opts?.title }]);
+    const key = opts?.key;
+    setToasts((prev) => [...prev.filter((t) => !key || t.key !== key), { id, message, type, title: opts?.title, key }]);
   }, []);
 
   const removeToast = useCallback((id: number) => {

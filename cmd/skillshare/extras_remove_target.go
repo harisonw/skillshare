@@ -140,7 +140,15 @@ func cmdExtrasRemoveTarget(args []string) error {
 	resolved := canonicalExtraTargetPath(mode, cwd, target.Path)
 
 	var pruned int
-	if prune {
+	if prune && extras[idx].File != "" {
+		changed, restoreErr := sync.RestoreExtraTarget(sync.NewExtraFile(sourceDirForExtra(extras[idx]), extras[idx].File, resolved, target.As, targetMode))
+		if restoreErr != nil {
+			return fmt.Errorf("failed to prune target %s: %w", shortenPath(rmPath), restoreErr)
+		}
+		if changed {
+			pruned = 1
+		}
+	} else if prune {
 		var managedFiles map[string]bool
 		if targetMode == "copy" {
 			var managedErr error
@@ -164,6 +172,10 @@ func cmdExtrasRemoveTarget(args []string) error {
 
 	if err := saveFn(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
+	}
+	if !prune && extras[idx].File != "" {
+		// No longer managed: a later attach here must record a fresh restore point.
+		sync.ForgetExtraTarget(sync.NewExtraFile(sourceDirForExtra(extras[idx]), extras[idx].File, resolved, target.As, targetMode))
 	}
 
 	ui.Success("Removed target %s from %s", shortenPath(rmPath), name)

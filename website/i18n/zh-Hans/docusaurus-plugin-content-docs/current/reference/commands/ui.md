@@ -88,13 +88,13 @@ skillshare ui start --clear-cache
 |------|------|
 | **Dashboard** | skills、agents、extras、MCP servers、plugins 和 targets 的计数，以及需要关注的项目 |
 | **Sync** | 在写入之前，按 Target 预览每一处变更。选择要包含的部分（Skills、Agents、Extras、MCP）。在 Target 内部编辑过的文件会被保留，除非开启了 **Force**。只存在于某个 Target 中的项目可以从这里收集回 Source。每次 sync 会先备份 Target 目录 |
-| **Git Sync** | 提交并推送 source 仓库，推送尚未上 remote 的提交，并拉取。Pull 会同步该仓库 scope 所涵盖的内容（`skills`、`agents`、`extras` 或 `root`），与 [`pull`](/docs/reference/commands/pull) 相同。当首次 pull 无法与 remote 合并时，它会提供一个强制 pull 选项，用 remote 分支替换本地文件 |
+| **Git Sync** | 提交并推送 source 仓库，推送尚未上 remote 的提交，并拉取。打开页面时会先从 remote fetch，所以 **Pull** 会显示 remote 有多少个新提交。Pull 会同步该仓库 scope 所涵盖的内容（`skills`、`agents`、`extras` 或 `root`），与 [`pull`](/docs/reference/commands/pull) 相同。当 remote 因为有更新的提交而拒绝 push 时，错误提示会提供 **Pull**。当首次 pull 无法与 remote 合并时，它会提供一个强制 pull 选项，用 remote 分支替换本地文件 |
 | **Hubs** | 从 Skills 页面进入。**Browse** 过滤某个 hub 并从中安装；**My hubs** 从已安装的 skills 组装出一个索引，验证并导出它。参见 [`hub`](/docs/reference/commands/hub) |
-| **Skills** / **Agents** | 已安装的项目、**Updates** 标签页，以及 **Trash** 标签页。Skills 还有一个 **Analyze** 标签页，估算每个 skill 为某个 target 的上下文增加了多少 token。**Install** 可从 GitHub 搜索，或从 URL 或路径安装。**+ New Skill** 打开创建向导。带有 `disable-model-invocation: true` 的 skill 会在列表、卡片和详情页上带有 **manual only** 标签，这与 [`list`](/docs/reference/commands/list) 用 `M` 切换的状态相同。在 skill 编辑器中，**Add field** 会描述每个 frontmatter 字段的作用。**Sync skills** / **Sync agents** 会先预览，然后只将该类型 sync 到每个 target；在更新、卸载或 collect 之后，点击 **Sync Now** 也会打开同一个对话框 |
-| **Extras** | 与 skills 一起同步的 rules、commands 和其他目录 |
+| **Skills** / **Agents** | 已安装的项目、**Updates** 标签页，以及 **Trash** 标签页。Skills 还有一个 **Analyze** 标签页，估算每个 skill 为某个 target 的上下文增加了多少 token。**Install** 可从 GitHub 搜索，或从 URL 或路径安装。**+ New Skill** 打开创建向导。列表和卡片视图可以按 **Folder**（tracked repo、`frontend/react` 这类文件夹，或 **Root**）过滤，也可以按 **Folder** 分组，Root 排在最前，其余文件夹按名称 A→Z 排序。**tree** 视图左侧显示 source 文件夹，右侧显示详情：点击文件夹或 skill 进行选择，Cmd/Ctrl 点击加入选择，Shift 点击选择范围，双击 skill 打开它。右侧可以用一个开关启用或停用所有选中的项目、设置它们的 targets（包括 tracked repo 及其子文件夹），并列出每个 skill 各自的开关；tracked repo 还提供 **Update repo** 和 **Uninstall repo**。带有 `disable-model-invocation: true` 的 skill 会在列表、卡片和详情页上带有 **manual only** 标签，这与 [`list`](/docs/reference/commands/list) 用 `M` 切换的状态相同。在 skill 编辑器中，**Add field** 会描述每个 frontmatter 字段的作用。**Sync skills** / **Sync agents** 会先预览，然后只将该类型 sync 到每个 target；在更新、卸载或 collect 之后，点击 **Sync Now** 也会打开同一个对话框 |
+| **Extras** | **文件夹**：与 skills 一起同步的 rules、commands 和其他目录。**AGENTS.md**：在 global mode 下是共享 `AGENTS.md` 以及哪些 target 在使用它们；在项目中是项目的 `./AGENTS.md` 以及每个 target 是否会读取它。参见[让多个工具共用一份 AGENTS.md](../../how-to/daily-tasks/sharing-instructions.md) |
 | **MCP** | 每个 server 一行，以及它同步到的 Agents 开关。**添加服务器** 接受 URL、命令、粘贴的片段或文件；**从 target 导入** 会读取某个已安装 Agent 现有的配置。每个 server 的菜单都有 **查看各 Agent 会写入的配置**，用于显示每个 Agent 的原生配置，包括尚未保存的编辑。冲突会提供 **从该 Agent 导入** 或 **使用来源覆盖**，Backup 也可以在恢复前预览。对于使用 `pi-mcp-adapter` 的 Pi server，server 对话框中还有 **Direct tools**，以及一个 **其他 adapter 设置** 输入框，用于以 JSON 形式填写 [`piOptions`](./mcp.md#pi-options)。**默认值** 用于编辑 `mcp.targets` 和 `mcp.directTools`。Sync 框中的 **Sync MCP** 会列出待写入的更改，并只写入 MCP 配置文件，同时为每个文件保留一份备份。 |
 | **Plugins** | 每个 plugin 一行，以及它的 Agents 开关。展开一行还会列出该来源支持的其他 Agents；勾选一个会预览安装效果。行菜单可以同步、更新、移除，或打开 **View files**，即 Skillshare 审阅过的本地副本的只读浏览器。参见 [Manage plugins across tools](/docs/how-to/daily-tasks/sharing-plugins) |
-| **Targets** | 带状态的 Target 列表。**添加目标** 还提供 **另一个账号**：你已在使用的某个 Agent 的第二个配置文件夹，并会预览它的写入位置。每个 Target 的页面可编辑 include/exclude filter，并把本地专属的 skills 收集回 Source。列表也会显示每个 Agent 拿到的 MCP server 数量。有 MCP 配置文件的 Target 会多一个 **MCP** 标签页，每个 server 一行；点一下就会保存，**Sync all targets** 会写入所有 Target 的 MCP 配置文件 |
+| **Targets** | 带状态的 Target 列表。**添加目标** 还提供 **另一个账号**：你已在使用的某个 Agent 的第二个配置文件夹，并会预览它的写入位置。每个 Target 的页面可编辑 include/exclude filter，并把本地专属的 skills 收集回 Source。列表也会显示每个 Agent 拿到的 MCP server 数量。有 MCP 配置文件的 Target 会多一个 **MCP** 标签页，每个 server 一行；点一下就会保存，**Sync all targets** 会写入所有 Target 的 MCP 配置文件。每个 Target 还有一个以其指示文件命名的标签页（**CLAUDE.md**、**GEMINI.md**、**AGENTS.md** 等），显示读取顺序、编辑该文件，并可将其转换为 `AGENTS.md` |
 | **Projects** | 仅限 global mode。global 配置会 sync 进的项目文件夹，来自 [`projects`](/docs/reference/targets/configuration#projects) 和 [`mcp.projects`](./mcp.md#projects-in-the-dashboard)。**添加项目** 需要填写文件夹、它的 Target 和要 sync 的内容。每个项目都有带 filter 的 **Skills** 和 **Agents** 标签页，可以预览并查看会写入的文件夹，还有一个 **MCP** 标签页，用于在该文件夹中关闭 global server 或为它添加自己的 server。**Sync project** 会先预览，然后只 sync 该项目的 skills、agents 和 MCP。已经指向某个项目文件夹的 Target 可以被转换 |
 | **Audit** | 对 skills 和 agents 的安全扫描，按严重程度列出 findings。**Rules** 标签页按类别浏览每一条规则：可以关闭某一条、更改其严重程度、把某个严重程度应用到整个类别、选择扫描 profile（`default`、`strict`、`permissive`），或打开自定义 `audit-rules.yaml` 的编辑器 |
 | **Settings** | 带标签页：**General**（source 路径、sync 模式、外观）、**Backup**（快照与恢复）、**Log**（操作历史）、**Health**（与 [`doctor`](/docs/reference/commands/doctor) 相同的检查）、**Extensions**（同步时的文件转换）、**Files**（`config.yaml`、`.skillignore` 和 `.agentignore` 的直接编辑器） |
@@ -127,6 +127,7 @@ Dashboard 支持两种视觉风格和三种颜色模式，可通过侧边栏的 
 - **Available targets** 列出的是 project 级 target（例如相对于项目根目录的 `.claude/skills/`）
 - **Targets** 统计并切换 project 的 MCP server，写入 project 自己的文件（例如 `.mcp.json`）。Claude Code、OpenCode、Kilo Code 和 Pi 的 **MCP** 标签页还会列出在这个 project 关闭全局 server 的开关
 - **Install** 会自动协调 project config 中的 `skills:` 条目
+- **Extras -> AGENTS.md** 编辑的是项目的 `./AGENTS.md` 而不是共享文件，并为只读取自己文件的 target 提供一个小修正
 
 ## UI 预览
 
@@ -156,9 +157,9 @@ web dashboard 在 `/api/` 下暴露一个 REST API。所有端点都返回 JSON�
 | DELETE | `/api/targets/{name}` | 移除一个 target |
 | POST | `/api/sync` | 运行 sync（支持 `dryRun`、`force`、`kind`，以及 `project`：一个已声明的项目根目录，用于将 sync 限定在该项目的 targets）。除非设置了 `dryRun`，否则会先备份 targets |
 | POST | `/api/git/commit` | 从 source 仓库创建一个本地 git commit，但不推送 |
-| GET | `/api/git/status` | source 仓库状态，包括尚未推送的提交（`ahead`） |
-| POST | `/api/push` | 提交任何变更，然后推送。首次推送时会设置 upstream |
-| POST | `/api/pull` | 拉取，然后同步该仓库 scope 所涵盖的内容。当首次 pull 无法合并时，会以错误码 `merge_failed` 失败；用 `force: true` 重试可用 remote 分支替换本地文件 |
+| GET | `/api/git/status` | source 仓库状态，包括尚未推送的提交（`ahead`），以及截至上次 fetch 尚未拉取的 upstream 提交（`behind`）。不会执行 fetch |
+| POST | `/api/push` | 提交任何变更，然后推送。首次推送时会设置 upstream。当 remote 有本仓库没有的提交时，会以 `409` 和错误码 `push_rejected` 失败；先 pull，再重新 push |
+| POST | `/api/pull` | 拉取，然后同步该仓库 scope 所涵盖的内容。分歧的历史会被合并；`.metadata.json` 的冲突会自动解决，其他冲突会失败并撤销合并。当首次 pull 无法合并时，会以错误码 `merge_failed` 失败；用 `force: true` 重试可用 remote 分支替换本地文件 |
 | GET | `/api/diff` | source 与 targets 之间的差异 |
 | GET | `/api/search?q=` | 在 GitHub 上搜索 skills |
 | POST | `/api/install` | 从来源安装一个 skill |

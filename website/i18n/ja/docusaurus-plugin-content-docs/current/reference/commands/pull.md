@@ -80,6 +80,31 @@ skillshare pull
 git stash pop
 ```
 
+## 両方のマシンでコミットした場合 {#when-both-machines-committed}
+
+このマシンに remote にないコミットがあり、remote にもこのマシンにないコミットがある場合、`pull` は2つの履歴をマージコミットにまとめてから sync します。マージを共有するには、そのあとでプッシュしてください。
+
+どちらのマシンも Skill をインストール・更新するたびに `.metadata.json` を書き換えるため、このファイルはよく競合します。`pull` はこれらの競合を自動で解決します。Skill ごとのエントリを個別にマージし、両方のマシンが同じエントリを変更していた場合は `installed_at` が新しいほうを採用します。
+
+それ以外のファイルで競合が起きると、`pull` は停止してマージを取り消し、該当ファイルを表示します:
+
+```bash
+$ skillshare pull
+git pull failed
+pull stopped: this machine and the remote both changed my-skill/SKILL.md; the merge was undone, resolve it with git in ~/.config/skillshare/skills
+```
+
+リポジトリは pull 前の状態のままです。自分で競合を解決するには:
+
+```bash
+cd ~/.config/skillshare/skills
+git pull --no-rebase             # マージをやり直し、競合を残す
+# 競合したファイルを編集してから
+git add . && git commit --no-edit
+skillshare push
+skillshare sync
+```
+
 ## 既存の Skill がある状態での初回 pull
 
 初回の pull 時（まだアップストリームがない場合）、ローカルと remote の両方に既に Skill ディレクトリが含まれている場合、

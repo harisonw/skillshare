@@ -1,5 +1,106 @@
 # Changelog
 
+## [0.21.10] - 2026-09-27
+
+### New Features
+
+#### Dashboard
+
+- **Share one AGENTS.md across your tools** — the Extras page has a new **AGENTS.md** tab. Create a shared `AGENTS.md` and choose which targets read it. Claude has no user-level `AGENTS.md`, so it gets an `@` import in `~/.claude/CLAUDE.md` and keeps its own content; Codex, Gemini and other targets get a link in place of their file, which is backed up first. Several shared files can sit side by side, such as one for personal and one for work, and targets that follow `@` imports can use more than one. **Restore** asks first, then puts back exactly what the target had before it was attached.
+  ```bash
+  skillshare ui
+  ```
+- **Edit each tool's instruction file** — every target page has a tab named after the file that tool reads, such as **CLAUDE.md**, **GEMINI.md** or **AGENTS.md**. It shows the read order, an editor, and warnings such as Windsurf reading only the first 6,000 characters. **Convert…** moves the content of `CLAUDE.md` into `AGENTS.md` by import, rename or copy, and backs up the file first.
+- **`AGENTS.md` in projects** — in project mode the tab shows whether each target reads `./AGENTS.md`, and adds a small fix for tools that only read their own file, such as `@AGENTS.md` in `CLAUDE.md`.
+- **Tools skillshare doesn't know** — a custom target can say which instruction file it reads, in the **Custom target** dialog when you add it or later from the same tab. The setting is saved as `instructions` on the target:
+  ```yaml
+  targets:
+    myagent:
+      path: ~/.myagent/skills
+      instructions:
+        path: ~/.myagent/AGENTS.md
+        import: true        # the tool follows @path lines
+  ```
+- **See which projects a skill reaches** — on the Skills page, the **Targets** column shows your global tools as icons, followed by a folder badge with the number of projects the skill is synced into. Before, each project repeated its tools' icons, so `claude` plus two projects showed three Claude icons. Hover to see the global tools and each project's tools, including projects the skill does not reach. The **Target** filter now groups global tools and projects, with one entry per project, and in the tree view the **Targets** row shows where the selected skill actually goes. Refs: #297.
+
+#### Extras
+
+- **Single-file extras** — an extra with `file` syncs one file instead of a whole folder, `as` renames it per target, and the new `import` mode writes an `@` line into the target's own file instead of replacing it. `extras list` shows `modified` when a linked target was replaced by a different file, and `extras remove` puts back what each target had before the first sync.
+  ```yaml
+  extras:
+    - name: personal
+      file: AGENTS.md
+      targets:
+        - path: ~/.codex
+        - path: ~/.claude
+          as: CLAUDE.md
+          mode: import
+  ```
+
+### Bug Fixes
+
+#### Git sync
+
+- **A pull that fails midway no longer leaves the remote's files behind** — when git could not finish a pull, for example because a file in the source folder was owned by root, the files it had already written showed up as local changes. The dashboard then blocked the next pull and suggested committing them, which would have pushed stale content back. A failed pull now restores those files and leaves your own edits alone, and a permission failure shows the `chown` command that gives the source folder back to you.
+
+#### Upgrade
+
+- **Upgrading with sudo no longer leaves root-owned files in your home** — when the binary lived in a root-owned folder, `upgrade` ran entirely under sudo, so the built-in skill, dashboard assets and logs were written as root and a later `git pull` of the skills source failed with `Permission denied`. Only the binary replacement now runs with sudo.
+  ```bash
+  skillshare upgrade
+  ```
+
+#### MCP
+
+- **Pi servers load again with `pi-mcp-adapter` 3.0** — the adapter stopped reading Pi's `mcp.json` and now reads `mcp-adapter.json` in the same folder, so servers synced for it were ignored. Skillshare now writes them to `~/.pi/agent/mcp-adapter.json`, `.pi/mcp-adapter.json` in a project, or `mcp-adapter.json` in a Pi account's folder. The next sync removes the entries Skillshare had written to `mcp.json` and leaves your own there. If you already renamed the file as Pi's warning suggests, Skillshare keeps managing the entries you moved. `pi-mcp-extension` still uses `mcp.json`. Refs: #298.
+  ```bash
+  skillshare sync mcp
+  ```
+
+## [0.21.9] - 2026-09-26
+
+### New Features
+
+#### Dashboard
+
+- **Turn a whole folder or tracked repo on or off** — the **tree** view on the Skills and Agents pages now shows the folders on the left and what you selected on the right. Selecting a folder or tracked repo gives one switch that enables or disables everything inside it, and each skill is listed with its own switch. Cmd/Ctrl-click adds to the selection and Shift-click selects a range, so the same switch works on any set of skills. A disabled skill is marked with a power-off icon in place of its usual one. The divider between the two sides can be dragged. Refs: #295.
+- **Targets for skills in tracked repos** — setting targets on a tracked repo, one of its subfolders or a single skill in it used to be refused. It now works, and the setting is kept outside the cloned repo, so the repo stays clean and `skillshare update` keeps it. Refs: #295.
+- **Filter and group by folder** — the list and cards views have a **Folder** filter, and grouping has a **Folder** option, so skills installed into a folder can be seen one folder at a time or side by side. A tracked repo counts as one folder, and skills at the top of the source are grouped under **Root**.
+  ```bash
+  skillshare install ~/my-skill --into frontend
+  ```
+- **A shorter toolbar on the Skills and Agents pages** — the Source, Status, Target and Folder filters are now chips that show only their name until set; a set filter shows its value and a button to clear it. Grouping and sorting share one menu, and expand all / collapse all in the tree view is one button.
+
+### Bug Fixes
+
+#### Sync
+
+- **Skills under a dot folder are no longer reported missing** — a source skill in a folder such as `.system/` syncs to a target entry starting with a dot, which target scans skipped. `diff`, `doctor`, `status` and the dashboard reported these synced skills as missing, and `sync` did not prune them after the source skill was deleted. Refs: #294.
+
+#### Dashboard
+
+- **One Agent's plugin error no longer breaks the Plugins page** — when an Agent's plugin list could not be read, for example OpenCode with both `opencode.json` and `opencode.jsonc`, the whole Plugins page failed to load. That Agent now shows its error and the other Agents work as usual. Refs: #296.
+- **The dashboard server no longer risks crashing under overlapping requests** — changing a skill while another request was being handled could crash the server.
+
+## [0.21.8] - 2026-09-25
+
+### New Features
+
+#### Git sync
+
+- **See what the remote has before you push** — opening the **Git Sync** page fetches from the remote, and **Pull** shows how many commits are waiting, such as **Pull 2 commits**, so a machine that is behind finds out before a push is refused.
+- **`.metadata.json` conflicts resolve themselves** — every install or update rewrites `.metadata.json`, so pulling after two machines had both installed or updated skills almost always conflicted there. `pull` now merges that file skill by skill; when both machines changed the same skill, the one installed later wins. A conflict in any other file stops the pull, undoes the merge and names the files, so the repository is never left half-merged.
+  ```bash
+  skillshare pull
+  ```
+
+### Bug Fixes
+
+#### Git sync
+
+- **Pulling after both machines committed** — once this machine and the remote each had commits the other lacked, `pull` failed with `Need to specify how to reconcile divergent branches`, in the terminal and on the **Git Sync** page, and the only way out was git in a terminal. `pull` now merges the two histories. `skillshare update` does the same for a tracked repository with local commits.
+- **A refused push offers Pull** — when the remote had newer commits, **Push** on the **Git Sync** page showed git's raw `rejected` message. It now says to pull first and puts a **Pull** button next to the error.
+
 ## [0.21.7] - 2026-09-24
 
 ### New Features

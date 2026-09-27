@@ -305,6 +305,9 @@ func (s *Server) handleBatchUninstallSkills(w http.ResponseWriter, body batchUni
 				s.skillsStore.Remove(name)
 			}
 		}
+		for rp := range removedPaths {
+			s.skillsStore.RemoveTargetOverrides(rp)
+		}
 
 		if err := s.skillsStore.Save(s.cfg.EffectiveSkillsSource()); err != nil {
 			log.Printf("warning: failed to save metadata: %v", err)

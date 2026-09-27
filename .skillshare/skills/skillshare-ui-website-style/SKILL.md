@@ -16,6 +16,8 @@ metadata:
 
 Enforce the skillshare design system across the two frontends. $ARGUMENTS is the file or area being worked on.
 
+Before acting, run `python3 scripts/ai-context.py frontend`. That topic and the CSS/source files it identifies are the source of truth; this skill retains the component catalog and visual QA checklist.
+
 | Aspect | UI Dashboard (`ui/`) | Website (`website/`) |
 |--------|---------------------|----------------------|
 | Stack | React 19 + Vite + Tailwind CSS v4 | Docusaurus 3 + custom CSS |
@@ -98,9 +100,9 @@ State and variant are short modifier classes on the same element: `.on` (selecte
 | Page | `.ss-wrap` (1080px column, 28px gap), `.ss-pgh` + `.ss-ph` (header, via `PageHeader`), `.ss-crumb`, `.ss-sec` (section heading row; `h2` inside, `.more` link on the right), `.ss-h1` `.ss-h2`, `.ss-hand` (Kalam aside) |
 | Shell | `.ss-side` `.ss-wm` `.ss-nvg` `.ss-nv` `.ss-sidefoot` — `Layout.tsx` only |
 | Buttons | `.ss-btn` + `.pri` `.ghost` `.dng` + `.sm` `.lg`; `.ss-ib` (30px icon button); `.ss-more` (text link) |
-| Forms | `.ss-fld` (label + control + `.hp` help), `.ss-inp` (+ `.area` `.err`, `.k` key hint), `.ss-chk` (+ `.rad`), `.ss-sw` (switch), `.ss-tgl` (icon toggle), `.ss-seg` (+ `.ic` icon-only) |
+| Forms | `.ss-fld` (label + control + `.hp` help), `.ss-inp` (+ `.area` `.err`, `.k` key hint), `.ss-chk` (+ `.rad`), `.ss-sw` (switch; `.on`, `.mix` when only some are on), `.ss-tgl` (icon toggle), `.ss-seg` (+ `.ic` icon-only) |
 | Navigation | `.ss-tabs`, `.ss-tabbar` (tabs with controls on the right), `.ss-pager`, `.ss-menu` (+ `.hv` `.dng`, `hr`, `.k`) |
-| Lists | `.ss-list` (framed container), `.ss-lh` (column header), `.ss-gh` (group header), `.ss-r` (row; `.link` clickable, `.sel`, `.fold`; `.nm` name, `.nm.m` mono name), `.ss-plain` (rows without side padding), `.tr` with `--d` (tree indent) |
+| Lists | `.ss-list` (framed container), `.ss-lh` (column header), `.ss-gh` (group header), `.ss-r` (row; `.link` clickable, `.sel`, `.fold`; `.nm` name, `.nm.m` mono name), `.ss-plain` (rows without side padding), `.ss-split` (tree view box: `.lp` tree, `.dv` divider, `.rp` detail pane), `.ss-tn` (tree row; `.sel`, `.in` inside a selected folder, `.off`; indent with `--d`) |
 | Boxes | `.ss-box` (card, via `Card`), `.ss-tiles` + `.ss-tile` (grid; sticky notes in Playful), `.ss-kv` (`dl` key/value), `.ss-setrow` (settings row), `.ss-counts` (stat strip) |
 | Status | `.ss-st` (dot + text; `.ok` `.warn` `.bad` `.off`, `.wrap` for long messages), `.ss-tag` (mono label; `.ok` `.warn` `.bad` `.inf`), `.ss-sev` (audit severity; `.c` `.h` `.md` `.l` `.n`), `.ss-cnt` (count) |
 | Icons | `.ss-cat` (kind tile; `.skill` `.agent` `.extra` `.mcp` `.plugin` `.target`, tones, `.sm`), `.ss-at` (agent or tool logo; `.lg`), `.ss-stack` (overlapping logos) |
@@ -152,7 +154,7 @@ Tailwind utilities are for layout inside these (`flex`, `gap-*`, `min-w-0`, `w-[
 
 - `.ss-wrap` spaces its children with a 28px gap. Do not add `space-y-*` or margins between them.
 - A page that is one child of a wider layout, without `.ss-wrap`, still gets header spacing from `.ss-pgh`.
-- `PageHeader` no longer renders `icon`; do not pass it. Use `backTo` for a sub-page of a nav item, `crumbs` for deeper trails, `mono` when the title is a resource name.
+- `PageHeader` has no icon (the `icon` prop is deprecated); do not pass it. Use `backTo` for a sub-page of a nav item, `crumbs` for deeper trails, `mono` when the title is a resource name.
 - A sub-page reached from a nav item keeps that item lit through `also` in the `Layout.tsx` nav definition (Skills stays active on `/hubs`).
 
 ### Components

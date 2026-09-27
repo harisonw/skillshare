@@ -301,7 +301,7 @@ func (s *Service) renderScope(desired map[fileKey]map[string]map[string]any, ser
 			}
 			if target == "pi" {
 				if piExtension != "" && piExtension != server.PiExtension {
-					return fmt.Errorf("Pi servers share one config file; select the same piExtension for every Pi server")
+					return fmt.Errorf("Pi uses one MCP extension; select the same piExtension for every Pi server")
 				}
 				piExtension = server.PiExtension
 			}
@@ -355,7 +355,7 @@ func (s *Service) shownAs(target, path string, accounts map[string]Account) stri
 		scoped := *s
 		scoped.accounts, scoped.ProjectRoot = accounts, ""
 		account, agent := scoped.forTarget(name)
-		if file, err := account.nativePath(agent); err == nil && agent == shown && file == path {
+		if file, err := account.nativePath(agent); err == nil && agent == shown && (file == path || agent == "pi" && piExtensionPath(file) == path) {
 			return name
 		}
 	}
@@ -374,6 +374,9 @@ func (s *Service) destination(target string, server Server) (string, string, err
 		return path, claudeOffPrefix + s.ProjectRoot, err
 	}
 	path, err := s.nativePath(target)
+	if target == "pi" && server.PiExtension == "pi-mcp-extension" {
+		path = piExtensionPath(path)
+	}
 	return path, target, err
 }
 
@@ -493,6 +496,8 @@ func (s *Service) previewResolved(source *Source, resolutions []Resolution) (*Pl
 		}
 	}
 	projectRoots := sortedKeys(source.Projects)
+	// The ownership before any file is planned, since planning one file drops entries of another.
+	owners := maps.Clone(state.Entries)
 	keys := make([]fileKey, 0, len(desired))
 	for key := range desired {
 		keys = append(keys, key)
@@ -534,6 +539,16 @@ func (s *Service) previewResolved(source *Source, resolutions []Resolution) (*Pl
 			currentHash := entryHash(managedEntry(target, current))
 			want := desired[fk][name]
 			wantHash := entryHash(managedEntry(target, want))
+			// pi-mcp-adapter 3 tells the user to mv mcp.json to mcp-adapter.json. An entry this
+			// config owned there and that arrived unchanged is still its own. Refs: #298.
+			if !managed && target == "pi" && path != piExtensionPath(path) {
+				prior, ok := owners[ownershipKey(target, piExtensionPath(path), name)]
+				if ok && prior.Owner == source.ConfigPath && prior.Hash == currentHash {
+					owned = ownership{Owner: source.ConfigPath, Target: target, Path: path, Name: name, Hash: currentHash}
+					managed = true
+					p.state.Entries[key] = owned
+				}
+			}
 			for _, resolution := range resolutions {
 				if resolution.Target != shown || resolution.Name != name {
 					continue

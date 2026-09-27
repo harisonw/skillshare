@@ -90,11 +90,23 @@ type TargetConfig struct {
 	Skills *ResourceTargetConfig `yaml:"skills,omitempty"`
 	Agents *ResourceTargetConfig `yaml:"agents,omitempty"`
 
+	// Instructions names the instruction file the tool reads, for tools
+	// skillshare does not know or to override the built-in file.
+	Instructions *TargetInstructionsConfig `yaml:"instructions,omitempty"`
+
 	defaultTargetNaming string `yaml:"-"`
 	// derivedSkills and derivedAgents are the paths expandAgentConfigDirs filled in.
 	derivedSkills, derivedAgents string `yaml:"-"`
 	// projectRoot marks a target expanded from projects; see expandProjects.
 	projectRoot string `yaml:"-"`
+}
+
+// TargetInstructionsConfig is a user-set instruction file of a target. Path is
+// absolute or ~/ in global mode and relative to the project root in project
+// mode. Import marks a tool that follows @path lines.
+type TargetInstructionsConfig struct {
+	Path   string `yaml:"path" json:"path"`
+	Import bool   `yaml:"import,omitempty" json:"import"`
 }
 
 // SkillsConfig returns the effective skills configuration.
@@ -248,15 +260,19 @@ type HubConfig struct {
 // ExtraTargetConfig holds configuration for one target of an extra resource.
 type ExtraTargetConfig struct {
 	Path      string `yaml:"path"`
-	Mode      string `yaml:"mode,omitempty"`      // merge (default), symlink, or copy
+	Mode      string `yaml:"mode,omitempty"`      // merge (default), symlink, copy, or import (single-file extras only)
 	Flatten   bool   `yaml:"flatten,omitempty"`   // flatten subdirectories into target root
 	Extension string `yaml:"extension,omitempty"` // transform script applied during sync (implies copy)
+	As        string `yaml:"as,omitempty"`        // target filename for a single-file extra (default: the extra's file)
 }
 
 // ExtraConfig holds configuration for a non-skill resource type (rules, commands, etc.).
 type ExtraConfig struct {
-	Name    string              `yaml:"name"`
-	Source  string              `yaml:"source,omitempty"`
+	Name   string `yaml:"name"`
+	Source string `yaml:"source,omitempty"`
+	// File makes this a single-file extra: a plain filename inside the
+	// resolved source directory, synced to <target path>/<as or file>.
+	File    string              `yaml:"file,omitempty"`
 	Targets []ExtraTargetConfig `yaml:"targets"`
 }
 

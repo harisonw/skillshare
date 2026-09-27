@@ -433,3 +433,27 @@ targets:
 	result.AssertSuccess(t)
 	result.AssertOutputContains(t, "Summary")
 }
+
+func TestDiff_MergeMode_HiddenSourceSkill_ShowsSynced(t *testing.T) {
+	sb := testutil.NewSandbox(t)
+	defer sb.Cleanup()
+
+	sb.CreateSkill("skill-a", map[string]string{"SKILL.md": "---\nname: skill-a\n---\n# A"})
+	sb.CreateNestedSkill(".system/example", map[string]string{"SKILL.md": "---\nname: example\n---\n# Example"})
+	targetPath := sb.CreateTarget("claude")
+
+	sb.WriteConfig(`source: ` + sb.SourcePath + `
+target_naming: flat
+targets:
+  claude:
+    path: ` + targetPath + `
+    mode: merge
+`)
+
+	sb.RunCLI("sync").AssertSuccess(t)
+
+	result := sb.RunCLI("diff")
+	result.AssertSuccess(t)
+	result.AssertOutputContains(t, "fully synced")
+	result.AssertOutputNotContains(t, ".system__example")
+}

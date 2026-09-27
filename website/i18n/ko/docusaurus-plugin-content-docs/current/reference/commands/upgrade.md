@@ -96,9 +96,9 @@ skillshare sync  # 모든 target으로 배포
 Downloading v0.21.4...  3.2 MB / 9.1 MB
 ```
 
-binary가 보호된 디렉터리(예: `/usr/local/bin`)에 있으면, skillshare는 별도의 접두사 없이 자동으로 `sudo`를 사용해 업그레이드를 재실행합니다.
+binary가 보호된 디렉터리(예: `/usr/local/bin`)에 있으면, skillshare는 별도의 접두사 없이 `sudo`로 binary 교체만 수행합니다. 내장 skill, UI 에셋, 로그는 여전히 사용자 권한으로 기록되므로 업그레이드 전체를 `sudo`로 실행하지 마세요. skill 소스에 root 소유 파일이 남아 이후 `git pull`이 `Permission denied`로 실패합니다.
 
-비밀번호를 입력할 터미널이 없는 경우(대시보드의 **지금 업데이트** 버튼, CI)에는 입력을 기다리지 않고 업그레이드가 즉시 중단되며, 터미널에서 `sudo skillshare upgrade`를 실행하라고 안내합니다. 캐시된 `sudo` 자격 증명이나 `NOPASSWD` 설정이 있으면 프롬프트 없이 업그레이드됩니다.
+비밀번호를 입력할 터미널이 없는 경우(대시보드의 **지금 업데이트** 버튼, CI)에는 입력을 기다리지 않고 업그레이드가 즉시 중단되며, 터미널에서 `skillshare upgrade`를 실행하라고 안내합니다. 캐시된 `sudo` 자격 증명이나 `NOPASSWD` 설정이 있으면 프롬프트 없이 업그레이드됩니다.
 
 ### Web UI 에셋
 

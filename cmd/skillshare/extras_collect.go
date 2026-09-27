@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -117,6 +118,11 @@ func extrasCollectProject(cwd, name, fromPath string, dryRun, force bool, start 
 	return runCollect(sourceDir, expandedPath, extra.Name, target.Mode, dryRun, force, target.Flatten, "project", config.ProjectConfigPath(cwd), start, cwd)
 }
 
+// errSingleFileCollect: collect walks a whole target directory, which for a
+// single-file extra would pull unrelated files (e.g. all of ~/.claude) into
+// the source.
+var errSingleFileCollect = errors.New("collect is not supported for single-file extras")
+
 // resolveCollectExtra finds the extra by name and the target to collect from.
 // With --from, an unconfigured path yields a target with default settings.
 func resolveCollectExtra(extras []config.ExtraConfig, name, fromPath string, mode runMode, cwd string) (*config.ExtraConfig, config.ExtraTargetConfig, error) {
@@ -129,6 +135,9 @@ func resolveCollectExtra(extras []config.ExtraConfig, name, fromPath string, mod
 	}
 	if found == nil {
 		return nil, config.ExtraTargetConfig{}, fmt.Errorf("extra %q not found in config", name)
+	}
+	if found.File != "" {
+		return nil, config.ExtraTargetConfig{}, errSingleFileCollect
 	}
 
 	if fromPath == "" {

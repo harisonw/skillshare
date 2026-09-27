@@ -48,6 +48,11 @@ func collectExtrasDiff(extras []config.ExtraConfig, sourceResolver func(config.E
 	for _, extra := range extras {
 		sourceDir := sourceResolver(extra)
 
+		if extra.File != "" {
+			results = append(results, collectExtraFileDiff(extra, sourceDir)...)
+			continue
+		}
+
 		files, err := sync.DiscoverExtraFiles(sourceDir)
 		if err != nil {
 			// Source doesn't exist — report for each target
@@ -137,6 +142,27 @@ func collectExtrasDiff(extras []config.ExtraConfig, sourceResolver func(config.E
 		}
 	}
 
+	return results
+}
+
+// collectExtraFileDiff reports each target of a single-file extra as one item.
+func collectExtraFileDiff(extra config.ExtraConfig, sourceDir string) []extraDiffResult {
+	var results []extraDiffResult
+	for _, t := range extra.Targets {
+		f := sync.NewExtraFile(sourceDir, extra.File, t.Path, t.As, t.Mode)
+		r := extraDiffResult{extraName: extra.Name, targetPath: t.Path, mode: f.Mode}
+		switch status := sync.ExtraFileStatus(f); status {
+		case "synced":
+			r.synced = true
+		case "no source":
+			r.errMsg = "source file not found"
+		case "not synced":
+			r.items = append(r.items, extraDiffItem{action: "add", file: filepath.Base(f.Target), reason: "missing in target"})
+		default:
+			r.items = append(r.items, extraDiffItem{action: "modify", file: filepath.Base(f.Target), reason: status})
+		}
+		results = append(results, r)
+	}
 	return results
 }
 

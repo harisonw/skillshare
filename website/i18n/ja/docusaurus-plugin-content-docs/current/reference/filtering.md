@@ -77,6 +77,8 @@ targets: [claude, cursor]
 省略すると、すべての Target に Sync されます。`metadata.targets` とトップレベルの `targets` の両方が
 存在する場合、`metadata.targets` が優先されます。
 
+**Tracked repo:** dashboard で tracked repo 内の Skill に設定した targets は、その SKILL.md ではなく source の `.metadata.json` に保存される。そのため clone はクリーンなままで、`update` も通常どおり動作する。この設定は Skill の `metadata.targets` より優先される。
+
 **エイリアス:** Target 名はエイリアスに対応しています。`claude` は `claude-code` として設定された
 Target に一致します。[対応する Target](/docs/reference/targets/supported-targets) を参照してください。
 

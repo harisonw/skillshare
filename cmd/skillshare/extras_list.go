@@ -12,6 +12,7 @@ import (
 
 type extrasListEntry struct {
 	Name         string             `json:"name"`
+	File         string             `json:"file,omitempty"` // single-file extra: the synced file in source_dir
 	SourceDir    string             `json:"source_dir"`
 	SourceType   string             `json:"source_type"`
 	FileCount    int                `json:"file_count"`
@@ -24,7 +25,8 @@ type extrasTargetInfo struct {
 	Mode      string `json:"mode"`
 	Flatten   bool   `json:"flatten"`
 	Extension string `json:"extension,omitempty"` // transform extension name, if any
-	Status    string `json:"status"`              // "synced", "drift", "not synced", "no source"
+	As        string `json:"as,omitempty"`        // single-file extra: target filename
+	Status    string `json:"status"`              // "synced", "drift", "modified", "not synced", "no source"
 }
 
 // buildExtrasListEntries builds list entries for all configured extras.
@@ -36,11 +38,12 @@ func buildExtrasListEntries(extras []config.ExtraConfig, extrasSource, extension
 		sourceDir := sourceFunc(extra)
 		entry := extrasListEntry{
 			Name:       extra.Name,
+			File:       extra.File,
 			SourceDir:  sourceDir,
 			SourceType: config.ResolveExtrasSourceType(extra, extrasSource),
 		}
 
-		files, discoverErr := sync.DiscoverExtraFiles(sourceDir)
+		files, discoverErr := sync.DiscoverExtraSource(sourceDir, extra.File)
 		if discoverErr != nil {
 			entry.SourceExists = false
 			entry.FileCount = 0
@@ -57,6 +60,7 @@ func buildExtrasListEntries(extras []config.ExtraConfig, extrasSource, extension
 				Mode:      m,
 				Flatten:   t.Flatten,
 				Extension: t.Extension,
+				As:        t.As,
 			}
 
 			// Transform targets emit generated files via copy semantics; resolve
@@ -74,7 +78,9 @@ func buildExtrasListEntries(extras []config.ExtraConfig, extrasSource, extension
 				}
 			}
 
-			if !entry.SourceExists {
+			if extra.File != "" {
+				ti.Status = sync.ExtraFileStatus(sync.NewExtraFile(sourceDir, extra.File, resolvedPath, t.As, m))
+			} else if !entry.SourceExists {
 				ti.Status = "no source"
 			} else if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
 				ti.Status = "not synced"

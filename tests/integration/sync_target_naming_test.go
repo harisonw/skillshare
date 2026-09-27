@@ -321,3 +321,42 @@ targets:
 		t.Fatal("did not expect target naming migration warnings in symlink mode")
 	}
 }
+
+func TestSync_TargetNamingFlat_PrunesRemovedHiddenSourceSkill(t *testing.T) {
+	sb := testutil.NewSandbox(t)
+	defer sb.Cleanup()
+
+	sb.CreateSkill("skill-a", map[string]string{"SKILL.md": "---\nname: skill-a\n---\n# A"})
+	sb.CreateNestedSkill(".system/example", map[string]string{"SKILL.md": "---\nname: example\n---\n# Example"})
+	targetPath := sb.CreateTarget("claude")
+
+	sb.WriteConfig(`source: ` + sb.SourcePath + `
+target_naming: flat
+targets:
+  claude:
+    path: ` + targetPath + `
+    mode: merge
+`)
+
+	sb.RunCLI("sync").AssertSuccess(t)
+	if !sb.IsSymlink(filepath.Join(targetPath, ".system__example")) {
+		t.Fatal("expected .system__example to be synced as a symlink")
+	}
+
+	if err := os.RemoveAll(filepath.Join(sb.SourcePath, ".system")); err != nil {
+		t.Fatalf("remove hidden source skill: %v", err)
+	}
+	sb.RunCLI("sync").AssertSuccess(t)
+
+	if _, err := os.Lstat(filepath.Join(targetPath, ".system__example")); !os.IsNotExist(err) {
+		t.Fatal("expected .system__example to be pruned from target")
+	}
+	var manifest ssync.Manifest
+	data := sb.ReadFile(filepath.Join(targetPath, ssync.ManifestFile))
+	if err := json.Unmarshal([]byte(data), &manifest); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+	if _, ok := manifest.Managed[".system__example"]; ok {
+		t.Fatal("expected .system__example to be removed from manifest")
+	}
+}

@@ -127,7 +127,7 @@ func TestHandleUpgradeReturnsRunnerError(t *testing.T) {
 func TestHandleUpgradeNeedsSudoIsCoded(t *testing.T) {
 	old := runUIUpgrade
 	runUIUpgrade = func() (uiUpgradeResult, error) {
-		return uiUpgradeResult{Output: "run in a terminal: sudo skillshare upgrade"}, errors.New("exit status 1")
+		return uiUpgradeResult{Output: "run in a terminal: skillshare upgrade"}, errors.New("exit status 1")
 	}
 	defer func() { runUIUpgrade = old }()
 

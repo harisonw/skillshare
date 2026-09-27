@@ -36,7 +36,12 @@ export interface PluginResult { result: { results: PluginOutcome[] } | null; fai
 const post = <T,>(path: string, body: unknown) => apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) });
 export const pluginsApi = {
   /** `hosts: false` answers from config alone, without waiting on any Agent's CLI; `hosts` comes back empty. */
-  list: (hosts = true) => apiFetch<PluginInventory>(hosts ? '/plugins' : '/plugins?hosts=false'),
+  list: (hosts = true) =>
+    apiFetch<PluginInventory>(hosts ? '/plugins' : '/plugins?hosts=false').then((inv) => ({
+      ...inv,
+      // A failed inventory could arrive as null; one Agent must not break the whole page.
+      hosts: inv.hosts.map((h) => ({ ...h, installed: (h.installed as NativePlugin[] | null) ?? [] })),
+    })),
   discover: (source: string, sourceRef?: string, entry?: string) => post<PluginDiscovery>('/plugins/discover', { source, sourceRef, entry }),
   /** The reviewed local copy of the plugin's source; empty for an imported plugin, which has none. */
   files: (name: string) => apiFetch<{ files: string[] }>(`/plugins/${encodeURIComponent(name)}/files`),

@@ -53,7 +53,7 @@ func TestPiOptionsSyncFollowsConfig(t *testing.T) {
 		if _, err := s.Apply(plan.Revision); err != nil {
 			t.Fatal(err)
 		}
-		data, _ := os.ReadFile(filepath.Join(s.Home, ".pi", "agent", "mcp.json"))
+		data, _ := os.ReadFile(filepath.Join(s.Home, ".pi", "agent", "mcp-adapter.json"))
 		return string(data)
 	}
 	sync("", "add")

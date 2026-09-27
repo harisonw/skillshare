@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -454,5 +456,111 @@ func TestLookupProjectTarget_AntigravityCLIIsNotAntigravityAlias(t *testing.T) {
 func TestAlsoScans_AntigravityCLIHasNone(t *testing.T) {
 	if got := AlsoScansGlobal("antigravity-cli"); len(got) != 0 {
 		t.Errorf("AlsoScansGlobal(antigravity-cli) = %v, want none", got)
+	}
+}
+
+func TestTargetSpec_ParsesInstructions(t *testing.T) {
+	var file targetsFile
+	data := "targets:\n  - name: x\n    skills:\n      global: \"~/.x/skills\"\n    instructions:\n      global: \"~/.x/X.md\"\n      project: \"X.md\"\n      import: true\n"
+	if err := yaml.Unmarshal([]byte(data), &file); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got := file.Targets[0].Instructions
+	if got.Global != "~/.x/X.md" || got.Project != "X.md" || !got.Import {
+		t.Errorf("Instructions = %+v", got)
+	}
+}
+
+func TestLookupInstructions_KnownTargets(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	tests := []struct {
+		name, global, project string
+		imp                   bool
+	}{
+		{"claude", ".claude/CLAUDE.md", "CLAUDE.md", true},
+		{"codex", ".codex/AGENTS.md", "AGENTS.md", false},
+		{"gemini", ".gemini/GEMINI.md", "GEMINI.md", false},
+		{"antigravity", ".gemini/GEMINI.md", "AGENTS.md", false},
+		{"opencode", ".config/opencode/AGENTS.md", "AGENTS.md", false},
+		{"amp", ".config/amp/AGENTS.md", "AGENTS.md", false},
+		{"windsurf", ".codeium/windsurf/memories/global_rules.md", "AGENTS.md", false},
+		{"goose", ".config/goose/.goosehints", "AGENTS.md", false},
+		{"kiro", ".kiro/steering/AGENTS.md", "AGENTS.md", false},
+		{"roo", ".roo/rules/AGENTS.md", "AGENTS.md", false},
+	}
+	for _, tt := range tests {
+		g, ok := LookupInstructions(tt.name, false)
+		if !ok || g.Path != filepath.Join(home, filepath.FromSlash(tt.global)) || g.Import != tt.imp {
+			t.Errorf("LookupInstructions(%s, global) = %+v, %v", tt.name, g, ok)
+		}
+		p, ok := LookupInstructions(tt.name, true)
+		if !ok || p.Path != tt.project || p.Import != tt.imp {
+			t.Errorf("LookupInstructions(%s, project) = %+v, %v", tt.name, p, ok)
+		}
+	}
+}
+
+func TestLookupInstructions_AliasAndMissing(t *testing.T) {
+	if got, ok := LookupInstructions("claude-code", true); !ok || got.Path != "CLAUDE.md" {
+		t.Errorf("alias claude-code = %+v, %v", got, ok)
+	}
+	if _, ok := LookupInstructions("cursor", false); ok {
+		t.Error("cursor has no global instructions file")
+	}
+	if got, ok := LookupInstructions("cursor", true); !ok || got.Path != "AGENTS.md" {
+		t.Errorf("cursor project = %+v, %v", got, ok)
+	}
+	if _, ok := LookupInstructions("adal", true); ok {
+		t.Error("adal has no instructions metadata")
+	}
+}
+
+func TestLookupInstructions_Extras(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	if got, _ := LookupInstructions("antigravity", false); got.SameAs != "gemini" {
+		t.Errorf("antigravity SameAs = %q, want gemini", got.SameAs)
+	}
+	if got, _ := LookupInstructions("windsurf", false); got.MaxChars != 6000 {
+		t.Errorf("windsurf MaxChars = %d, want 6000", got.MaxChars)
+	}
+	g, _ := LookupInstructions("claude", false)
+	if g.Rules != filepath.Join(home, ".claude", "rules") || g.Fallback != "" {
+		t.Errorf("claude global = %+v", g)
+	}
+	if p, _ := LookupInstructions("claude", true); p.Fallback != "AGENTS.md" || p.Rules != filepath.Join(".claude", "rules") {
+		t.Errorf("claude project = %+v", p)
+	}
+}
+
+func TestTargetInstructions_AccountMovesIntoConfigDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "work")
+	got, ok := TargetInstructions("claude-work", TargetConfig{Agent: "claude", ConfigDir: dir}, false)
+	if !ok || got.Path != filepath.Join(dir, "CLAUDE.md") || got.Rules != filepath.Join(dir, "rules") {
+		t.Errorf("account instructions = %+v, %v", got, ok)
+	}
+}
+
+func TestTargetInstructions_CustomGlobalExpandsTilde(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	tc := TargetConfig{Instructions: &TargetInstructionsConfig{Path: "~/.myagent/AGENTS.md", Import: true}}
+	got, ok := TargetInstructions("myagent", tc, false)
+	if !ok || got.Path != filepath.Join(home, ".myagent", "AGENTS.md") || !got.Import {
+		t.Errorf("custom global = %+v, %v", got, ok)
+	}
+}
+
+func TestTargetInstructions_CustomProjectStaysRelative(t *testing.T) {
+	tc := TargetConfig{Instructions: &TargetInstructionsConfig{Path: ".myagent/RULES.md"}}
+	got, ok := TargetInstructions("myagent", tc, true)
+	if !ok || got.Path != filepath.Join(".myagent", "RULES.md") {
+		t.Errorf("custom project = %+v, %v", got, ok)
+	}
+}
+
+func TestTargetInstructions_CustomOverridesBuiltin(t *testing.T) {
+	tc := TargetConfig{Instructions: &TargetInstructionsConfig{Path: "/elsewhere/NOTES.md"}}
+	got, ok := TargetInstructions("claude", tc, false)
+	if !ok || got != (InstructionsTarget{Path: filepath.Clean("/elsewhere/NOTES.md")}) {
+		t.Errorf("override = %+v, %v", got, ok)
 	}
 }

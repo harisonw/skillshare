@@ -278,6 +278,16 @@
             "exclude": { "type": "array", "items": { "type": "string" } },
             "extension": { "type": "string", "description": "Convert each agent through an extension before writing it to this target (copy mode; an unset mode becomes copy). A bare name resolves under the extensions directory; a path (containing a separator or starting with '.') is used directly.", "examples": ["opencode-agents", "codex-agents"] }
           }
+        },
+        "instructions": {
+          "type": "object",
+          "description": "The instruction file (CLAUDE.md, AGENTS.md, ...) this tool reads, for a tool skillshare does not know. Overrides the built-in file. Absolute or starting with ~/.",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1, "description": "The instruction file this tool reads.", "examples": ["~/.myagent/AGENTS.md"] },
+            "import": { "type": "boolean", "default": false, "description": "The tool follows @path lines in its instruction file, so several shared instruction files can be attached to it." }
+          }
         }
       }
     },
@@ -386,6 +396,12 @@
           "description": "Name of the extra resource (matches a subdirectory under the source extras directory).",
           "examples": ["rules", "commands"]
         },
+        "file": {
+          "type": "string",
+          "description": "Sync one file instead of the whole source directory: a plain filename inside the extra's source directory. Each target receives <path>/<as or file>.",
+          "pattern": "^[^/\\\\]+$",
+          "examples": ["AGENTS.md"]
+        },
         "targets": {
           "type": "array",
           "description": "Target directories to sync this extra resource to.",
@@ -408,9 +424,15 @@
         },
         "mode": {
           "type": "string",
-          "description": "Sync mode for this extra target. Defaults to merge.",
-          "enum": ["merge", "symlink", "copy"],
+          "description": "Sync mode for this extra target. Defaults to merge. import (single-file extras only) keeps an @<source file> line in a managed block of the target file.",
+          "enum": ["merge", "symlink", "copy", "import"],
           "default": "merge"
+        },
+        "as": {
+          "type": "string",
+          "description": "Target filename for a single-file extra (requires file on the extra). Defaults to the extra's file.",
+          "pattern": "^[^/\\\\]+$",
+          "examples": ["CLAUDE.md", "GEMINI.md"]
         },
         "flatten": {
           "type": "boolean",

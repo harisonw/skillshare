@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"skillshare/internal/config"
+	"skillshare/internal/install"
 	"skillshare/internal/skillignore"
 	"skillshare/internal/utils"
 )
@@ -323,5 +324,36 @@ func discoverSourceSkillsInternal(sourcePath string, opts discoverOptions) ([]Di
 		return nil, nil, nil, fmt.Errorf("failed to walk source directory: %w", err)
 	}
 
+	if opts.parseFrontmatter || opts.collectContext {
+		applyTargetOverrides(skills, walkRoot)
+	}
+
 	return skills, trackedRepos, stats, nil
+}
+
+// applyTargetOverrides replaces the frontmatter targets of tracked-repo skills
+// with the overrides stored in the source's .metadata.json, so every consumer
+// of discovery sees the same effective targets. An empty override means all
+// targets.
+func applyTargetOverrides(skills []DiscoveredSkill, sourceDir string) {
+	var overrides map[string][]string
+	loaded := false
+	for i := range skills {
+		if !skills[i].IsInRepo {
+			continue
+		}
+		if !loaded {
+			overrides = install.LoadTargetOverrides(sourceDir)
+			loaded = true
+		}
+		targets, ok := overrides[skills[i].RelPath]
+		if !ok {
+			continue
+		}
+		if len(targets) == 0 {
+			skills[i].Targets = nil
+		} else {
+			skills[i].Targets = append([]string(nil), targets...)
+		}
+	}
 }

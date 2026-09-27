@@ -84,7 +84,7 @@ func (s *Server) handleListSkills(w http.ResponseWriter, r *http.Request) {
 				ManualOnly: manualOnly(d.SourcePath),
 			}
 
-			if entry := s.skillsStore.GetByPath(d.RelPath); entry != nil {
+			if entry := s.skillEntry(d.RelPath); entry != nil {
 				if !entry.InstalledAt.IsZero() {
 					item.InstalledAt = entry.InstalledAt.Format(time.RFC3339)
 				}
@@ -117,7 +117,7 @@ func (s *Server) handleListSkills(w http.ResponseWriter, r *http.Request) {
 
 			// Read from centralized agents metadata store
 			agentKey := strings.TrimSuffix(d.RelPath, ".md")
-			if entry := s.agentsStore.GetByPath(agentKey); entry != nil {
+			if entry := s.agentEntry(agentKey); entry != nil {
 				if !entry.InstalledAt.IsZero() {
 					item.InstalledAt = entry.InstalledAt.Format(time.RFC3339)
 				}
@@ -197,7 +197,7 @@ func (s *Server) handleGetSkill(w http.ResponseWriter, r *http.Request) {
 				ManualOnly: manualOnly(d.SourcePath),
 			}
 
-			if entry := s.skillsStore.GetByPath(d.RelPath); entry != nil {
+			if entry := s.skillEntry(d.RelPath); entry != nil {
 				if !entry.InstalledAt.IsZero() {
 					item.InstalledAt = entry.InstalledAt.Format(time.RFC3339)
 				}
@@ -268,7 +268,7 @@ func (s *Server) handleGetSkill(w http.ResponseWriter, r *http.Request) {
 			}
 
 			agentKey := strings.TrimSuffix(d.RelPath, ".md")
-			if entry := s.agentsStore.GetByPath(agentKey); entry != nil {
+			if entry := s.agentEntry(agentKey); entry != nil {
 				if !entry.InstalledAt.IsZero() {
 					item.InstalledAt = entry.InstalledAt.Format(time.RFC3339)
 				}
@@ -439,6 +439,8 @@ func (s *Server) handleUninstallRepo(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 	}
+
+	s.skillsStore.RemoveTargetOverrides(repoName)
 
 	if err := s.skillsStore.Save(s.cfg.EffectiveSkillsSource()); err != nil {
 		log.Printf("warning: failed to save metadata after repo uninstall: %v", err)

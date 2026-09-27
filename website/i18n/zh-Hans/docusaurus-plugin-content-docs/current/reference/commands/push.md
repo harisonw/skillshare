@@ -95,9 +95,11 @@ Push failed
 
 解决方法：
 ```bash
-skillshare pull    # 获取 remote 的更改
+skillshare pull    # 把 remote 的更改与你的合并
 skillshare push    # 推送你的更改
 ```
+
+`pull` 会把 remote 的 commit 与你尚未推送的 commit 合并，所以第二次 `push` 就能成功。如果两边改了同一个文件，请参阅 [两台机器都有新 commit 时](/docs/reference/commands/pull#when-both-machines-committed)。
 
 ## 工作流
 

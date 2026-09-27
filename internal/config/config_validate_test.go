@@ -407,3 +407,69 @@ func TestValidateProjectConfig_MissingSource_Warning(t *testing.T) {
 		t.Errorf("expected source warning, got: %v", warnings)
 	}
 }
+
+func TestValidateConfig_RejectsImportWithoutFile(t *testing.T) {
+	cfg := &Config{
+		Source:  t.TempDir(),
+		Targets: map[string]TargetConfig{},
+		Extras:  []ExtraConfig{{Name: "rules", Targets: []ExtraTargetConfig{{Path: "/t", Mode: "import"}}}},
+	}
+	_, err := ValidateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "import mode requires file") {
+		t.Fatalf("err = %v, want import mode requires file", err)
+	}
+}
+
+func TestValidateConfig_SkillsTargetRejectsImport(t *testing.T) {
+	cfg := &Config{
+		Source:  t.TempDir(),
+		Targets: map[string]TargetConfig{"claude": {Mode: "import"}},
+	}
+	_, err := ValidateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "invalid sync mode") {
+		t.Fatalf("err = %v, want invalid sync mode", err)
+	}
+}
+
+func TestValidateTargetInstructions(t *testing.T) {
+	cases := []struct {
+		name    string
+		path    string
+		project bool
+		wantErr string
+	}{
+		{"global tilde", "~/.myagent/AGENTS.md", false, ""},
+		{"global absolute", "/opt/agent/AGENTS.md", false, ""},
+		{"global relative", ".myagent/AGENTS.md", false, "absolute or start with ~/"},
+		{"empty", "  ", false, "is empty"},
+		{"directory", "~/.myagent/", false, "not a directory"},
+		{"project relative", ".myagent/AGENTS.md", true, ""},
+		{"project absolute", "/opt/agent/AGENTS.md", true, "relative to the project root"},
+		{"project tilde", "~/AGENTS.md", true, "relative to the project root"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateTargetInstructions(&TargetInstructionsConfig{Path: tc.path}, tc.project)
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("err = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateConfig_RejectsRelativeInstructionsPath(t *testing.T) {
+	cfg := &Config{
+		Source: t.TempDir(),
+		Targets: map[string]TargetConfig{"myagent": {
+			Skills:       &ResourceTargetConfig{Path: filepath.Join(t.TempDir(), "skills")},
+			Instructions: &TargetInstructionsConfig{Path: "AGENTS.md"},
+		}},
+	}
+	_, err := ValidateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), `target "myagent": instructions.path`) {
+		t.Fatalf("err = %v, want instructions.path error", err)
+	}
+}

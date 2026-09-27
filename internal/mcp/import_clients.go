@@ -1,5 +1,8 @@
 package mcp
 
+// piExtensionWarning asks for the extension that an entry of Pi's mcp.json was written for.
+const piExtensionWarning = "Select piExtension to match the extension installed in Pi; the config file alone does not identify it"
+
 // Normalize native dialects before applying the common import validation.
 func normalizeClientImport(target string, entry map[string]any, c *Candidate) {
 	if target == "pi" {
@@ -7,7 +10,7 @@ func normalizeClientImport(target string, entry map[string]any, c *Candidate) {
 			entry["type"] = kind
 			delete(entry, "transport")
 		}
-		c.Warnings = append(c.Warnings, "Select piExtension to match the extension installed in Pi; the config file alone does not identify it")
+		c.Warnings = append(c.Warnings, piExtensionWarning)
 	}
 	format, ok := clientFormats[target]
 	if !ok {

@@ -231,6 +231,29 @@ Codex 也會讀取共用的 `~/.agents/skills`，但一個帳號只擁有自己�
 
 `mode`、`include`、`exclude` 與其他 Target 設定的運作方式與任何 Target 相同。你自己寫的 `skills.path` 或 `agents.path` 會優先於推導出來的路徑。Target 名稱也可以當作 [MCP target](/docs/reference/commands/mcp#accounts) 與 [plugin target](/docs/reference/commands/plugin#accounts) 使用。
 
+#### 指示檔案 {#target-instructions}
+
+skillshare 知道許多內建 Target 的指示檔案（`CLAUDE.md`、`AGENTS.md`、`GEMINI.md`……）。
+對於其他工具，`instructions` 會告訴 skillshare 該工具讀哪個檔案，讓 dashboard 能顯示並編輯它，
+也能接上[共用 AGENTS.md](../../how-to/daily-tasks/sharing-instructions.md)。在這裡設定的值會取代內建的檔案。
+
+```yaml
+targets:
+  myagent:
+    path: ~/.myagent/skills
+    instructions:
+      path: ~/.myagent/AGENTS.md
+      import: true        # 這個工具會展開 @path 行
+```
+
+| 欄位 | 說明 |
+|-------|-------------|
+| `instructions.path` | 該工具讀取的檔案。在 global config 中，須為絕對路徑或以 `~/` 開頭。在 project config 中，須為相對於專案根目錄的路徑，例如 `.myagent/AGENTS.md`。必須指向檔案，而不是目錄 |
+| `instructions.import` | 工具會展開 `@path` 行時設為 `true`。這樣它就能同時使用多份共用檔案，每份各加一行 import。預設為 `false`：工具只使用一份共用檔案，以連結取代它自己的檔案 |
+
+Dashboard 會在新增 Target 時從 **自訂目標** 對話框寫入這個欄位，之後也可以在 Target 的檔案分頁修改。當 Target 正在使用共用檔案時，
+它會拒絕變更或移除此欄位。移除它不會刪除該檔案。
+
 ### `include` / `exclude`（Target 篩選條件） {#include--exclude-target-filters}
 
 使用每個 Target 各自的篩選條件，控制在 **merge 與 copy 模式**下要同步哪些 Skill。
@@ -510,10 +533,12 @@ extras:
 |-------|----------|--------------|
 | `name` | 是 | Extra 識別碼 |
 | `source` | 否 | 此 Extra 的自訂 Source 目錄（覆寫 `extras_source` 與預設值） |
+| `file` | 否 | 只同步 Source 目錄中的這個檔案：單純的檔名，例如 `AGENTS.md`。詳見[單一檔案 Extra](../commands/extras.md#single-file-extras) |
 | `targets` | 是 | Target 路徑清單 |
 | `targets[].path` | 是 | 目的地目錄 |
-| `targets[].mode` | 否 | `merge`（預設）、`copy` 或 `symlink` |
-| `targets[].flatten` | 否 | 為 `true` 時，把子目錄檔案直接同步到 Target 根目錄（不能與 `symlink` 併用） |
+| `targets[].mode` | 否 | `merge`（預設）、`copy` 或 `symlink`；`import` 僅限單一檔案 Extra |
+| `targets[].as` | 否 | 單一檔案 Extra 在 Target 中的檔名（預設：`file` 的名稱） |
+| `targets[].flatten` | 否 | 為 `true` 時，把子目錄檔案直接同步到 Target 根目錄（不能與 `symlink` 或 `file` 併用） |
 
 `extras_source` 會在執行 `skillshare init` 或第一次 `extras init` 時，自動填入預設路徑（`~/.config/skillshare/extras/`）。可覆寫它，讓所有 Extras 使用自訂位置。
 
@@ -843,6 +868,8 @@ audit:
 |------|---------|--------------|
 | **字串** | `- claude` | 已知的 Target，使用預設路徑與 merge 模式 |
 | **物件** | `- name: x, path: ..., mode: ..., include: [...], exclude: [...]` | 自訂路徑、覆寫模式，或個別 Target 的篩選條件 |
+
+物件項目也可以設定 [`instructions`](#target-instructions)，路徑要相對於專案根目錄。
 
 ### `skills`（Project）
 

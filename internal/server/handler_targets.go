@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"skillshare/internal/config"
@@ -210,6 +211,8 @@ func (s *Server) handleAddTarget(w http.ResponseWriter, r *http.Request) {
 		// Agent and ConfigDir add another config directory of a built-in Agent instead.
 		Agent     string `json:"agent"`
 		ConfigDir string `json:"configDir"`
+		// Instructions optionally names the instruction file of a custom target.
+		Instructions *config.TargetInstructionsConfig `json:"instructions"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -263,8 +266,15 @@ func (s *Server) handleAddTarget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "target already exists: "+body.Name)
 		return
 	}
+	if ic := body.Instructions; ic != nil {
+		ic.Path = strings.TrimSpace(ic.Path)
+		if err := config.ValidateTargetInstructions(ic, s.IsProjectMode()); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 
-	tc := config.TargetConfig{Skills: &config.ResourceTargetConfig{Path: body.Path}}
+	tc := config.TargetConfig{Skills: &config.ResourceTargetConfig{Path: body.Path}, Instructions: body.Instructions}
 	if body.AgentPath != "" {
 		tc.Agents = &config.ResourceTargetConfig{Path: body.AgentPath}
 	}
@@ -272,7 +282,7 @@ func (s *Server) handleAddTarget(w http.ResponseWriter, r *http.Request) {
 
 	// In project mode, also update the project config
 	if s.IsProjectMode() {
-		s.projectCfg.Targets = append(s.projectCfg.Targets, config.ProjectTargetEntry{Name: body.Name})
+		s.projectCfg.Targets = append(s.projectCfg.Targets, config.ProjectTargetEntry{Name: body.Name, Instructions: body.Instructions})
 	}
 
 	if err := s.saveAndReloadConfig(); err != nil {

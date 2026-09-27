@@ -187,7 +187,7 @@ func cmdSyncExtrasGlobal(dryRun, force, jsonOutput bool, start time.Time) error 
 				}
 			}
 
-			result, syncErr := sync.SyncExtra(extraSource, targetPath, mode, dryRun, force, target.Flatten, "", spec)
+			result, syncErr := syncExtraTarget(extra, target, extraSource, targetPath, mode, dryRun, force, "", spec)
 			shortTarget := shortenPath(targetPath)
 
 			jsonTarget := syncExtrasJSONTarget{
@@ -388,7 +388,7 @@ func cmdSyncExtrasProject(cwd string, dryRun, force, jsonOutput bool, start time
 				}
 			}
 
-			result, syncErr := sync.SyncExtra(extraSource, targetPath, mode, dryRun, force, target.Flatten, cwd, spec)
+			result, syncErr := syncExtraTarget(extra, target, extraSource, targetPath, mode, dryRun, force, cwd, spec)
 			shortTarget := shortenPath(targetPath)
 
 			jsonTarget := syncExtrasJSONTarget{
@@ -485,6 +485,18 @@ func cmdSyncExtrasProject(cwd string, dryRun, force, jsonOutput bool, start time
 	return nil
 }
 
+// syncExtraTarget syncs one target of an extra. Single-file extras (file:)
+// sync just that file to <target>/<as or file>; others sync the directory.
+func syncExtraTarget(extra config.ExtraConfig, target config.ExtraTargetConfig, sourceDir, targetPath, mode string, dryRun, force bool, projectRoot string, spec *sync.ExtensionSpec) (*sync.ExtraResult, error) {
+	if extra.File == "" {
+		return sync.SyncExtra(sourceDir, targetPath, mode, dryRun, force, target.Flatten, projectRoot, spec)
+	}
+	if spec != nil {
+		return nil, fmt.Errorf("extensions are not supported for single-file extras")
+	}
+	return sync.SyncExtraFile(sync.NewExtraFile(sourceDir, extra.File, targetPath, target.As, mode), dryRun, projectRoot)
+}
+
 // syncVerb returns a user-facing verb for the given sync mode.
 func syncVerb(mode string) string {
 	switch mode {
@@ -492,6 +504,8 @@ func syncVerb(mode string) string {
 		return "copied"
 	case "symlink":
 		return "linked"
+	case "import":
+		return "imported"
 	default:
 		return "synced"
 	}
@@ -555,7 +569,7 @@ func runExtrasSyncEntries(extras []config.ExtraConfig, sourceFunc func(config.Ex
 				}
 			}
 
-			result, syncErr := sync.SyncExtra(extraSource, targetPath, mode, dryRun, force, target.Flatten, projectRoot, spec)
+			result, syncErr := syncExtraTarget(extra, target, extraSource, targetPath, mode, dryRun, force, projectRoot, spec)
 			jt := syncExtrasJSONTarget{Path: targetPath, Mode: mode}
 			if syncErr != nil {
 				jt.Error = syncErr.Error()

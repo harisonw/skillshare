@@ -182,14 +182,14 @@ func TestCodexAccountSyncsIntoItsConfigToml(t *testing.T) {
 	}
 }
 
-// A Pi account keeps its own mcp.json, the file PI_CODING_AGENT_DIR moves.
-func TestPiAccountSyncsIntoItsMcpJSON(t *testing.T) {
+// A Pi account keeps its own mcp-adapter.json, in the directory PI_CODING_AGENT_DIR moves.
+func TestPiAccountSyncsIntoItsAdapterFile(t *testing.T) {
 	s, work := agentAccountService(t, "pi", "mcp:\n  targets: [pi-work]\n  servers:\n    docs:\n      url: https://example.com/mcp\n      piExtension: pi-mcp-adapter\n")
 	plan, err := s.Preview()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(work, "mcp.json")
+	want := filepath.Join(work, "mcp-adapter.json")
 	if len(plan.Changes) != 1 || plan.Changes[0].Target != "pi-work" || plan.Changes[0].Path != want {
 		t.Fatalf("changes: %+v", plan.Changes)
 	}

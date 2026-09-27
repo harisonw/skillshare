@@ -95,9 +95,11 @@ Push failed
 
 해결 방법:
 ```bash
-skillshare pull    # remote 변경 사항 가져오기
+skillshare pull    # remote 변경 사항을 내 변경 사항과 병합
 skillshare push    # 내 변경 사항 push
 ```
+
+`pull`은 remote 커밋을 아직 push하지 않은 내 커밋과 병합하므로, 두 번째 `push`는 성공합니다. 양쪽에서 같은 파일을 변경한 경우의 동작은 [두 머신 모두 커밋한 경우](/docs/reference/commands/pull#when-both-machines-committed)를 참고하세요.
 
 ## 워크플로우
 

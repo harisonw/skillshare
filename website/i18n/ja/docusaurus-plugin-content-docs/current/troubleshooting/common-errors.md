@@ -221,17 +221,18 @@ git checkout -- .
 skillshare pull
 ```
 
-### `merge conflicts`
+### `pull stopped: this machine and the remote both changed ...`
 
-**原因:** 同じファイルが複数のマシンで編集された。
+**原因:** 同じファイルが2台のマシンで編集された。`pull` はマージを取り消したため、リポジトリは変更されていない。`.metadata.json` だけの競合ではこのエラーは起きない（自動で解決される）。
 
 **解決策:**
 ```bash
 cd ~/.config/skillshare/skills
-git status                    # 競合しているファイルを確認する
-# 競合を解決するためにファイルを編集する
+git pull --no-rebase          # マージをやり直し、競合を残す
+# 競合したファイルを編集する
 git add .
-git commit -m "Resolve conflicts"
+git commit --no-edit
+skillshare push
 skillshare sync
 ```
 
@@ -441,9 +442,9 @@ SSL 検証を無効化するのはセキュリティリスクです。オプシ�
 
 ## Update エラー
 
-### `git failed: Need to specify how to reconcile divergent branches`
+### `pull stopped: this machine and the remote both changed ...`（Tracked リポジトリ）
 
-**原因:** リモートブランチがローカルの Tracked コピーから分岐している。
+**原因:** Tracked リポジトリに、リモートと競合するローカルコミットがある。`update` は分岐した履歴をマージするが、競合するファイルがあると停止し、マージは取り消される。
 
 **解決策:**
 ```bash
@@ -452,7 +453,9 @@ skillshare update --force
 
 # または手動で解決する
 cd ~/.config/skillshare/skills/_repo-name
-git pull --rebase
+git pull --no-rebase
+# 競合したファイルを編集してから
+git add . && git commit --no-edit
 ```
 
 :::tip

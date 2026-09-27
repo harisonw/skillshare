@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -247,13 +248,29 @@ func PullWithProgress(repoPath string, extraEnv []string, onProgress func(string
 		return nil, err
 	}
 	info.BeforeHash = beforeHash
+	dirtyBefore := statusPaths(repoPath)
 
-	args := []string{"pull", "--quiet"}
+	// Merge explicitly: without pull.rebase/pull.ff configured, git refuses to
+	// reconcile a branch that both this machine and the remote moved.
+	args := []string{"pull", "--no-rebase", "--ff", "--no-edit", "--quiet"}
 	if onProgress != nil {
-		args = []string{"pull", "--progress"}
+		args[len(args)-1] = "--progress"
 	}
 	if err := runGitWithProgress(repoPath, args, extraEnv, onProgress); err != nil {
-		return nil, err
+		conflicts := conflictedFiles(repoPath)
+		if len(conflicts) == 0 || resolveMetadataConflicts(repoPath, conflicts) != nil {
+			// A conflicted merge would leave markers that a later commit-all picks up.
+			abort := exec.Command("git", "merge", "--abort")
+			abort.Dir = repoPath
+			abort.Run() // best-effort; fails harmlessly when no merge started
+			if after, _ := GetCurrentFullHash(repoPath); after == beforeHash {
+				restorePullResidue(repoPath, dirtyBefore)
+			}
+			if len(conflicts) > 0 {
+				return nil, fmt.Errorf("pull stopped: this machine and the remote both changed %s; the merge was undone, resolve it with git in %s", strings.Join(conflicts, ", "), repoPath)
+			}
+			return nil, err
+		}
 	}
 
 	afterHash, err := GetCurrentFullHash(repoPath)
@@ -274,6 +291,109 @@ func PullWithProgress(repoPath string, extraEnv []string, onProgress func(string
 	info.Stats = stats
 
 	return info, nil
+}
+
+// statusPaths returns every path git status reports, tracked or not.
+func statusPaths(dir string) map[string]bool {
+	cmd := exec.Command("git", "status", "--porcelain", "-z", "-uall", "--no-renames")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	paths := map[string]bool{}
+	if err != nil {
+		return paths
+	}
+	for entry := range strings.SplitSeq(string(out), "\x00") {
+		if len(entry) > 3 {
+			paths[entry[3:]] = true
+		}
+	}
+	return paths
+}
+
+// restorePullResidue puts back files a failed pull already wrote. git stops a
+// checkout it cannot finish (e.g. "unable to unlink old ...: Permission
+// denied") without undoing the files before it, and with no MERGE_HEAD there
+// is nothing for merge --abort to undo. Left alone, the remote's copies show
+// up as local changes that block the next pull and invite committing them.
+// Only paths that were clean before the pull and now hold exactly the
+// upstream version are restored, so the user's own edits are never touched.
+func restorePullResidue(dir string, dirtyBefore map[string]bool) {
+	blob := func(rev, path string) string {
+		cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", rev+":"+path)
+		cmd.Dir = dir
+		out, _ := cmd.Output() // empty when the path is absent at rev
+		return strings.TrimSpace(string(out))
+	}
+	for path := range statusPaths(dir) {
+		if dirtyBefore[path] {
+			continue
+		}
+		upstream := blob("@{upstream}", path)
+		full := filepath.Join(dir, path)
+		if _, err := os.Lstat(full); err == nil {
+			hash := exec.Command("git", "hash-object", "--", path)
+			hash.Dir = dir
+			out, err := hash.Output()
+			if err != nil || upstream == "" || strings.TrimSpace(string(out)) != upstream {
+				continue
+			}
+		} else if upstream != "" {
+			continue // missing here but present upstream: not the pull's doing
+		}
+		if blob("HEAD", path) != "" {
+			restore := exec.Command("git", "checkout", "HEAD", "--", path)
+			restore.Dir = dir
+			restore.Run() // best-effort; the pull error is what gets reported
+			continue
+		}
+		unstage := exec.Command("git", "rm", "--cached", "--quiet", "--ignore-unmatch", "--", path)
+		unstage.Dir = dir
+		unstage.Run()
+		os.Remove(full)
+	}
+}
+
+// conflictedFiles lists the paths an in-progress merge left unmerged.
+func conflictedFiles(dir string) []string {
+	cmd := exec.Command("git", "diff", "--name-only", "--diff-filter=U")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	return strings.Fields(string(out))
+}
+
+// resolveMetadataConflicts concludes a merge whose only conflicts are
+// .metadata.json files, merging them per entry (see install.MergeMetadata).
+// Both machines rewriting the shared file is the common case, not a real clash.
+func resolveMetadataConflicts(dir string, conflicts []string) error {
+	stage := func(n int, path string) []byte {
+		cmd := exec.Command("git", "show", fmt.Sprintf(":%d:%s", n, path))
+		cmd.Dir = dir
+		out, _ := cmd.Output() // a missing stage (file absent on that side) reads as empty
+		return out
+	}
+	for _, path := range conflicts {
+		if filepath.Base(path) != install.MetadataFileName {
+			return fmt.Errorf("%s is not metadata", path)
+		}
+		merged, err := install.MergeMetadata(stage(1, path), stage(2, path), stage(3, path))
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, path), merged, 0644); err != nil {
+			return err
+		}
+		add := exec.Command("git", "add", "--", path)
+		add.Dir = dir
+		if err := add.Run(); err != nil {
+			return err
+		}
+	}
+	commit := exec.Command("git", "commit", "--no-edit")
+	commit.Dir = dir
+	return commit.Run()
 }
 
 // PullWithEnv runs git pull and returns update info (quiet mode) with
@@ -508,10 +628,19 @@ func PushRemoteWithEnv(dir string, extraEnv []string) error {
 
 	err := cmd.Run()
 	if err != nil {
-		return install.WrapGitError(outBuf.String(), err, install.UsedTokenAuth(extraEnv))
+		wrapped := install.WrapGitError(outBuf.String(), err, install.UsedTokenAuth(extraEnv))
+		out := outBuf.String()
+		if strings.Contains(out, "[rejected]") && (strings.Contains(out, "fetch first") || strings.Contains(out, "non-fast-forward")) {
+			return fmt.Errorf("%w: %v", ErrPushRejected, wrapped)
+		}
+		return wrapped
 	}
 	return nil
 }
+
+// ErrPushRejected reports that the remote has commits this repository lacks,
+// so the push needs a pull first.
+var ErrPushRejected = errors.New("remote has commits this machine does not have; pull first, then push")
 
 // PushArgs returns the git push arguments for dir. The first push sets
 // upstream, targeting origin's default branch when it is named differently
@@ -546,6 +675,19 @@ func PushArgs(dir string, extraEnv []string) []string {
 // before the first commit.
 func AheadCount(dir string) int {
 	cmd := exec.Command("git", "rev-list", "--count", "HEAD", "--not", "--remotes")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(string(out)))
+	return n
+}
+
+// BehindCount returns how many upstream commits HEAD lacks, as of the last
+// fetch. It returns 0 when unknown, e.g. without an upstream.
+func BehindCount(dir string) int {
+	cmd := exec.Command("git", "rev-list", "--count", "HEAD..@{u}")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {

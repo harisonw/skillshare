@@ -85,7 +85,9 @@ func (s *Server) handleUpdateStream(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
+		s.mu.RLock()
 		skills, err := getServerUpdatableSkills(source, s.skillsStore)
+		s.mu.RUnlock()
 		if err == nil {
 			for _, skill := range skills {
 				items = append(items, updateItem{

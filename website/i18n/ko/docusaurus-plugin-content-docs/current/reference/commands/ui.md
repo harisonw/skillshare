@@ -88,13 +88,13 @@ skillshare ui start --clear-cache
 |------|-------------|
 | **Dashboard** | skill, agent, extras, MCP 서버, plugin, target의 개수와 주의가 필요한 항목 |
 | **Sync** | target별로 기록 전에 모든 변경 사항을 미리 봅니다. 포함할 부분(Skills, Agents, Extras, MCP)을 선택합니다. target 내부에서 편집된 파일은 **Force**가 켜져 있지 않은 한 유지됩니다. target에만 존재하는 항목은 여기서 source로 다시 수집할 수 있습니다. 각 sync는 먼저 target 폴더를 백업합니다 |
-| **Git Sync** | source repo를 commit하고 push하며, 아직 remote에 없는 커밋을 push하고, pull합니다. Pull은 [`pull`](/docs/reference/commands/pull)과 마찬가지로 repo scope가 담고 있는 것(`skills`, `agents`, `extras`, 또는 `root`)을 동기화합니다. 첫 pull이 remote와 병합할 수 없을 때는 로컬 파일을 remote 브랜치로 교체하는 force pull을 제공합니다 |
+| **Git Sync** | source repo를 commit하고 push하며, 아직 remote에 없는 커밋을 push하고, pull합니다. 페이지를 열면 remote에서 fetch하므로 **Pull** 버튼에 remote에 있는 커밋 수가 표시됩니다. Pull은 [`pull`](/docs/reference/commands/pull)과 마찬가지로 repo scope가 담고 있는 것(`skills`, `agents`, `extras`, 또는 `root`)을 동기화합니다. remote에 더 새로운 커밋이 있어 push가 거부되면 오류 알림에서 **Pull**을 제공합니다. 첫 pull이 remote와 병합할 수 없을 때는 로컬 파일을 remote 브랜치로 교체하는 force pull을 제공합니다 |
 | **Hubs** | Skills 페이지에서 접근합니다. **Browse**는 hub를 필터링하고 그곳에서 설치합니다. **My hubs**는 설치된 skill로부터 인덱스를 구성하고 검증한 후 내보냅니다. [`hub`](/docs/reference/commands/hub) 참고 |
-| **Skills** / **Agents** | 설치된 항목, **Updates** 탭, **Trash** 탭. Skills에는 각 skill이 target의 context에 추가하는 토큰 수를 추정하는 **Analyze** 탭도 있습니다. **Install**은 GitHub를 검색하거나 URL 또는 경로에서 설치합니다. **+ New Skill**은 생성 마법사를 엽니다. `disable-model-invocation: true`가 설정된 skill은 목록, 타일, 상세 페이지에 **manual only** 태그가 표시되며, 이는 [`list`](/docs/reference/commands/list)에서 `M`으로 전환하는 것과 같은 상태입니다. skill 편집기에서 **Add field**는 각 frontmatter 필드가 하는 역할을 설명합니다. **Sync skills** / **Sync agents**는 미리 본 뒤 해당 종류만 모든 target에 동기화합니다. 업데이트, 제거 또는 collect 후에는 **Sync Now**에서 같은 대화상자가 열립니다 |
-| **Extras** | skill과 함께 동기화되는 rules, commands, 기타 폴더 |
+| **Skills** / **Agents** | 설치된 항목, **Updates** 탭, **Trash** 탭. Skills에는 각 skill이 target의 context에 추가하는 토큰 수를 추정하는 **Analyze** 탭도 있습니다. **Install**은 GitHub를 검색하거나 URL 또는 경로에서 설치합니다. **+ New Skill**은 생성 마법사를 엽니다. 목록과 카드 보기는 **Folder**(tracked repo, `frontend/react` 같은 폴더, 또는 **Root**)로 필터링하고 **Folder**로 그룹화할 수 있으며, Root가 먼저 오고 나머지 폴더는 이름 A→Z 순입니다. **tree** 보기는 왼쪽에 source 폴더를, 오른쪽에 상세 정보를 보여 줍니다. 폴더나 skill을 클릭해 선택하고, Cmd/Ctrl 클릭으로 선택에 추가하고, Shift 클릭으로 범위를 선택하며, skill을 더블클릭하면 열립니다. 오른쪽에서는 선택한 모든 항목을 스위치 하나로 켜거나 끄고, targets를 설정하며(tracked repo와 그 하위 폴더 포함), 각 skill을 개별 스위치와 함께 나열합니다. tracked repo에는 **Update repo**와 **Uninstall repo**도 있습니다. `disable-model-invocation: true`가 설정된 skill은 목록, 타일, 상세 페이지에 **manual only** 태그가 표시되며, 이는 [`list`](/docs/reference/commands/list)에서 `M`으로 전환하는 것과 같은 상태입니다. skill 편집기에서 **Add field**는 각 frontmatter 필드가 하는 역할을 설명합니다. **Sync skills** / **Sync agents**는 미리 본 뒤 해당 종류만 모든 target에 동기화합니다. 업데이트, 제거 또는 collect 후에는 **Sync Now**에서 같은 대화상자가 열립니다 |
+| **Extras** | **폴더**: skill과 함께 동기화되는 rules, commands, 기타 폴더. **AGENTS.md**: global 모드에서는 공유 `AGENTS.md`와 그것을 쓰는 target, 프로젝트에서는 프로젝트의 `./AGENTS.md`와 각 target이 그것을 읽는지 여부. [여러 도구에서 하나의 AGENTS.md 공유하기](../../how-to/daily-tasks/sharing-instructions.md)를 참고하세요 |
 | **MCP** | 서버당 한 행이며, 동기화 대상인 Agent가 토글로 표시됩니다. **서버 추가**는 URL, command, 붙여넣은 snippet 또는 파일을 받습니다. **target에서 가져오기**는 설치된 Agent가 이미 가지고 있는 것을 읽어옵니다. 각 서버의 메뉴에는 **각 Agent에 기록될 설정 보기**가 있어 저장되지 않은 편집을 포함해 Agent별 네이티브 설정을 보여줍니다. 충돌 시 **해당 Agent에서 가져오기** 또는 **원본으로 덮어쓰기**를 제공하며, 백업은 복원 전에 미리 볼 수 있습니다. `pi-mcp-adapter`를 사용하는 Pi 서버의 경우, 서버 대화상자에 **Direct tools**와, [`piOptions`](./mcp.md#pi-options)를 JSON으로 받는 **기타 adapter 설정** 입력란도 있습니다. **기본값**은 `mcp.targets`와 `mcp.directTools`를 편집합니다. Sync 박스의 **Sync MCP**는 대기 중인 변경 사항을 나열하고 MCP 설정 파일만 작성하며, 각 파일의 백업을 남깁니다. |
 | **Plugins** | plugin당 한 행이며, 해당 Agent가 토글로 표시됩니다. 행을 펼치면 소스가 지원하는 다른 Agent도 나열되며, 하나를 선택하면 설치를 미리 봅니다. 행 메뉴는 sync, update, remove를 수행하거나, Skillshare가 검토한 로컬 사본을 읽기 전용으로 탐색하는 **View files**를 엽니다. [Manage plugins across tools](/docs/how-to/daily-tasks/sharing-plugins) 참고 |
-| **Targets** | 상태가 표시된 target 목록. **대상 추가**는 **다른 계정**도 받습니다. 이미 사용 중인 Agent의 두 번째 config 폴더이며, 어디에 기록되는지 미리보기로 보여줍니다. 각 target의 페이지에서 include/exclude 필터를 편집하고 로컬 전용 skill을 source로 다시 수집합니다. 목록에는 각 Agent가 받는 MCP 서버 수도 표시됩니다. MCP 설정 파일이 있는 target에는 **MCP** 탭이 있어 서버마다 한 행으로 고릅니다. 클릭하면 바로 저장되고 **Sync all targets**가 모든 target의 MCP 파일에 기록합니다 |
+| **Targets** | 상태가 표시된 target 목록. **대상 추가**는 **다른 계정**도 받습니다. 이미 사용 중인 Agent의 두 번째 config 폴더이며, 어디에 기록되는지 미리보기로 보여줍니다. 각 target의 페이지에서 include/exclude 필터를 편집하고 로컬 전용 skill을 source로 다시 수집합니다. 목록에는 각 Agent가 받는 MCP 서버 수도 표시됩니다. MCP 설정 파일이 있는 target에는 **MCP** 탭이 있어 서버마다 한 행으로 고릅니다. 클릭하면 바로 저장되고 **Sync all targets**가 모든 target의 MCP 파일에 기록합니다. 각 target에는 지침 파일 이름을 딴 탭(**CLAUDE.md**, **GEMINI.md**, **AGENTS.md**, ...)도 있어, 읽는 순서를 보여 주고 파일을 편집하며 `AGENTS.md`로 변환합니다 |
 | **프로젝트** | Global mode 전용. global 설정이 동기화하는 프로젝트 폴더이며, [`projects`](/docs/reference/targets/configuration#projects)와 [`mcp.projects`](./mcp.md#projects-in-the-dashboard)에서 옵니다. **프로젝트 추가**는 폴더, 그 target, 동기화할 항목을 받습니다. 각 프로젝트에는 필터, 미리보기, 기록될 폴더를 보여주는 **Skills**와 **Agents** 탭, 그리고 해당 폴더에서 global 서버를 끄거나 프로젝트 자체 서버를 부여하는 **MCP** 탭이 있습니다. **Sync project**는 미리 본 뒤 해당 프로젝트의 skill, agent, MCP만 동기화합니다. 이미 프로젝트 폴더를 가리키는 Target은 변환할 수 있습니다 |
 | **Audit** | skill과 agent에 대한 보안 스캔이며, 심각도별로 findings를 표시합니다. **Rules** 탭에서는 카테고리별로 모든 rule을 탐색할 수 있습니다: rule을 끄거나, 심각도를 변경하거나, 카테고리 전체에 심각도를 적용하거나, 스캔 profile(`default`, `strict`, `permissive`)을 선택하거나, 사용자 지정 `audit-rules.yaml` 편집기를 엽니다 |
 | **Settings** | 탭으로 구성: **General**(source 경로, sync mode, 외관), **Backup**(스냅샷과 복원), **Log**(작업 이력), **Health**([`doctor`](/docs/reference/commands/doctor)와 동일한 검사), **Extensions**(sync 시점의 파일 변환), **Files**(`config.yaml`, `.skillignore`, `.agentignore`를 위한 직접 편집기) |
@@ -127,6 +127,7 @@ project mode(`-p`)로 실행할 때 대시보드는 다음과 같이 달라집�
 - **Available targets**는 프로젝트 수준의 target을 나열합니다(예: 프로젝트 루트 기준 `.claude/skills/`)
 - **Targets**는 프로젝트의 MCP 서버를 세고 켜고 끄며, 프로젝트 자체 파일(예: `.mcp.json`)에 기록합니다. Claude Code, OpenCode, Kilo Code, Pi의 **MCP** 탭에는 이 프로젝트에서 전역 서버를 끄는 스위치도 표시됩니다
 - **Install**은 프로젝트 config의 `skills:` 항목을 자동으로 재조정합니다
+- **Extras -> AGENTS.md**는 공유 파일 대신 프로젝트의 `./AGENTS.md`를 편집하며, 자체 파일만 읽는 target에는 간단한 수정을 제안합니다
 
 ## UI 미리보기
 
@@ -156,9 +157,9 @@ project mode(`-p`)로 실행할 때 대시보드는 다음과 같이 달라집�
 | DELETE | `/api/targets/{name}` | target 제거 |
 | POST | `/api/sync` | sync 실행(`dryRun`, `force`, `kind`, 그리고 sync를 해당 프로젝트의 target으로 제한하는 선언된 프로젝트 루트인 `project` 지원). `dryRun`이 설정되지 않은 한 먼저 target을 백업합니다 |
 | POST | `/api/git/commit` | push 없이 source repo에서 로컬 git commit 생성 |
-| GET | `/api/git/status` | 아직 push되지 않은 커밋(`ahead`)을 포함한 source repo 상태 |
-| POST | `/api/push` | 변경 사항을 commit한 후 push합니다. 첫 push 시 upstream을 설정합니다 |
-| POST | `/api/pull` | pull한 후 repo scope가 담고 있는 것을 sync합니다. 첫 pull이 병합에 실패하면 오류 코드 `merge_failed`로 실패합니다. 로컬 파일을 remote 브랜치로 교체하려면 `force: true`로 재시도하세요 |
+| GET | `/api/git/status` | 아직 push되지 않은 커밋(`ahead`)과 마지막 fetch 기준으로 아직 pull하지 않은 upstream 커밋(`behind`)을 포함한 source repo 상태. fetch는 하지 않습니다 |
+| POST | `/api/push` | 변경 사항을 commit한 후 push합니다. 첫 push 시 upstream을 설정합니다. remote에 이 repo에 없는 커밋이 있으면 `409`와 오류 코드 `push_rejected`로 실패합니다. pull한 후 다시 push하세요 |
+| POST | `/api/pull` | pull한 후 repo scope가 담고 있는 것을 sync합니다. 갈라진 히스토리는 병합되며, `.metadata.json` 충돌은 자동으로 해결되고, 그 외의 충돌은 병합을 되돌린 채 실패합니다. 첫 pull이 병합에 실패하면 오류 코드 `merge_failed`로 실패합니다. 로컬 파일을 remote 브랜치로 교체하려면 `force: true`로 재시도하세요 |
 | GET | `/api/diff` | source와 target 간의 diff |
 | GET | `/api/search?q=` | GitHub에서 skill 검색 |
 | POST | `/api/install` | source에서 skill 설치 |

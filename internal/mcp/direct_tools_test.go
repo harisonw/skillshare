@@ -45,7 +45,7 @@ func TestDirectToolsRejected(t *testing.T) {
 
 func TestDirectToolsSyncFollowsConfigAndKeepsHandAddedValue(t *testing.T) {
 	s := testService(t)
-	path := filepath.Join(s.Home, ".pi", "agent", "mcp.json")
+	path := filepath.Join(s.Home, ".pi", "agent", "mcp-adapter.json")
 	sync := func(directTools, wantAction string) string {
 		t.Helper()
 		config := "mcp:\n  targets: [pi]\n  servers:\n    docs:\n      command: docs\n      piExtension: pi-mcp-adapter\n" + directTools
@@ -127,17 +127,17 @@ func TestDirectToolsDefaultFillsPiServersWithoutTheirOwn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	global := desired[fileKey{filepath.Join(tmp, ".pi", "agent", "mcp.json"), "pi"}]
+	global := desired[fileKey{filepath.Join(tmp, ".pi", "agent", "mcp-adapter.json"), "pi"}]
 	if global["inherits"]["directTools"] != true {
 		t.Errorf("default not applied: %v", global["inherits"])
 	}
 	if list, ok := global["own"]["directTools"].([]any); !ok || len(list) != 1 {
 		t.Errorf("server value lost to the default: %v", global["own"])
 	}
-	if got := desired[fileKey{filepath.Join(tmp, "quiet", ".pi", "mcp.json"), "pi"}]["local"]["directTools"]; got != false {
+	if got := desired[fileKey{filepath.Join(tmp, "quiet", ".pi", "mcp-adapter.json"), "pi"}]["local"]["directTools"]; got != false {
 		t.Errorf("project default ignored: %v", got)
 	}
-	if got := desired[fileKey{filepath.Join(tmp, "same", ".pi", "mcp.json"), "pi"}]["local"]["directTools"]; got != true {
+	if got := desired[fileKey{filepath.Join(tmp, "same", ".pi", "mcp-adapter.json"), "pi"}]["local"]["directTools"]; got != true {
 		t.Errorf("project did not inherit the global default: %v", got)
 	}
 	if _, leaked := desired[fileKey{filepath.Join(tmp, ".config", "opencode", "opencode.json"), "opencode"}]["inherits"]["directTools"]; leaked {

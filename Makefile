@@ -1,4 +1,4 @@
-.PHONY: help build build-meta build-windows run test test-unit test-int test-docker test-docker-online test-redteam test-redteam-signal test-redteam-rules-signal playground playground-down devc devc-up devc-down devc-restart devc-reset devc-status dev-docker dev-docker-down docker-build docker-build-multiarch lint fmt fmt-check check install clean ui-install ui-build ui-dev build-all verify verify-shell verify-down verify-status verify-reset
+.PHONY: help build build-meta build-windows run test test-unit test-int test-docker test-docker-online test-redteam test-redteam-signal test-redteam-rules-signal playground playground-down devc devc-up devc-down devc-restart devc-reset devc-status dev-docker dev-docker-down docker-build docker-build-multiarch lint fmt fmt-check docs-check check install clean ui-install ui-build ui-dev build-all verify verify-shell verify-down verify-status verify-reset
 
 help:
 	@echo "Common tasks:"
@@ -27,6 +27,7 @@ help:
 	@echo "  make verify-reset   # delete the throwaway HOME"
 	@echo "  make lint           # go vet"
 	@echo "  make fmt            # format Go files"
+	@echo "  make docs-check     # validate AI context routes and budgets"
 	@echo "  make check          # fmt-check + lint + test"
 	@echo "  make ui-dev         # Go API server + Vite dev server (requires local Go)"
 	@echo "  make dev-docker     # Go API in Docker + auto-rebuild (pair with: cd ui && pnpm run dev)"
@@ -139,7 +140,10 @@ fmt:
 fmt-check:
 	test -z "$$(gofmt -l ./cmd ./internal ./tests)"
 
-check: fmt-check lint test
+docs-check:
+	python3 scripts/ai-context.py check
+
+check: docs-check fmt-check lint test
 
 install:
 	go install ./cmd/skillshare

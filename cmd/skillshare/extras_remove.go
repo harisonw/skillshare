@@ -9,6 +9,7 @@ import (
 
 	"skillshare/internal/config"
 	"skillshare/internal/oplog"
+	"skillshare/internal/sync"
 	"skillshare/internal/ui"
 )
 
@@ -81,21 +82,20 @@ func removeExtraFromGlobalConfig(cfg *config.Config, name string) (string, error
 		return "", fmt.Errorf("failed to save config: %w", err)
 	}
 
-	e := oplog.NewEntry("extras-remove", "ok", 0)
-	e.Args = map[string]any{"name": name, "scope": "global"}
+	restored, restoreErr := restoreExtraFileTargets(removed, sourceDir, modeGlobal, "")
+
+	e := oplog.NewEntry("extras-remove", statusFromErr(restoreErr), 0)
+	e.Args = map[string]any{"name": name, "scope": "global", "restored": restored}
+	if restoreErr != nil {
+		e.Message = restoreErr.Error()
+	}
 	oplog.WriteWithLimit(config.ConfigPath(), oplog.OpsFile, e, logMaxEntries()) //nolint:errcheck
 
-	return sourceDir, nil
+	return sourceDir, restoreErr
 }
 
 func removeExtraFromProjectConfig(projCfg *config.ProjectConfig, cwd, name string) (string, error) {
-	idx := -1
-	for i, e := range projCfg.Extras {
-		if e.Name == name {
-			idx = i
-			break
-		}
-	}
+	idx, removed := findExtraByName(projCfg.Extras, name)
 	if idx == -1 {
 		return "", fmt.Errorf("extra %q not found in project config", name)
 	}
@@ -107,12 +107,33 @@ func removeExtraFromProjectConfig(projCfg *config.ProjectConfig, cwd, name strin
 
 	sourceDir := config.ExtrasSourceDirProject(projCfg.EffectiveExtrasSource(cwd), name)
 
+	restored, restoreErr := restoreExtraFileTargets(removed, sourceDir, modeProject, cwd)
+
 	cfgPath := config.ProjectConfigPath(cwd)
-	e := oplog.NewEntry("extras-remove", "ok", 0)
-	e.Args = map[string]any{"name": name, "scope": "project"}
+	e := oplog.NewEntry("extras-remove", statusFromErr(restoreErr), 0)
+	e.Args = map[string]any{"name": name, "scope": "project", "restored": restored}
+	if restoreErr != nil {
+		e.Message = restoreErr.Error()
+	}
 	oplog.WriteWithLimit(cfgPath, oplog.OpsFile, e, logMaxEntries()) //nolint:errcheck
 
-	return sourceDir, nil
+	return sourceDir, restoreErr
+}
+
+func extraRemoveTargetNote(extra config.ExtraConfig) string {
+	if extra.File != "" {
+		return "Target files will be restored to how they were before skillshare replaced them."
+	}
+	return "Existing symlinks in targets will become orphaned."
+}
+
+// restoreExtraFileTargets undoes the targets of a removed single-file extra:
+// its links, copies, or import lines go, and files it replaced come back.
+// Directory extras keep their targets (sync extras cleans orphans).
+func restoreExtraFileTargets(extra config.ExtraConfig, sourceDir string, mode runMode, cwd string) (int, error) {
+	return sync.RestoreExtraFileTargets(extra, sourceDir, func(path string) string {
+		return canonicalExtraTargetPath(mode, cwd, path)
+	})
 }
 
 func extrasRemoveGlobal(name string, force bool, start time.Time) error {
@@ -131,7 +152,7 @@ func extrasRemoveGlobal(name string, force bool, start time.Time) error {
 	if !force {
 		ui.Warning("This will remove %q from config.", name)
 		ui.Info("Source files in %s will NOT be deleted.", shortenPath(sourceDir))
-		ui.Info("Existing symlinks in targets will become orphaned.")
+		ui.Info("%s", extraRemoveTargetNote(found))
 		fmt.Println()
 		fmt.Print("Remove? [y/N]: ")
 		var input string
@@ -149,7 +170,9 @@ func extrasRemoveGlobal(name string, force bool, start time.Time) error {
 
 	ui.Success("Removed %q from extras config", name)
 	cleanEmptyExtrasDir(sourceDir)
-	ui.Info("Run 'skillshare sync extras' to clean up orphaned links.")
+	if found.File == "" {
+		ui.Info("Run 'skillshare sync extras' to clean up orphaned links.")
+	}
 	_ = start
 	return nil
 }
@@ -160,11 +183,12 @@ func extrasRemoveProject(cwd, name string, force bool, start time.Time) error {
 		return err
 	}
 
+	_, found := findExtraByName(projCfg.Extras, name)
 	if !force {
 		sourceDir := config.ExtrasSourceDirProject(projCfg.EffectiveExtrasSource(cwd), name)
 		ui.Warning("This will remove %q from project config.", name)
 		ui.Info("Source files in %s will NOT be deleted.", shortenPath(sourceDir))
-		ui.Info("Existing symlinks in targets will become orphaned.")
+		ui.Info("%s", extraRemoveTargetNote(found))
 		fmt.Println()
 		fmt.Print("Remove? [y/N]: ")
 		var input string
@@ -182,7 +206,9 @@ func extrasRemoveProject(cwd, name string, force bool, start time.Time) error {
 
 	ui.Success("Removed %q from project extras config", name)
 	cleanEmptyExtrasDir(sourceDir)
-	ui.Info("Run 'skillshare sync extras -p' to clean up orphaned links.")
+	if found.File == "" {
+		ui.Info("Run 'skillshare sync extras -p' to clean up orphaned links.")
+	}
 	_ = start
 	return nil
 }

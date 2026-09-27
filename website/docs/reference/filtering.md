@@ -67,6 +67,8 @@ targets: [claude, cursor]
 
 **Behavior:** Whitelist — the skill only syncs to the listed targets. Omitting the field means sync to all targets. If both `metadata.targets` and top-level `targets` are present, `metadata.targets` wins.
 
+**Tracked repos:** targets set in the dashboard for a skill inside a tracked repo are stored in the source's `.metadata.json` instead of its SKILL.md, so the clone stays clean and `update` keeps working. That setting takes precedence over the skill's `metadata.targets`.
+
 **Aliases:** Target names support aliases. `claude` matches a target configured as `claude-code`. See [Supported Targets](/docs/reference/targets/supported-targets).
 
 📖 [Skill format — targets field](/docs/understand/skill-format#targets)

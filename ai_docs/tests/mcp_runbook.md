@@ -226,10 +226,12 @@ jq -e '.mcpServers["pi-docs"].transport == "streamable-http"' "$HOME/.pi/agent/m
 ss sync mcp --dry-run --json -g | jq -e '.changes[] | select(.target == "pi" and .action == "unchanged")'
 ss mcp edit pi-docs --pi-extension pi-mcp-adapter --no-tui -g
 ss sync mcp -g
-jq -e '.mcpServers["pi-docs"] | has("transport") | not' "$HOME/.pi/agent/mcp.json"
+jq -e '.mcpServers["pi-docs"] | has("transport") | not' "$HOME/.pi/agent/mcp-adapter.json"
+jq -e '.mcpServers | has("pi-docs") | not' "$HOME/.pi/agent/mcp.json"
 ss mcp remove pi-docs --sync --no-tui -g
 ```
 
 **Expected:** explicit extension choice is saved, extension output includes transport,
-adapter output omits it, the second sync is unchanged, and removal affects only
+adapter output omits it and moves from `mcp.json` to `mcp-adapter.json`, the second
+sync is unchanged, and removal affects only
 the managed entry. No MCP server or Pi package is installed or executed.

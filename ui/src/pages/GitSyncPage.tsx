@@ -4,6 +4,7 @@ import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, CircleChe
 import { api, ApiError, type GitStatus, type PullResponse } from '../api/client';
 import Button from '../components/Button';
 import ConfirmDialog from '../components/ConfirmDialog';
+import CopyButton from '../components/CopyButton';
 import DialogShell from '../components/DialogShell';
 import EmptyState from '../components/EmptyState';
 import { Input } from '../components/Input';
@@ -20,6 +21,8 @@ import { queryKeys, staleTimes } from '../lib/queryKeys';
 const SCOPES = ['skills', 'agents', 'extras', 'root'];
 const TONE = { New: 'ok', Changed: 'warn', Renamed: 'warn', Deleted: 'bad' } as const;
 const PULLED_SHOWN = 5;
+// Gives the current user back files a sudo run left owned by root.
+const chownCommand = (path: string) => `sudo chown -R "$(id -un)" '${path.replaceAll("'", `'\\''`)}'`;
 type Setup = { kind: 'init' | 'scope' | 'remote'; scope: string };
 
 export default function GitSyncPage() {
@@ -28,7 +31,18 @@ export default function GitSyncPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: status, isPending, error } = useQuery({ queryKey: queryKeys.gitStatus, queryFn: () => api.gitStatus(), staleTime: staleTimes.gitStatus, enabled: !isProjectMode });
-  const branches = useQuery({ queryKey: queryKeys.gitBranches, queryFn: () => api.gitBranches(), staleTime: staleTimes.gitStatus, enabled: !isProjectMode && !!status?.isRepo });
+  // Fetch once when the page opens so status knows what the remote has (status itself never fetches: the sidebar polls it).
+  const branches = useQuery({
+    queryKey: queryKeys.gitBranches,
+    queryFn: async () => {
+      // An offline or unauthenticated fetch must not empty the branch list.
+      const res = await api.gitBranches({ fetch: !!status?.hasRemote }).catch(() => api.gitBranches());
+      void queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus });
+      return res;
+    },
+    staleTime: staleTimes.gitStatus,
+    enabled: !isProjectMode && !!status?.isRepo,
+  });
 
   const [message, setMessage] = useState('');
   const [dryRun, setDryRun] = useState(false);
@@ -36,6 +50,10 @@ export default function GitSyncPage() {
   const [runError, setRunError] = useState('');
   // A first pull whose history cannot merge; the error note then offers a force pull.
   const [mergeFailed, setMergeFailed] = useState(false);
+  // A push the remote rejected because it has newer commits; the error note then offers a pull.
+  const [pushRejected, setPushRejected] = useState(false);
+  // The source folder a pull could not write into; set with a permission error.
+  const [lockedPath, setLockedPath] = useState('');
   const [confirmForce, setConfirmForce] = useState(false);
   const [note, setNote] = useState('');
   const [pulled, setPulled] = useState<PullResponse | null>(null);
@@ -50,12 +68,16 @@ export default function GitSyncPage() {
     setBusy(kind);
     setRunError('');
     setMergeFailed(false);
+    setPushRejected(false);
+    setLockedPath('');
     setNote('');
     try {
       await work();
     } catch (err) {
       setRunError((err as Error).message);
       setMergeFailed(err instanceof ApiError && err.code === 'merge_failed');
+      setPushRejected(err instanceof ApiError && err.code === 'push_rejected');
+      setLockedPath(err instanceof ApiError && err.code === 'permission_denied' ? String(err.params?.path ?? '') : '');
     } finally {
       setBusy(null);
       refresh();
@@ -138,7 +160,7 @@ export default function GitSyncPage() {
           )}
           <Button variant="secondary" onClick={() => pull()} loading={busy === 'pull'} disabled={writing || !status.hasRemote || status.isDirty} title={!status.hasRemote ? t('gitSync.noRemoteHint') : undefined}>
             {busy !== 'pull' && <ArrowDownToLine size={16} />}
-            {t('gitSync.actions.pull')}
+            {status.behind > 0 ? t(status.behind === 1 ? 'gitSync.actions.pullCommits.one' : 'gitSync.actions.pullCommits.other', { count: status.behind }) : t('gitSync.actions.pull')}
           </Button>
         </span>
       ))}
@@ -163,8 +185,20 @@ export default function GitSyncPage() {
         {runError && (
           <div className="ss-note bad">
             <AlertCircle size={16} />
-            <span className="flex-1 whitespace-pre-wrap break-words">{runError}</span>
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span className="whitespace-pre-wrap break-words">{runError}</span>
+              {lockedPath && (
+                <>
+                  <span>{t('gitSync.pull.permission.hint')}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="min-w-0 break-all font-mono text-[12.5px]">{chownCommand(lockedPath)}</span>
+                    <CopyButton value={chownCommand(lockedPath)} size={14} title={t('common.copy')} copiedLabel="" />
+                  </span>
+                </>
+              )}
+            </div>
             {mergeFailed && <Button variant="secondary" size="sm" onClick={() => setConfirmForce(true)} disabled={writing}>{t('gitSync.pull.force.button')}</Button>}
+            {pushRejected && <Button variant="secondary" size="sm" onClick={() => pull()} disabled={writing}>{t('gitSync.actions.pull')}</Button>}
             <button type="button" className="ss-ib !h-6 !w-6" aria-label={t('common.close')} onClick={() => setRunError('')}><X size={14} /></button>
           </div>
         )}

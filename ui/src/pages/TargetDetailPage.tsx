@@ -15,6 +15,7 @@ import { useToast } from '../components/Toast';
 import FilterSection, { ModePicker } from '../components/targets/FilterSection';
 import RemoveTargetDialog from '../components/targets/RemoveTargetDialog';
 import TargetMCP from '../components/targets/TargetMCP';
+import TargetInstructions from '../components/instructions/TargetInstructions';
 import { mcpClient, serverCount } from '../components/mcp/mcpView';
 import { refreshTargets } from '../components/targets/targetView';
 import { queryKeys, staleTimes } from '../lib/queryKeys';
@@ -61,15 +62,18 @@ function TargetEditor({ target }: { target: Target }) {
   const client = mcpClient(target.name);
   const mcpPath = mcp.data?.paths[client];
   // Until the list arrives, loading or failing, the tab stays so it can say which.
-  const tab: Kind | 'mcp' = target.agentPath && params.get('tab') === 'agents' ? 'agent' : params.get('tab') === 'mcp' && (mcpPath || !mcp.data) ? 'mcp' : 'skill';
+  const tab: Kind | 'mcp' | 'instructions' = params.get('tab') === 'instructions' ? 'instructions'
+    : target.agentPath && params.get('tab') === 'agents' ? 'agent' : params.get('tab') === 'mcp' && (mcpPath || !mcp.data) ? 'mcp' : 'skill';
   const kind: Kind = tab === 'agent' ? 'agent' : 'skill';
-  const tabs = (['skill', 'agent', 'mcp'] as const).filter((k) => k === 'skill' || (k === 'agent' ? target.agentPath : mcpPath || tab === 'mcp'));
+  const tabs = (['skill', 'agent', 'mcp', 'instructions'] as const).filter((k) => k === 'skill' || k === 'instructions' || (k === 'agent' ? target.agentPath : mcpPath || tab === 'mcp'));
+  const instructions = useQuery({ queryKey: queryKeys.instructions.target(target.name), queryFn: () => api.getTargetInstructions(target.name) });
+  const syncTab = tab === 'skill' || tab === 'agent';
   const saved = draftOf(target);
   const [draft, setDraft] = useState<Draft>(saved);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [collecting, setCollecting] = useState(false);
-  const { data: extData } = useQuery({ queryKey: ['extras', 'extensions'], queryFn: () => api.listExtraExtensions(), staleTime: staleTimes.extras, enabled: tab !== 'mcp' });
+  const { data: extData } = useQuery({ queryKey: ['extras', 'extensions'], queryFn: () => api.listExtraExtensions(), staleTime: staleTimes.extras, enabled: syncTab });
   const extensions = extData?.extensions ?? [];
 
   // Preview the draft filters once typing settles.
@@ -118,19 +122,25 @@ function TargetEditor({ target }: { target: Target }) {
     setDraft(agent ? { ...draft, agentInclude: next.include, agentExclude: next.exclude } : { ...draft, ...next });
   const local = agent ? target.agentLocalCount ?? 0 : target.localCount;
 
-  const tabCount = (k: (typeof tabs)[number]) => (k === 'mcp' ? mcp.data && serverCount(mcp.data, client) : entriesOf(k).length) || null;
+  const tabCount = (k: (typeof tabs)[number]) =>
+    (k === 'mcp' ? mcp.data && serverCount(mcp.data, client)
+      : k === 'instructions' ? instructions.data?.read_order.filter((e) => e.read).length
+        : entriesOf(k).length) || null;
+  // Name the tab after the file this target actually reads (CLAUDE.md, GEMINI.md, …).
+  const instructionsTab = instructions.data?.supported && instructions.data.path ? instructions.data.path.split('/').pop() : 'AGENTS.md';
+  const subtitle = tab === 'mcp' ? mcpPath ?? '' : tab === 'instructions' ? instructions.data?.path ?? '' : agent ? target.agentPath ?? '' : target.path;
   return (
     <div className="animate-fade-in">
       <PageHeader
         crumbs={[{ label: t('targets.title'), to: '/targets' }, { label: target.name }]}
         title={target.name}
-        subtitle={<span className="font-mono">{shortenHome(tab === 'mcp' ? mcpPath ?? '' : agent ? target.agentPath ?? '' : target.path)}</span>}
+        subtitle={<span className="font-mono">{shortenHome(subtitle)}</span>}
         actions={
           <>
             {tab === 'skill' && <Link to={`/skills?tab=analyze&target=${encodeURIComponent(target.name)}`} className="ss-btn ghost">{t('analyze.open')}</Link>}
             <Button variant="ghost" onClick={() => setRemoving(true)}>{t('targetDetail.remove')}</Button>
-            {/* A switch on the MCP tab saves as it flips. */}
-            {tab !== 'mcp' && <Button variant="primary" onClick={save} loading={saving} disabled={!dirty}>{t('common.save')}</Button>}
+            {/* A switch on the MCP tab saves as it flips; the instructions tab saves its own file. */}
+            {syncTab && <Button variant="primary" onClick={save} loading={saving} disabled={!dirty}>{t('common.save')}</Button>}
           </>
         }
       />
@@ -138,15 +148,17 @@ function TargetEditor({ target }: { target: Target }) {
       {tabs.length > 1 && (
         <nav className="ss-tabs mb-7" aria-label={t('targetDetail.tabs')}>
           {tabs.map((k) => (
-            <Link key={k} to={k === 'agent' ? '?tab=agents' : k === 'mcp' ? '?tab=mcp' : '?'} replace className={tab === k ? 'on' : ''}>
-              {k === 'agent' ? 'Agents' : k === 'mcp' ? 'MCP' : 'Skills'}
+            <Link key={k} to={k === 'agent' ? '?tab=agents' : k === 'mcp' ? '?tab=mcp' : k === 'instructions' ? '?tab=instructions' : '?'} replace className={tab === k ? 'on' : ''}>
+              {k === 'agent' ? 'Agents' : k === 'mcp' ? 'MCP' : k === 'instructions' ? instructionsTab : 'Skills'}
               {tabCount(k) !== null && <span className="ss-cnt">{tabCount(k)}</span>}
             </Link>
           ))}
         </nav>
       )}
 
-      {tab === 'mcp' ? (
+      {tab === 'instructions' ? (
+        <TargetInstructions name={target.name} />
+      ) : tab === 'mcp' ? (
         mcp.data ? <TargetMCP name={client} data={mcp.data} /> : mcp.error ? <div className="ss-note bad"><span className="flex-1">{mcp.error.message}</span></div> : <PageSkeleton />
       ) : (
         <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-start gap-12">

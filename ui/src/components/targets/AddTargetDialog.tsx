@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { ArrowLeft, Check, ChevronDown, Folder, FolderPlus, Plus, Search, Users, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, FileText, Folder, FolderPlus, Plus, Search, Users, X } from 'lucide-react';
 import { api, type AvailableTarget } from '../../api/client';
+import { useAppContext } from '../../context/AppContext';
 import { shortenHome } from '../../lib/paths';
 import { useT } from '../../i18n';
 import AgentIcon from '../AgentIcon';
 import Button from '../Button';
 import DialogShell from '../DialogShell';
+import { Checkbox } from '../Input';
+import { setupPathProblem } from '../instructions/instructionsView';
 
 const PREVIEW_COUNT = 5;
 
@@ -33,6 +36,7 @@ export default function AddTargetDialog({ available, initial, existing, onClose,
   onAdded: (name: string) => void;
 }) {
   const t = useT();
+  const { isProjectMode } = useAppContext();
   const pool = available.filter((a) => !a.installed).sort((a, b) => a.name.localeCompare(b.name));
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
@@ -45,6 +49,10 @@ export default function AddTargetDialog({ available, initial, existing, onClose,
     const first = pool.find((a) => a.name === initial) ?? pool.find((a) => a.detected);
     return { name: first?.name ?? '', path: first?.path ?? '', agentPath: first?.agentPath ?? '' };
   });
+  // A custom tool's instruction file, so its file tab works right after adding it.
+  const [instructions, setInstructions] = useState({ path: '', import: false });
+  const instructionsProblem = mode === 'custom' ? setupPathProblem(instructions.path, isProjectMode) : null;
+  const instructionsExample = `${isProjectMode ? '' : '~/'}.${draft.name.trim() || 'my-tool'}/AGENTS.md`;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,14 +70,14 @@ export default function AddTargetDialog({ available, initial, existing, onClose,
   // Codex reads the shared ~/.agents/skills, outside its config folder; an account's skills
   // are always in its own folder.
   const accountSkills = dir && accountAgent ? moved(accountAgent.path) || `${dir}/skills` : '';
-  const canAdd = Boolean(draft.name.trim()) && !taken && (mode === 'account' ? Boolean(dir && accountAgent) : Boolean(draft.path.trim()) && (custom || Boolean(known)));
+  const canAdd = Boolean(draft.name.trim()) && !taken && !instructionsProblem && (mode === 'account' ? Boolean(dir && accountAgent) : Boolean(draft.path.trim()) && (custom || Boolean(known)));
   const add = async () => {
     const name = draft.name.trim();
     setBusy(true);
     setError('');
     try {
       if (mode === 'account') await api.addAgentConfigDir(name, account.agent, dir);
-      else await api.addTarget(name, draft.path.trim(), draft.agentPath.trim() || undefined);
+      else await api.addTarget(name, draft.path.trim(), draft.agentPath.trim() || undefined, mode === 'custom' && instructions.path.trim() ? { path: instructions.path.trim(), import: instructions.import } : undefined);
       onAdded(name);
     } catch (err) {
       setError((err as Error).message);
@@ -80,6 +88,7 @@ export default function AddTargetDialog({ available, initial, existing, onClose,
     setMode(next);
     setError('');
     setDraft({ name: '', path: '', agentPath: '' });
+    setInstructions({ path: '', import: false });
     setAccount({ agent: accountAgents[0]?.name ?? '', dir: '', named: false });
   };
   // The name follows the folder (~/.claude-work gives claude-work) until it is typed.
@@ -180,6 +189,17 @@ export default function AddTargetDialog({ available, initial, existing, onClose,
             {nameField}
             <FolderField id="target-path" label={t('targets.add.skillsFolder')} value={draft.path} onChange={(path) => setDraft({ ...draft, path })} placeholder="~/tools/my-tool/skills" hint={t('targets.add.customSkillsHint')} disabled={busy} />
             <FolderField id="target-agent-path" label={t('targets.add.agentsFolder')} value={draft.agentPath} onChange={(agentPath) => setDraft({ ...draft, agentPath })} placeholder={t('targets.add.optional')} hint={t('targets.add.customAgentsHint')} disabled={busy} />
+            <div className="ss-fld">
+              <label htmlFor="target-instructions">{t('targets.add.instructionsFile')}</label>
+              <span className={`ss-inp ${instructionsProblem ? 'err' : ''}`}>
+                <FileText size={15} className="shrink-0 text-ink-3" />
+                <input id="target-instructions" className="font-mono" value={instructions.path} onChange={(e) => setInstructions({ ...instructions, path: e.target.value })} placeholder={instructionsExample} spellCheck={false} autoComplete="off" disabled={busy} />
+              </span>
+              <span className={`hp ${instructionsProblem ? '!text-bad' : ''}`}>
+                {instructionsProblem ? t(`instructions.setup.problem.${instructionsProblem}`) : t(isProjectMode ? 'targets.add.instructionsHintProject' : 'targets.add.instructionsHint')}
+              </span>
+            </div>
+            {instructions.path.trim() && <Checkbox label={t('instructions.setup.import')} checked={instructions.import} onChange={(v) => setInstructions({ ...instructions, import: v })} size="sm" disabled={busy} />}
             <div className="ss-note inf"><span className="flex-1">{t('targets.add.createdHint')}</span></div>
           </>
         ) : (

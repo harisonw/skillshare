@@ -178,7 +178,7 @@ skillshare pull
 
 **何が起きるか:**
 ```
-git pull           # または初回 pull では fetch + reset
+git pull           # 両方のマシンでコミットした場合はマージ。初回 pull では fetch + マージまたは reset
 skillshare sync
 ```
 
@@ -239,12 +239,21 @@ git stash pop
 
 ### マージの競合
 
+両方のマシンでコミットした場合、`pull` はそれらをマージします。`.metadata.json` の競合は自動で解決されます。それ以外のファイルで競合が起きると、`pull` は停止してマージを取り消し、該当ファイルを表示します:
+
+```
+$ skillshare pull
+pull stopped: this machine and the remote both changed my-skill/SKILL.md; the merge was undone, resolve it with git in ~/.config/skillshare/skills
+```
+
+**解決方法:**
 ```bash
 cd ~/.config/skillshare/skills
-git status                    # 競合しているファイルを確認する
-# ファイルを編集して解決する
+git pull --no-rebase          # マージをやり直し、競合を残す
+# 競合したファイルを編集する
 git add .
-git commit -m "Resolve conflicts"
+git commit --no-edit
+skillshare push
 skillshare sync
 ```
 

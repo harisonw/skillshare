@@ -177,7 +177,7 @@ skillshare pull
 
 **实际执行内容：**
 ```
-git pull           # 或首次拉取时改用 fetch + reset
+git pull           # 两台机器都有新 commit 时会合并；首次拉取时改用 fetch + merge 或 reset
 skillshare sync
 ```
 
@@ -238,12 +238,21 @@ git stash pop
 
 ### Merge 冲突
 
+两台机器都有新 commit 时，`pull` 会把它们合并。`.metadata.json` 的冲突会自动解决。其他文件发生冲突时，`pull` 会停止、撤销合并，并列出冲突的文件：
+
+```
+$ skillshare pull
+pull stopped: this machine and the remote both changed my-skill/SKILL.md; the merge was undone, resolve it with git in ~/.config/skillshare/skills
+```
+
+**解决方法：**
 ```bash
 cd ~/.config/skillshare/skills
-git status                    # 查看冲突文件
-# 编辑文件以解决冲突
+git pull --no-rebase          # 重新合并并保留冲突
+# 编辑冲突文件
 git add .
-git commit -m "Resolve conflicts"
+git commit --no-edit
+skillshare push
 skillshare sync
 ```
 

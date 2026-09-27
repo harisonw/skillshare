@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ellipsis, FoldVertical, Folder, FolderPlus, Link2, Plus, Puzzle, RefreshCw, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api/client';
@@ -19,12 +19,15 @@ import { SkillContextMenu, type ContextMenuItem } from '../components/TargetMenu
 import { useT } from '../i18n';
 import { buildSyncToast, sumEntry, syncToastType } from '../lib/extrasSyncToast';
 import { shortenHome } from '../lib/paths';
+import ProjectInstructions from '../components/instructions/ProjectInstructions';
+import SharedInstructions from '../components/instructions/SharedInstructions';
 
 const MODES = ['merge', 'copy', 'symlink'] as const;
 
 const STATUS: Record<string, { tone: string; labelKey: string }> = {
   synced: { tone: 'ok', labelKey: 'extras.status.synced' },
   drift: { tone: 'warn', labelKey: 'extras.status.drift' },
+  modified: { tone: 'warn', labelKey: 'extras.status.modified' },
   'not synced': { tone: 'warn', labelKey: 'extras.status.notSynced' },
   'no source': { tone: 'bad', labelKey: 'extras.status.sourceMissing' },
 };
@@ -279,6 +282,8 @@ export default function ExtrasPage() {
   const { toast } = useToast();
   const t = useT();
   const queryClient = useQueryClient();
+  const [params] = useSearchParams();
+  const tab = params.get('tab') === 'instructions' ? 'instructions' : 'folders';
 
   const { data, isPending, error } = useQuery({ queryKey: queryKeys.extras, queryFn: () => api.listExtras(), staleTime: staleTimes.extras });
   const { data: extData } = useQuery({ queryKey: ['extras', 'extensions'], queryFn: () => api.listExtraExtensions(), staleTime: staleTimes.extras });
@@ -290,6 +295,7 @@ export default function ExtrasPage() {
   const sharedDir = overview?.extrasSource ?? `${(overview?.source ?? '').replace(/\/[^/]*\/?$/, '')}/extras`;
 
   const [showAdd, setShowAdd] = useState(false);
+  const [creatingShared, setCreatingShared] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [removeExtra, setRemoveExtra] = useState<string | null>(null);
@@ -406,25 +412,35 @@ export default function ExtrasPage() {
       : []),
   ];
 
-  const extras = data?.extras ?? [];
+  // Shared instruction files (single-file extras) have their own tab in global mode.
+  const extras = (data?.extras ?? []).filter((e) => isProjectMode || !e.file);
+  const sharedCount = (data?.extras ?? []).length - extras.length;
 
   return (
     <div className="animate-fade-in">
       <PageHeader
         title={t('extras.title')}
         subtitle={t(isProjectMode ? 'extras.subtitle.project' : 'extras.subtitle.global')}
-        actions={<span data-tour="extras-list"><Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={15} />{t('extras.addExtra')}</Button></span>}
+        actions={tab === 'folders' ? <span data-tour="extras-list"><Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={15} />{t('extras.addExtra')}</Button></span>
+          : !isProjectMode && <Button variant="primary" onClick={() => setCreatingShared(true)}><Plus size={15} />{t('instructions.shared.new')}</Button>}
       />
 
-      {isPending ? (
+      <nav className="ss-tabs mb-7" aria-label={t('extras.tabs')}>
+        <Link to="?" replace className={tab === 'folders' ? 'on' : ''} aria-current={tab === 'folders'}>{t('extras.tab.folders')}</Link>
+        <Link to="?tab=instructions" replace className={tab === 'instructions' ? 'on' : ''} aria-current={tab === 'instructions'}>{t('extras.tab.instructions')}</Link>
+      </nav>
+
+      {tab === 'instructions' ? (
+        isProjectMode ? <ProjectInstructions /> : <SharedInstructions creating={creatingShared} setCreating={setCreatingShared} />
+      ) : isPending ? (
         <PageSkeleton />
       ) : error ? (
         <div className="ss-note bad"><span className="flex-1">{error.message}</span></div>
       ) : extras.length === 0 ? (
         <EmptyState
           icon={FolderPlus}
-          title={t('extras.empty.title')}
-          description={t('extras.empty.description')}
+          title={t(sharedCount > 0 ? 'extras.empty.foldersTitle' : 'extras.empty.title')}
+          description={sharedCount > 0 ? t('extras.empty.sharedElsewhere', { count: sharedCount }) : t('extras.empty.description')}
           action={<Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={15} />{t('extras.addExtra')}</Button>}
         />
       ) : (

@@ -177,7 +177,7 @@ skillshare pull
 
 **실제로 일어나는 일:**
 ```
-git pull           # 또는 첫 pull 시 fetch + reset
+git pull           # 두 머신 모두 커밋했다면 병합; 첫 pull 시 fetch 후 병합 또는 reset
 skillshare sync
 ```
 
@@ -238,12 +238,21 @@ git stash pop
 
 ### 병합 충돌
 
+두 머신 모두 커밋한 경우 `pull`이 이를 병합합니다. `.metadata.json`의 충돌은 자동으로 해결됩니다. 그 외의 파일에서 충돌이 발생하면 pull이 중단되고, 병합이 되돌려지며, 해당 파일이 표시됩니다:
+
+```
+$ skillshare pull
+pull stopped: this machine and the remote both changed my-skill/SKILL.md; the merge was undone, resolve it with git in ~/.config/skillshare/skills
+```
+
+**해결 방법:**
 ```bash
 cd ~/.config/skillshare/skills
-git status                    # 충돌된 파일 확인
-# 파일을 편집해 해결
+git pull --no-rebase          # 병합을 다시 실행하고 충돌을 남겨 둠
+# 충돌한 파일 편집
 git add .
-git commit -m "Resolve conflicts"
+git commit --no-edit
+skillshare push
 skillshare sync
 ```
 

@@ -44,7 +44,7 @@ type extrasInitTUIModel struct {
 	err         error
 }
 
-var syncModes = config.ExtraSyncModes
+var syncModes = config.ValidSyncModes // import needs a single-file extra, which init does not create
 
 func newExtrasInitTUIModel() extrasInitTUIModel {
 	ti := textinput.New()

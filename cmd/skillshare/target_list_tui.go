@@ -464,7 +464,7 @@ func (m targetListTUIModel) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd
 
 // ─── Mode Picker ─────────────────────────────────────────────────────
 
-var targetSyncModes = config.ExtraSyncModes // ["merge", "copy", "symlink"]
+var targetSyncModes = config.ValidSyncModes // ["merge", "symlink", "copy"]
 
 func (m targetListTUIModel) openModePicker(name string, target config.TargetConfig) (tea.Model, tea.Cmd) {
 	return m.openModePickerForScope(name, target.SkillsConfig(), "skills")

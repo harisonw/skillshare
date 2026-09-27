@@ -164,6 +164,11 @@ func cmdExtrasMode(args []string) error {
 			return err
 		}
 	}
+	if _, updated := findExtraByName(extras, name); updated.File != "" || syncMode == "import" {
+		if err := config.ValidateExtraConfig(updated); err != nil {
+			return err
+		}
+	}
 
 	if err := saveFn(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
@@ -199,6 +204,11 @@ func applyFlattenAll(extras []config.ExtraConfig, name string, flatten bool, sav
 				return fmt.Errorf("target %s: %w", extra.Targets[j].Path, err)
 			}
 			extras[i].Targets[j].Flatten = flatten
+		}
+		if extra.File != "" {
+			if err := config.ValidateExtraConfig(extras[i]); err != nil {
+				return err
+			}
 		}
 
 		if err := saveFn(); err != nil {

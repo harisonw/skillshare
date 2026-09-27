@@ -205,17 +205,18 @@ git checkout -- .
 skillshare pull
 ```
 
-### `merge conflicts`
+### `pull stopped: this machine and the remote both changed ...`
 
-**Cause:** Same file was edited on multiple machines.
+**Cause:** The same file was edited on two machines. `pull` undid the merge, so the repository is unchanged. Conflicts in `.metadata.json` alone never cause this; they are resolved automatically.
 
 **Solution:**
 ```bash
 cd ~/.config/skillshare/skills
-git status                    # See conflicted files
-# Edit files to resolve conflicts
+git pull --no-rebase          # Redo the merge and keep the conflicts
+# Edit the conflicted files
 git add .
-git commit -m "Resolve conflicts"
+git commit --no-edit
+skillshare push
 skillshare sync
 ```
 
@@ -404,9 +405,9 @@ See [Environment Variables — Git SSL / TLS](/docs/reference/appendix/environme
 
 ## Update Errors
 
-### `git failed: Need to specify how to reconcile divergent branches`
+### `pull stopped: this machine and the remote both changed ...` (tracked repository)
 
-**Cause:** The remote branch has diverged from your local tracked copy.
+**Cause:** A tracked repository has local commits that conflict with the remote. `update` merges diverged history, but a conflicting file stops it and the merge is undone.
 
 **Solution:**
 ```bash
@@ -415,7 +416,9 @@ skillshare update --force
 
 # Or manually resolve
 cd ~/.config/skillshare/skills/_repo-name
-git pull --rebase
+git pull --no-rebase
+# Edit the conflicted files, then
+git add . && git commit --no-edit
 ```
 
 :::tip

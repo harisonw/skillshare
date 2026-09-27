@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -201,6 +202,69 @@ func TestSchema_ExtrasAndAgentsAllowExtension(t *testing.T) {
 		}
 		if !owners["agents"] {
 			t.Errorf("%s: agents block missing 'extension' property", file)
+		}
+	}
+}
+
+func TestSchema_ExtrasAllowSingleFile(t *testing.T) {
+	root := findRepoRoot(t)
+	for _, file := range []string{"schemas/config.schema.json", "schemas/project-config.schema.json"} {
+		data, err := os.ReadFile(filepath.Join(root, file))
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		var schema struct {
+			Defs map[string]struct {
+				Properties map[string]struct {
+					Enum []string `json:"enum"`
+				} `json:"properties"`
+			} `json:"$defs"`
+		}
+		if err := json.Unmarshal(data, &schema); err != nil {
+			t.Fatalf("%s: invalid JSON: %v", file, err)
+		}
+		if _, ok := schema.Defs["extraConfig"].Properties["file"]; !ok {
+			t.Errorf("%s: extraConfig missing 'file' property", file)
+		}
+		target := schema.Defs["extraTargetConfig"].Properties
+		if _, ok := target["as"]; !ok {
+			t.Errorf("%s: extraTargetConfig missing 'as' property", file)
+		}
+		if !slices.Contains(target["mode"].Enum, "import") {
+			t.Errorf("%s: extraTargetConfig mode enum missing 'import': %v", file, target["mode"].Enum)
+		}
+	}
+}
+
+func TestSchema_TargetsAllowInstructions(t *testing.T) {
+	root := findRepoRoot(t)
+	cases := map[string]func(defs map[string]any) any{
+		"schemas/config.schema.json": func(defs map[string]any) any {
+			return defs["targetConfig"]
+		},
+		"schemas/project-config.schema.json": func(defs map[string]any) any {
+			return defs["projectTargetEntry"].(map[string]any)["oneOf"].([]any)[1]
+		},
+	}
+	for file, target := range cases {
+		data, err := os.ReadFile(filepath.Join(root, file))
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		var schema map[string]any
+		if err := json.Unmarshal(data, &schema); err != nil {
+			t.Fatalf("%s: invalid JSON: %v", file, err)
+		}
+		props := target(schema["$defs"].(map[string]any)).(map[string]any)["properties"].(map[string]any)
+		in, ok := props["instructions"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s: target missing 'instructions' property", file)
+		}
+		inProps := in["properties"].(map[string]any)
+		for _, key := range []string{"path", "import"} {
+			if _, ok := inProps[key]; !ok {
+				t.Errorf("%s: instructions missing %q", file, key)
+			}
 		}
 	}
 }

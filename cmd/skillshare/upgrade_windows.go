@@ -8,6 +8,6 @@ func needsSudo(_ string) bool {
 	return false
 }
 
-func reexecWithSudo(_ string) error {
+func upgradeBinaryWithSudo(_, _ string) error {
 	return fmt.Errorf("sudo is not supported on Windows")
 }

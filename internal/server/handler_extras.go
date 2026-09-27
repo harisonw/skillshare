@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -32,6 +33,7 @@ func (s *Server) resolveExtensionSpec(ext string) (*syncpkg.ExtensionSpec, error
 // extrasListEntry is the JSON response shape for a single extra.
 type extrasListEntry struct {
 	Name         string             `json:"name"`
+	File         string             `json:"file,omitempty"` // single-file extra: the synced file in source_dir
 	SourceDir    string             `json:"source_dir"`
 	SourceType   string             `json:"source_type"`
 	FileCount    int                `json:"file_count"`
@@ -45,7 +47,8 @@ type extrasTargetInfo struct {
 	Mode      string `json:"mode"`
 	Flatten   bool   `json:"flatten"`
 	Extension string `json:"extension,omitempty"`
-	Status    string `json:"status"` // "synced", "drift", "not synced", "no source"
+	As        string `json:"as,omitempty"` // single-file extra: target filename
+	Status    string `json:"status"`       // "synced", "drift", "modified", "not synced", "no source"
 }
 
 // extrasSourceDir returns the source directory for the named extra in the
@@ -113,11 +116,12 @@ func (s *Server) handleExtras(w http.ResponseWriter, r *http.Request) {
 		}
 		entry := extrasListEntry{
 			Name:       extra.Name,
+			File:       extra.File,
 			SourceDir:  sourceDir,
 			SourceType: config.ResolveExtrasSourceType(extra, resolvedExtrasSource),
 		}
 
-		files, err := syncpkg.DiscoverExtraFiles(sourceDir)
+		files, err := syncpkg.DiscoverExtraSource(sourceDir, extra.File)
 		if err != nil {
 			entry.SourceExists = false
 			entry.FileCount = 0
@@ -135,6 +139,13 @@ func (s *Server) handleExtras(w http.ResponseWriter, r *http.Request) {
 				Mode:      m,
 				Flatten:   t.Flatten,
 				Extension: t.Extension,
+				As:        t.As,
+			}
+
+			if extra.File != "" {
+				ti.Status = syncpkg.ExtraFileStatus(syncpkg.NewExtraFile(sourceDir, extra.File, targetPath, t.As, m))
+				entry.Targets = append(entry.Targets, ti)
+				continue
 			}
 
 			// Transform extensions use copy semantics. Resolve the mode through
@@ -245,6 +256,10 @@ func (s *Server) handleExtrasDiff(w http.ResponseWriter, r *http.Request) {
 		} else {
 			sourceDir = config.ResolveExtrasSourceDir(extra, extrasSource, source)
 		}
+		if extra.File != "" {
+			out = append(out, extraFileDiffEntries(extra, sourceDir, projectRoot)...)
+			continue
+		}
 		files, err := syncpkg.DiscoverExtraFiles(sourceDir)
 		if err != nil {
 			// Source doesn't exist — report every target as needing creation
@@ -298,6 +313,27 @@ func (s *Server) handleExtrasDiff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]any{"extras": out})
+}
+
+// extraFileDiffEntries reports each target of a single-file extra as one item.
+func extraFileDiffEntries(extra config.ExtraConfig, sourceDir, projectRoot string) []extrasDiffEntry {
+	var out []extrasDiffEntry
+	for _, t := range extra.Targets {
+		f := syncpkg.NewExtraFile(sourceDir, extra.File, resolveExtrasTargetPath(projectRoot, t.Path), t.As, t.Mode)
+		entry := extrasDiffEntry{Name: extra.Name, Target: t.Path, Mode: f.Mode, Items: []extrasDiffItem{}}
+		switch status := syncpkg.ExtraFileStatus(f); status {
+		case "synced":
+			entry.Synced = true
+		case "no source":
+			entry.Items = append(entry.Items, extrasDiffItem{Action: "create", File: extra.File, Reason: "no source file"})
+		case "not synced":
+			entry.Items = append(entry.Items, extrasDiffItem{Action: "create", File: filepath.Base(f.Target), Reason: "missing in target"})
+		default:
+			entry.Items = append(entry.Items, extrasDiffItem{Action: "update", File: filepath.Base(f.Target), Reason: status})
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 // buildExtrasDiffItems returns the list of files that differ between source and
@@ -443,6 +479,10 @@ func (s *Server) handleExtrasCreate(w http.ResponseWriter, r *http.Request) {
 			et.Mode = "copy"
 		}
 		extra.Targets = append(extra.Targets, et)
+	}
+	if err := config.ValidateExtraConfig(extra); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// Append to config (extras source resolution is handled by
@@ -597,7 +637,16 @@ func (s *Server) syncExtras(name string, dryRun, force bool) []extraSyncResult {
 			}
 
 			targetPath := resolveExtrasTargetPath(projectRoot, t.Path)
-			res, err := syncpkg.SyncExtra(sourceDir, targetPath, m, dryRun, force, t.Flatten, projectRoot, spec)
+			var res *syncpkg.ExtraResult
+			var err error
+			switch {
+			case extra.File == "":
+				res, err = syncpkg.SyncExtra(sourceDir, targetPath, m, dryRun, force, t.Flatten, projectRoot, spec)
+			case spec != nil:
+				err = fmt.Errorf("extensions are not supported for single-file extras")
+			default:
+				res, err = syncpkg.SyncExtraFile(syncpkg.NewExtraFile(sourceDir, extra.File, targetPath, t.As, m), dryRun, projectRoot)
+			}
 			if err != nil {
 				tr.Error = err.Error()
 			} else {
@@ -688,6 +737,13 @@ func (s *Server) handleExtrasMode(w http.ResponseWriter, r *http.Request) {
 					writeError(w, http.StatusBadRequest, err.Error())
 					return
 				}
+				if extra.File != "" || newMode == "import" {
+					changed := config.ExtraTargetConfig{Path: t.Path, Mode: newMode, Flatten: newFlatten, Extension: newExtension, As: t.As}
+					if err := config.ValidateExtraConfig(config.ExtraConfig{Name: extra.Name, File: extra.File, Targets: []config.ExtraTargetConfig{changed}}); err != nil {
+						writeError(w, http.StatusBadRequest, err.Error())
+						return
+					}
+				}
 
 				extras[i].Targets[j].Mode = newMode
 				if body.Flatten != nil {
@@ -749,6 +805,9 @@ func (s *Server) handleExtrasDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	removed := extras[idx]
+	sourceDir := s.extrasSourceDir(removed)
+
 	// Remove from config
 	if s.IsProjectMode() {
 		s.projectCfg.Extras = append(s.projectCfg.Extras[:idx], s.projectCfg.Extras[idx+1:]...)
@@ -761,12 +820,26 @@ func (s *Server) handleExtrasDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeOpsLog("extras-remove", "ok", start, map[string]any{
-		"name":  name,
-		"scope": "ui",
-	}, "")
+	// A single-file extra's targets go back to how they were (as the CLI does).
+	projectRoot := s.projectRoot
+	restored, restoreErr := syncpkg.RestoreExtraFileTargets(removed, sourceDir, func(p string) string {
+		return resolveExtrasTargetPath(projectRoot, p)
+	})
+	status, msg := "ok", ""
+	if restoreErr != nil {
+		status, msg = "partial", restoreErr.Error()
+	}
+	s.writeOpsLog("extras-remove", status, start, map[string]any{
+		"name":     name,
+		"restored": restored,
+		"scope":    "ui",
+	}, msg)
 
-	writeJSON(w, map[string]any{"success": true, "name": name})
+	if restoreErr != nil {
+		writeError(w, http.StatusInternalServerError, restoreErr.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"success": true, "name": name, "restored": restored})
 }
 
 // handleExtrasAddTarget — POST /api/extras/{name}/targets
@@ -828,6 +901,10 @@ func (s *Server) handleExtrasAddTarget(w http.ResponseWriter, r *http.Request) {
 	if body.Mode != "" {
 		et.Mode = body.Mode
 	}
+	if err := config.ValidateExtraConfig(config.ExtraConfig{Name: name, File: extras[idx].File, Targets: []config.ExtraTargetConfig{et}}); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	extras[idx].Targets = append(extras[idx].Targets, et)
 
 	if err := s.saveAndReloadConfig(); err != nil {
@@ -843,8 +920,9 @@ func (s *Server) handleExtrasAddTarget(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleExtrasRemoveTarget — DELETE /api/extras/{name}/targets
-// Removes one target from an existing extra. Config-only — the UI does not
-// prune disk files (mirrors the whole-extra DELETE contract).
+// Removes one target from an existing extra. For a directory extra it is
+// config-only; a single-file extra's target is restored first (its link or
+// import line goes and the file it replaced comes back), like --prune.
 func (s *Server) handleExtrasRemoveTarget(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	name := r.PathValue("name")
@@ -887,9 +965,18 @@ func (s *Server) handleExtrasRemoveTarget(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusNotFound, "target not found: "+body.Path)
 		return
 	}
-	if len(extras[idx].Targets) == 1 {
+	if len(extras[idx].Targets) == 1 && extras[idx].File == "" {
 		writeError(w, http.StatusBadRequest, "cannot remove the last target; delete the extra instead")
 		return
+	}
+
+	if extra := extras[idx]; extra.File != "" {
+		t := extra.Targets[tIdx]
+		f := syncpkg.NewExtraFile(s.extrasSourceDir(extra), extra.File, resolveExtrasTargetPath(s.projectRoot, t.Path), t.As, t.Mode)
+		if _, err := syncpkg.RestoreExtraTarget(f); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to restore target: "+err.Error())
+			return
+		}
 	}
 
 	extras[idx].Targets = append(extras[idx].Targets[:tIdx], extras[idx].Targets[tIdx+1:]...)

@@ -141,6 +141,32 @@ func (s *Server) IsProjectMode() bool {
 	return s.projectRoot != ""
 }
 
+// skillEntry returns a copy of the skills metadata entry for relPath, or nil.
+// It takes s.mu.RLock, so the caller must not hold s.mu.
+func (s *Server) skillEntry(relPath string) *install.MetadataEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return copyMetadataEntry(s.skillsStore.GetByPath(relPath))
+}
+
+// agentEntry returns a copy of the agents metadata entry for key, or nil.
+// It takes s.mu.RLock, so the caller must not hold s.mu.
+func (s *Server) agentEntry(key string) *install.MetadataEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return copyMetadataEntry(s.agentsStore.GetByPath(key))
+}
+
+// copyMetadataEntry returns a shallow copy so callers can read the entry after
+// s.mu is released while other requests replace or mutate the store.
+func copyMetadataEntry(e *install.MetadataEntry) *install.MetadataEntry {
+	if e == nil {
+		return nil
+	}
+	c := *e
+	return &c
+}
+
 // skillsSource returns the skills source directory for the current mode.
 // Caller must hold s.mu (RLock or Lock) when accessing s.cfg.
 func (s *Server) skillsSource() string {
@@ -397,6 +423,23 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /api/targets", s.handleAddTarget)
 	s.mux.HandleFunc("PATCH /api/targets/{name}", s.handleUpdateTarget)
 	s.mux.HandleFunc("DELETE /api/targets/{name}", s.handleRemoveTarget)
+	s.mux.HandleFunc("GET /api/targets/{name}/instructions", s.handleGetTargetInstructions)
+	s.mux.HandleFunc("PUT /api/targets/{name}/instructions", s.handlePutTargetInstructions)
+	s.mux.HandleFunc("POST /api/targets/{name}/instructions/convert", s.handleConvertTargetInstructions)
+	s.mux.HandleFunc("PUT /api/targets/{name}/instructions/setup", s.handlePutTargetInstructionsSetup)
+	s.mux.HandleFunc("DELETE /api/targets/{name}/instructions/setup", s.handleDeleteTargetInstructionsSetup)
+
+	// Instruction files: shared files (global) and the project AGENTS.md
+	s.mux.HandleFunc("GET /api/instructions", s.requireGlobalInstructions(s.handleListSharedInstructions))
+	s.mux.HandleFunc("POST /api/instructions", s.requireGlobalInstructions(s.handleCreateSharedInstructions))
+	s.mux.HandleFunc("POST /api/instructions/assign", s.requireGlobalInstructions(s.handleAssignSharedInstructions))
+	s.mux.HandleFunc("GET /api/instructions/{name}/content", s.requireGlobalInstructions(s.handleGetSharedInstructionsContent))
+	s.mux.HandleFunc("PUT /api/instructions/{name}/content", s.requireGlobalInstructions(s.handlePutSharedInstructionsContent))
+	s.mux.HandleFunc("POST /api/instructions/{name}/restore", s.requireGlobalInstructions(s.handleRestoreSharedInstructions))
+	s.mux.HandleFunc("POST /api/instructions/{name}/resolve", s.requireGlobalInstructions(s.handleResolveSharedInstructions))
+	s.mux.HandleFunc("GET /api/instructions/project", s.requireProjectInstructions(s.handleGetProjectInstructions))
+	s.mux.HandleFunc("PUT /api/instructions/project", s.requireProjectInstructions(s.handlePutProjectInstructions))
+	s.mux.HandleFunc("POST /api/instructions/project/shim", s.requireProjectInstructions(s.handleProjectInstructionsShim))
 
 	// Projects (global config only)
 	s.mux.HandleFunc("GET /api/projects", s.requireGlobalProjects(s.handleListProjects))

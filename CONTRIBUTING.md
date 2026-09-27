@@ -51,6 +51,8 @@ The language links at the top of each README are sorted by language code (`ja`, 
 
 All development and testing should be done inside the **devcontainer**. This ensures a consistent environment (Go toolchain, Node.js, pnpm, and demo content are pre-configured).
 
+Repository-specific task context is indexed in the [developer wiki](wiki/README.md). Agents should load the closest topic with `python3 scripts/ai-context.py <topic>` before making changes.
+
 ```bash
 git clone https://github.com/runkids/skillshare.git
 cd skillshare

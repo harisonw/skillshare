@@ -1109,7 +1109,7 @@ func checkExtras(extras []config.ExtraConfig, result *doctorResult, isProject bo
 			sourceDir = config.ResolveExtrasSourceDir(extra, extrasSource, source)
 		}
 
-		files, err := sync.DiscoverExtraFiles(sourceDir)
+		files, err := sync.DiscoverExtraSource(sourceDir, extra.File)
 		if err != nil {
 			result.addError()
 			ui.Error("%s: source missing (%s)", extra.Name, sourceDir)

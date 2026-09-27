@@ -1,0 +1,94 @@
+# CLI Development
+
+Use when adding or changing Go CLI commands, flags, handlers, interactive TUIs, domain packages, or any mutating behavior.
+
+## Before Starting
+
+- Search for the closest existing command pattern instead of guessing APIs from memory or documentation.
+- List affected command, domain, test, schema, documentation, and Web API files.
+- Define acceptance criteria before changing public behavior. Ask only when ambiguity would materially change scope or interfaces.
+- Use TDD: create a reproducible failing test, then write the smallest implementation that passes it.
+
+## Command Layering
+
+`cmd/skillshare/<command>.go` should contain only flag parsing, validation, and mode dispatch. When a handler approaches roughly 300 lines or mixes concerns, split it using existing suffixes:
+
+| Suffix | Responsibility |
+|---|---|
+| `_handlers.go` | Core orchestration |
+| `_project.go` | Project-mode behavior |
+| `_render.go` / `_format.go` | Output rendering and formatting |
+| `_prompt.go` / `_prompt_tui.go` | Decisions and prompts |
+| `_tui.go` | Full-screen Bubble Tea UI |
+| `_batch.go` | Batch orchestration |
+| `_resolve.go` | Target/resource resolution |
+| `_context.go` | Mode-specific context |
+
+Put testable core logic in `internal/<domain>/`. Do not let the CLI, Web API, and UI implement separate versions of the same business logic.
+
+## Global and Project Mode
+
+Most commands route through `parseModeArgs()` for global (`-g`) or project (`-p`) mode. Before changing behavior, verify:
+
+- whether the modes use different configuration, registry, source, or target paths;
+- whether project mode needs a separate handler;
+- whether their flag sets are actually the same;
+- whether tests cover mode precedence, working directory, and missing configuration.
+
+## Output and Interaction
+
+- Reuse `internal/ui` and existing Bubble Tea components instead of introducing another prompt framework.
+- Preserve dispatch order: structured JSON → TUI when interactive and allowed → empty state → plain text.
+- Structured-output stdout must remain machine-readable; progress, spinners, and diagnostics must not contaminate JSON.
+- When adding or changing a flag, inspect `--help`, completions, website command documentation, and tests.
+- Noninteractive automation should use explicit flags. Never treat `--force` as a universal prompt bypass.
+
+## Mutating Behavior
+
+Operations that change configuration, sources, targets, or managed files must:
+
+- follow existing dry-run, backup, rollback, and conflict-handling patterns;
+- write an oplog entry to `operations.log` with the operation, status, duration, and necessary arguments;
+- send security scan events to the audit log rather than the regular operation log;
+- preserve path validation, scope checks, and ownership checks;
+- use domain uninstall/remove flows for managed state rather than replacing them with filesystem deletion.
+
+## Tests
+
+Integration tests use `internal/testutil.NewSandbox(t)` and `RunCLI` or `RunCLIInDir`:
+
+```go
+func TestFeature_BasicCase(t *testing.T) {
+    sb := testutil.NewSandbox(t)
+    defer sb.Cleanup()
+
+    sb.CreateSkill("test-skill", map[string]string{
+        "SKILL.md": "---\nname: test-skill\n---\n# Content",
+    })
+
+    result := sb.RunCLI("command", "args...")
+    result.AssertSuccess(t)
+    result.AssertOutputContains(t, "expected output")
+}
+```
+
+For a bug fix, prove that the test fails before the fix. Add an E2E runbook in `ai_docs/tests/<slug>_runbook.md` for new commands, install/uninstall/sync flows, security behavior, multi-step workflows, or OS/network/permission cases that integration tests cannot cover.
+
+All command execution and isolation rules live in `testing`. Never run the CLI or tests on the host.
+
+## Web API
+
+When a dashboard endpoint is needed:
+
+1. Use existing `writeJSON` and `writeError` helpers in `internal/server/handler_<name>.go`.
+2. Register the method and route in `internal/server/server.go`.
+3. Handle scope explicitly through `s.IsProjectMode()` or the existing guards.
+4. Add handler tests and verify UI client types and query invalidation.
+5. Share an `internal/` package when the CLI and API expose the same operation; do not shell out between them.
+
+## Completion Criteria
+
+- The failing test now passes, along with proportionate neighboring tests.
+- Handler split, dual-mode behavior, structured output, oplog, and Web API implications were reviewed.
+- Public behavior changes were synchronized after loading `documentation`.
+- Commands were verified inside the devcontainer using `testing` guidance.

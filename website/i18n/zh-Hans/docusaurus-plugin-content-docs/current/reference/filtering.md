@@ -67,6 +67,8 @@ targets: [claude, cursor]
 
 **行为：** 白名单——该 Skill 只会 sync 到列出的 Target。省略此字段表示 sync 到所有 Target。如果 `metadata.targets` 与顶层 `targets` 同时存在，`metadata.targets` 优先。
 
+**Tracked repos：** 在 dashboard 中为 tracked repo 内的 skill 设置的 targets 存储在 source 的 `.metadata.json` 中，而不是它的 SKILL.md，因此 clone 保持干净，`update` 也能照常运行。该设置优先于 skill 的 `metadata.targets`。
+
 **别名：** Target 名称支持别名。`claude` 会匹配配置为 `claude-code` 的 Target。参见 [Supported Targets](/docs/reference/targets/supported-targets)。
 
 📖 [Skill format — targets 字段](/docs/understand/skill-format#targets)

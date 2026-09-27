@@ -48,6 +48,12 @@ function LegacyResourceRedirect() {
   return <Navigate to={name ? `${base}/${encodeURIComponent(name)}` : base} replace />;
 }
 
+/** A shared AGENTS.md had its own page; it is now selected on the Extras tab. */
+function LegacySharedInstructionRedirect() {
+  const { name = '' } = useParams();
+  return <Navigate to={`/extras?tab=instructions&file=${encodeURIComponent(name)}`} replace />;
+}
+
 /** Filter Studio and the Collect page became tabs and a dialog on the target page. */
 function LegacyTargetRedirect() {
   const { name } = useParams();
@@ -82,6 +88,7 @@ function AppRoutes() {
             <Route path="targets/:name" element={<Lazy><TargetDetailPage /></Lazy>} />
             <Route path="targets/:name/filters" element={<LegacyTargetRedirect />} />
             <Route path="extras" element={<Lazy><ExtrasPage /></Lazy>} />
+            <Route path="extras/instructions/:name" element={<LegacySharedInstructionRedirect />} />
             <Route path="plugins" element={<Lazy><PluginsPage /></Lazy>} />
             <Route path="projects" element={<Lazy><ProjectsPage /></Lazy>} />
             <Route path="projects/:root" element={<Lazy><ProjectDetailPage /></Lazy>} />

@@ -25,6 +25,10 @@ import (
 	versionpkg "skillshare/internal/version"
 )
 
+// replaceBinaryFlag is internal: the sudo child receives only this flag, so
+// root replaces the binary and never touches the user's skill, caches, or logs.
+const replaceBinaryFlag = "--replace-binary"
+
 func cmdUpgrade(args []string) error {
 	start := time.Now()
 
@@ -32,6 +36,7 @@ func cmdUpgrade(args []string) error {
 	force := false
 	skillOnly := false
 	cliOnly := false
+	replaceVersion := ""
 
 	// Parse args
 	for _, arg := range args {
@@ -47,7 +52,19 @@ func cmdUpgrade(args []string) error {
 		case "--help", "-h":
 			printUpgradeHelp()
 			return nil
+		default:
+			if v, ok := strings.CutPrefix(arg, replaceBinaryFlag+"="); ok {
+				replaceVersion = v
+			}
 		}
+	}
+
+	if replaceVersion != "" {
+		execPath, err := resolveExecPath()
+		if err != nil {
+			return err
+		}
+		return downloadBinary(execPath, replaceVersion)
 	}
 
 	// Show logo
@@ -127,14 +144,9 @@ func upgradeCLIBinary(dryRun, force bool) (string, error) {
 	// Step 1: Show current version
 	ui.StepStart("CLI", fmt.Sprintf("v%s", version))
 
-	// Get current executable path
-	execPath, err := os.Executable()
+	execPath, err := resolveExecPath()
 	if err != nil {
-		return "", fmt.Errorf("failed to get executable path: %w", err)
-	}
-	execPath, err = filepath.EvalSymlinks(execPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve symlink: %w", err)
+		return "", err
 	}
 
 	// Check if installed via Homebrew
@@ -192,27 +204,18 @@ func upgradeCLIBinary(dryRun, force bool) (string, error) {
 		}
 	}
 
-	// Check if we need elevated permissions to write to the binary location
+	// Only the binary replacement runs as root; everything after it writes
+	// into the user's home and must stay owned by the user.
 	if runtime.GOOS != "windows" && needsSudo(execPath) {
 		ui.Info("Need elevated permissions to write to %s", filepath.Dir(execPath))
-		return "", reexecWithSudo(execPath)
+		err = upgradeBinaryWithSudo(execPath, latestVersion)
+	} else {
+		err = downloadBinary(execPath, latestVersion)
 	}
-
-	// Get download URL for current platform
-	downloadURL, err := versionpkg.BuildDownloadURL(latestVersion)
 	if err != nil {
-		return "", fmt.Errorf("failed to get download URL: %w", err)
+		return "", err
 	}
-
-	// Download
 	hasUIDownload := latestVersion != ""
-	downloadLabel := fmt.Sprintf("Downloading v%s...", latestVersion)
-	downloadSpinner := ui.StartTreeSpinner(downloadLabel, !hasUIDownload)
-	if err := downloadAndReplace(downloadURL, execPath, downloadProgress(downloadLabel, downloadSpinner.Update)); err != nil {
-		downloadSpinner.Fail("Failed to download")
-		return "", fmt.Errorf("failed to upgrade: %w", err)
-	}
-	downloadSpinner.Success(fmt.Sprintf("Upgraded  v%s → v%s", version, latestVersion))
 
 	// Clear version cache so next check fetches fresh data
 	versionpkg.ClearCache()
@@ -228,6 +231,34 @@ func upgradeCLIBinary(dryRun, force bool) (string, error) {
 	}
 
 	return latestVersion, nil
+}
+
+func resolveExecPath() (string, error) {
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("failed to get executable path: %w", err)
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve symlink: %w", err)
+	}
+	return execPath, nil
+}
+
+func downloadBinary(execPath, targetVersion string) error {
+	downloadURL, err := versionpkg.BuildDownloadURL(targetVersion)
+	if err != nil {
+		return fmt.Errorf("failed to get download URL: %w", err)
+	}
+
+	downloadLabel := fmt.Sprintf("Downloading v%s...", targetVersion)
+	downloadSpinner := ui.StartTreeSpinner(downloadLabel, false)
+	if err := downloadAndReplace(downloadURL, execPath, downloadProgress(downloadLabel, downloadSpinner.Update)); err != nil {
+		downloadSpinner.Fail("Failed to download")
+		return fmt.Errorf("failed to upgrade: %w", err)
+	}
+	downloadSpinner.Success(fmt.Sprintf("Upgraded  v%s → v%s", version, targetVersion))
+	return nil
 }
 
 func upgradeSkillshareSkill(dryRun, force bool) error {

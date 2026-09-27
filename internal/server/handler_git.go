@@ -30,6 +30,8 @@ type gitStatusResponse struct {
 	TrackingBranch string   `json:"trackingBranch,omitempty"`
 	// Ahead counts commits no remote-tracking branch has yet, i.e. what a push uploads.
 	Ahead int `json:"ahead"`
+	// Behind counts upstream commits HEAD lacks as of the last fetch, i.e. what a pull brings in.
+	Behind int `json:"behind"`
 	// Root-scope hazards (populated only when scope == "root"): NestedRepos are
 	// subdirectories with their own .git that commit as empty submodules;
 	// ConfigTracked means config.yaml leaked into version control.
@@ -108,6 +110,7 @@ func (s *Server) handleGitStatus(w http.ResponseWriter, r *http.Request) {
 
 	if resp.HasRemote {
 		resp.Ahead = git.AheadCount(src)
+		resp.Behind = git.BehindCount(src)
 	}
 
 	// Root-scope hazards: nested submodule traps and a leaked config.yaml.
@@ -514,6 +517,12 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := git.PushRemoteWithAuth(src); err != nil {
+		if errors.Is(err, git.ErrPushRejected) {
+			// The UI offers a pull for this code.
+			s.writeOpsLog("push", "error", start, args, err.Error())
+			writeCodedError(w, http.StatusConflict, "push_rejected", err.Error(), nil)
+			return
+		}
 		fail(err)
 		return
 	}
@@ -695,6 +704,11 @@ func (s *Server) handlePull(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, git.ErrMergeFailed) {
 			// The UI offers a force pull for this code.
 			writeCodedError(w, http.StatusConflict, "merge_failed", "git pull failed: "+err.Error(), nil)
+			return
+		}
+		if strings.Contains(err.Error(), "Permission denied") {
+			// Usually files a sudo run left owned by root; the UI shows how to take them back.
+			writeCodedError(w, http.StatusInternalServerError, "permission_denied", "git pull failed: "+err.Error(), map[string]string{"path": src})
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "git pull failed: "+err.Error())

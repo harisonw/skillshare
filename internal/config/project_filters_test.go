@@ -82,3 +82,40 @@ func TestLoadProjectAndResolveTargets_PreservesFilters(t *testing.T) {
 		t.Fatalf("resolved exclude = %v", rsc.Exclude)
 	}
 }
+
+func TestLoadProjectAndResolveTargets_KeepsInstructions(t *testing.T) {
+	root := t.TempDir()
+	cfgPath := filepath.Join(root, ".skillshare", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
+		t.Fatalf("mkdir project config dir: %v", err)
+	}
+	raw := "targets:\n" +
+		"  - name: myagent\n" +
+		"    skills: { path: .myagent/skills }\n" +
+		"    instructions: { path: .myagent/AGENTS.md, import: true }\n"
+	if err := os.WriteFile(cfgPath, []byte(raw), 0644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+	cfg, err := LoadProject(root)
+	if err != nil {
+		t.Fatalf("LoadProject returned error: %v", err)
+	}
+	resolved, err := ResolveProjectTargets(root, cfg)
+	if err != nil {
+		t.Fatalf("ResolveProjectTargets returned error: %v", err)
+	}
+	want := &TargetInstructionsConfig{Path: ".myagent/AGENTS.md", Import: true}
+	if got := resolved["myagent"].Instructions; !reflect.DeepEqual(got, want) {
+		t.Fatalf("resolved instructions = %+v, want %+v", got, want)
+	}
+	if err := cfg.Save(root); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	again, err := LoadProject(root)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got := again.Targets[0].Instructions; !reflect.DeepEqual(got, want) {
+		t.Fatalf("saved instructions = %+v, want %+v", got, want)
+	}
+}

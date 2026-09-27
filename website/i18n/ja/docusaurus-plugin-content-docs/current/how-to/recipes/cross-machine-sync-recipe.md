@@ -72,8 +72,9 @@ skillshare push
 
 - **ログイン時の自動 Sync**: シェルのプロファイル（`.bashrc` / `.zshrc`）に
   `skillshare pull && skillshare sync` を追加する
-- **競合の解決**: 2台のマシンが同じ Skill を変更した場合、`pull` は git merge を使います —
-  Source ディレクトリ内で競合を解決してください
+- **競合の解決**: `pull` は両方のマシンのコミットをマージし、`.metadata.json` の競合は自動で解決します。
+  両方のマシンが同じ Skill ファイルを編集した場合、`pull` は停止してマージを取り消し、該当ファイルを表示します —
+  Source ディレクトリ内で git を使って解決してください
 - **選択的な Sync**: `config.yaml` の Target ごとの `include` / `exclude` フィルターを使い、
   各マシンに Sync される Skill を制御する
 

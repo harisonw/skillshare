@@ -1,0 +1,419 @@
+import { useState } from 'react';
+import type { ReactNode } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, ChevronUp, Copy, Ellipsis, FilePlus, Plus, Trash2, TriangleAlert, X } from 'lucide-react';
+import { api } from '../../api/client';
+import type { SharedInstructionsFile, SharedInstructionsTarget } from '../../api/client';
+import AgentIcon from '../AgentIcon';
+import Button from '../Button';
+import { Checkbox } from '../Checkbox';
+import ConfirmDialog from '../ConfirmDialog';
+import EmptyState from '../EmptyState';
+import { PageSkeleton } from '../Skeleton';
+import { SkillContextMenu } from '../TargetMenu';
+import { useToast } from '../Toast';
+import { useT } from '../../i18n';
+import { queryKeys } from '../../lib/queryKeys';
+import { shortenHome } from '../../lib/paths';
+import InstructionsEditorDialog from './InstructionsEditorDialog';
+import NewSharedDialog from './NewSharedDialog';
+import {
+  connectExtras, connectPlan, connectedTo, formatSize, lineCount, needsSync, refreshInstructions, restorePlan, rowHint, statusTone, usesOf,
+} from './instructionsView';
+import type { ConnectStep, RestoreStep, RowHint } from './instructionsView';
+
+const PREVIEW_LINES = 8;
+type Pending = { title: string; message: ReactNode; confirm: string; danger?: boolean; run: () => Promise<void> };
+
+/** ④ Extras › AGENTS.md (global): shared files on the left, the selected file and its targets on the right. */
+export default function SharedInstructions({ creating, setCreating }: { creating: boolean; setCreating: (open: boolean) => void }) {
+  const t = useT();
+  const queryClient = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const { data, error, isPending } = useQuery({ queryKey: queryKeys.instructions.shared, queryFn: () => api.listSharedInstructions() });
+
+  const pick = (name: string | null) => setParams((prev) => {
+    const next = new URLSearchParams(prev);
+    if (name) next.set('file', name);
+    else next.delete('file');
+    return next;
+  }, { replace: true });
+
+  if (isPending) return <PageSkeleton />;
+  if (error) return <div className="ss-note bad"><span className="flex-1">{error.message}</span></div>;
+  const { files, targets } = data;
+  const current = files.find((f) => f.name === params.get('file')) ?? files[0];
+
+  return (
+    <>
+      {!current ? (
+        <EmptyState
+          icon={FilePlus}
+          title={t('instructions.shared.empty.title')}
+          description={t('instructions.shared.empty.description')}
+          action={<Button variant="primary" onClick={() => setCreating(true)}><Plus size={15} />{t('instructions.shared.new')}</Button>}
+        />
+      ) : (
+        <div className="grid grid-cols-[220px_minmax(0,1fr)] items-start gap-6">
+          <nav className="ss-list" aria-label={t('instructions.shared.files')}>
+            {files.map((f) => {
+              const using = connectedTo(targets, f.name);
+              const on = f.name === current.name;
+              return (
+                <button key={f.name} type="button" aria-pressed={on} onClick={() => pick(f.name)}
+                  className={`ss-r link w-full !flex-col !items-start !gap-2 !py-3 text-left ${on ? 'sel' : ''}`}>
+                  <span className="max-w-full truncate font-mono text-[13.5px] font-semibold">{f.name}</span>
+                  <span className="flex items-center gap-2">
+                    {using.length > 0 && (
+                      <span className="ss-stack" aria-hidden="true">
+                        {using.slice(0, 5).map((tg) => <span key={tg.name} className="ss-at !h-5 !w-5"><AgentIcon target={tg.name} size={11} /></span>)}
+                      </span>
+                    )}
+                    <span className="text-[12px] text-ink-3">{t(using.length === 1 ? 'instructions.shared.count.one' : 'instructions.shared.count.other', { count: using.length })}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+          <FilePanel key={current.name} file={current} targets={targets}
+            onDeleted={() => pick(files.find((f) => f.name !== current.name)?.name ?? null)} />
+        </div>
+      )}
+
+      {creating && (
+        <NewSharedDialog
+          targets={targets}
+          onClose={() => setCreating(false)}
+          onCreated={(name) => { setCreating(false); pick(name); refreshInstructions(queryClient); }}
+        />
+      )}
+    </>
+  );
+}
+
+function FilePanel({ file, targets, onDeleted }: {
+  file: SharedInstructionsFile;
+  targets: SharedInstructionsTarget[];
+  onDeleted: () => void;
+}) {
+  const t = useT();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const name = file.name;
+  // Off once deletion starts, so the refresh afterwards does not ask for a file that is gone.
+  const [deleting, setDeleting] = useState(false);
+  const content = useQuery({ queryKey: queryKeys.instructions.sharedContent(name), queryFn: () => api.getSharedInstructionsContent(name), enabled: !deleting });
+  const [expanded, setExpanded] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  const connected = connectedTo(targets, name);
+  const isOn = (tg: SharedInstructionsTarget) => !tg.same_as && usesOf(tg).includes(name);
+  const selectable = targets.filter((tg) => !tg.same_as);
+  const chosen = selectable.filter((tg) => selected.has(tg.name));
+  const allOn = selectable.length > 0 && selectable.every((tg) => selected.has(tg.name));
+  const connectAll = connectPlan(targets, file);
+  const restoreAll = restorePlan(targets, name);
+  const stale = needsSync(targets, name);
+  const list = (names: string[]) => names.join(t('instructions.shared.listSep'));
+
+  // Runs one change with the page busy, reporting failures and refetching afterwards.
+  const act = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    } finally {
+      setBusy(false);
+      refreshInstructions(queryClient);
+    }
+  };
+  const ask = (p: Pending) => setPending(p);
+
+  const connect = async (steps: { target: string; extras: string[] }[]) => {
+    const errors: string[] = [];
+    const done: string[] = [];
+    for (const s of steps) {
+      const res = await api.assignSharedInstructions([s.target], s.extras);
+      if (res.success) done.push(s.target);
+      else errors.push(...res.errors);
+    }
+    if (done.length) toast(t('instructions.shared.assigned', { targets: list(done), files: name }), 'success');
+    if (errors.length) throw new Error(errors.join('; '));
+  };
+  // Restore takes only this file off each target; an import target keeps its other files.
+  const detach = async (names: string[]) => {
+    const errors: string[] = [];
+    const done: string[] = [];
+    for (const n of names) {
+      const res = await api.restoreSharedInstructions(name, n);
+      if (res.success) done.push(n);
+      else errors.push(...res.errors);
+    }
+    if (done.length) toast(t('instructions.shared.detached', { targets: list(done), name }), 'success');
+    if (errors.length) throw new Error(errors.join('; '));
+  };
+
+  const toggle = (tg: SharedInstructionsTarget) => {
+    if (isOn(tg)) {
+      ask({
+        title: t('instructions.turnOff.title', { target: tg.name }),
+        message: t('instructions.turnOff.message', { path: shortenHome(tg.path), name, target: tg.name }),
+        confirm: t('instructions.detail.restore'),
+        run: () => detach([tg.name]),
+      });
+    } else if (!tg.import && tg.assigned.length > 0) {
+      const other = tg.assigned[0].name;
+      ask({
+        title: t('instructions.switchFrom.title', { target: tg.name, name }),
+        message: t('instructions.switchFrom.message', { target: tg.name, other }),
+        confirm: t('instructions.switchFrom.confirm', { name }),
+        run: () => connect([{ target: tg.name, extras: [name] }]),
+      });
+    } else {
+      void act(() => connect([{ target: tg.name, extras: connectExtras(tg, name) }]));
+    }
+  };
+
+  const connectNote = (s: ConnectStep) => (s.note === 'switch' ? t('instructions.plan.switch', { other: s.other ?? '', name })
+    : s.note === 'tooLong' ? t('instructions.plan.tooLong', { max: (s.max ?? 0).toLocaleString() })
+      : t(`instructions.plan.${s.note}`));
+  const restoreNote = (s: RestoreStep) => (s.note === 'importKeep' ? t('instructions.plan.importKeep', { name, others: list(s.others ?? []) })
+    : s.note === 'import' ? t('instructions.plan.dropImport', { name })
+      : s.note === 'modified' ? t('instructions.plan.modified') : t('instructions.plan.restoreLink'));
+  const planList = (rows: { target: string; note: string; warn: boolean }[], footer: string) => (
+    <div className="flex flex-col gap-3">
+      <div className="ss-list">
+        {rows.map((r) => (
+          <div key={r.target} className="ss-r !min-h-11 !gap-2.5 !py-1.5">
+            <span className="ss-at !h-6 !w-6"><AgentIcon target={r.target} size={14} /></span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-semibold text-ink">{r.target}</span>
+            <span className={`text-right text-[12.5px] ${r.warn ? 'text-warn' : 'text-ink-3'}`}>{r.note}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[13px]">{footer}</p>
+    </div>
+  );
+  const askConnect = (steps: ConnectStep[], confirm: string) => ask({
+    title: t(steps.length === 1 ? 'instructions.connectAll.title.one' : 'instructions.connectAll.title.other', { count: steps.length, name }),
+    message: planList(steps.map((s) => ({ target: s.target, note: connectNote(s), warn: s.note === 'switch' || s.note === 'tooLong' })), t('instructions.connectAll.message')),
+    confirm,
+    run: () => connect(steps),
+  });
+  const askRestore = (steps: RestoreStep[], confirm: string) => ask({
+    title: t(steps.length === 1 ? 'instructions.restoreAll.title.one' : 'instructions.restoreAll.title.other', { count: steps.length, name }),
+    message: planList(steps.map((s) => ({ target: s.target, note: restoreNote(s), warn: s.note === 'modified' })), t('instructions.restoreAll.message', { name })),
+    confirm,
+    run: () => detach(steps.map((s) => s.target)),
+  });
+
+  const resolve = (tg: SharedInstructionsTarget, action: 'collect' | 'reapply') => ask({
+    title: t(`instructions.resolve.${action}.title`, { name, target: tg.name }),
+    message: t(`instructions.resolve.${action}.message`, { name, target: tg.name, count: connected.length }),
+    confirm: t(`instructions.resolve.${action}.item`, { name }),
+    run: async () => {
+      await api.resolveSharedInstructions(name, tg.name, action);
+      toast(t(`instructions.resolve.${action}.done`, { name, target: tg.name }), 'success');
+    },
+  });
+
+  const sync = () => act(async () => {
+    const res = await api.syncExtras({ name });
+    const failed = res.extras.flatMap((e) => e.targets).find((r) => r.error);
+    if (failed) throw new Error(failed.error);
+    toast(t('instructions.shared.synced', { name, targets: list(stale.map((tg) => tg.name)) }), 'success');
+  });
+
+  const remove = () => ask({
+    title: t('instructions.delete.title', { name }),
+    message: connected.length
+      ? t('instructions.delete.message', { count: connected.length, targets: list(connected.map((tg) => tg.name)), name })
+      : t('instructions.delete.unused', { name }),
+    confirm: t('instructions.detail.delete.confirm'),
+    danger: true,
+    run: async () => {
+      setDeleting(true);
+      try {
+        await api.deleteExtra(name);
+      } catch (err) {
+        setDeleting(false);
+        throw err;
+      }
+      toast(t('instructions.detail.delete.done', { name }), 'success');
+      onDeleted();
+    },
+  });
+
+  const copyPath = async () => {
+    try {
+      await navigator.clipboard.writeText(file.path);
+      toast(t('instructions.shared.pathCopied', { path: shortenHome(file.path) }), 'success');
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  };
+
+  const hintText = (h: RowHint) => {
+    switch (h.kind) {
+      case 'sameAs': return t('instructions.hint.sameAs', { name: h.name });
+      case 'notSynced': return t(h.mode === 'symlink' ? 'instructions.hint.missingLink' : 'instructions.hint.missingFile');
+      case 'drift': return h.mode === 'import' ? t('instructions.hint.driftImport') : t('instructions.hint.drift', { name });
+      case 'noSource': return t('instructions.hint.noSource', { name });
+      case 'tooLong': return t('instructions.shared.tooLong', { name, chars: file.chars.toLocaleString(), max: h.max.toLocaleString() });
+      case 'usesOther': return t('instructions.hint.usesOther', { name: h.name });
+      case 'alsoUses': return t('instructions.hint.alsoUses', { names: list(h.names) });
+    }
+  };
+
+  const text = content.data?.content ?? '';
+  const lines = text ? text.replace(/\n$/, '').split('\n') : [];
+  const bulkOff = chosen.filter((tg) => !isOn(tg));
+  const bulkOn = chosen.filter(isOn);
+
+  return (
+    <section className="flex min-w-0 flex-col gap-4" aria-label={name}>
+      <div className="flex items-start gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h2 className="truncate font-mono text-[20px] font-bold">{name}</h2>
+          <span className="truncate font-mono text-[12px] text-ink-3" title={file.path}>{shortenHome(file.path)}</span>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => setEditing(true)} disabled={!content.data}>{t('instructions.shared.edit')}</Button>
+        <button type="button" className="ss-ib" aria-label={t('instructions.shared.more')} aria-haspopup="menu" aria-expanded={menu !== null}
+          onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right - 200, y: r.bottom + 4 }); }}>
+          <Ellipsis size={16} />
+        </button>
+      </div>
+
+      <div className="ss-list">
+        <div className="flex h-[38px] items-center gap-2 border-b border-line bg-sunken pr-2 pl-4">
+          <span className="flex-1 text-[12.5px] text-ink-2">
+            {content.data ? t('instructions.preview.stats', { lines: lineCount(text), size: formatSize(file.size) }) : '…'}
+          </span>
+          {lines.length > PREVIEW_LINES && (
+            <Button variant="ghost" size="sm" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+              {t(expanded ? 'instructions.preview.collapse' : 'instructions.preview.expand')}
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </Button>
+          )}
+        </div>
+        {content.error ? (
+          <div className="px-[18px] py-3 text-[13px] text-bad">{content.error.message}</div>
+        ) : (
+          <pre className="overflow-x-auto px-[18px] pt-3 pb-3.5 font-mono text-[12.5px] leading-[1.7] whitespace-pre text-ink">
+            {(expanded ? lines : lines.slice(0, PREVIEW_LINES)).join('\n') || ' '}
+            {!expanded && lines.length > PREVIEW_LINES && <span className="text-ink-3">{'\n…'}</span>}
+          </pre>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 pt-1.5 pl-4">
+        <Checkbox label={t('instructions.shared.selectAll')} hideLabel checked={allOn} indeterminate={!allOn && chosen.length > 0}
+          onChange={() => setSelected(allOn ? new Set() : new Set(selectable.map((tg) => tg.name)))} disabled={selectable.length === 0} />
+        <h3 className="ml-2 text-[15px] font-bold">{t('instructions.detail.targets')}</h3>
+        <span className="text-[12.5px] text-ink-3">{t('instructions.shared.connectedCount', { count: connected.length })}</span>
+        <span className="flex-1" />
+        {stale.length > 0 && (
+          <>
+            <span className="text-[12.5px] text-warn">{t(stale.length === 1 ? 'instructions.shared.needSync.one' : 'instructions.shared.needSync.other', { count: stale.length })}</span>
+            <Button variant="primary" size="sm" onClick={() => void sync()} loading={busy}>{t('extras.sync')}</Button>
+          </>
+        )}
+        {connectAll.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => askConnect(connectAll, t('instructions.shared.connectAll'))}>{t('instructions.shared.connectAll')}</Button>}
+        {restoreAll.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => askRestore(restoreAll, t('instructions.shared.restoreAll'))}>{t('instructions.shared.restoreAll')}</Button>}
+      </div>
+
+      <div className="ss-list">
+        {targets.map((tg) => {
+          const on = isOn(tg);
+          const a = tg.assigned.find((x) => x.name === name);
+          const hint = rowHint(tg, file);
+          const label = t('instructions.shared.switch', { target: tg.name, name });
+          return (
+            <div key={tg.name} className={`ss-r !block !p-0 ${selected.has(tg.name) ? 'sel' : ''}`}>
+              <div className="flex min-h-[56px] items-center gap-3 px-4 py-2">
+                <Checkbox label={t('instructions.shared.select', { name: tg.name })} hideLabel checked={selected.has(tg.name)} disabled={Boolean(tg.same_as)}
+                  onChange={(v) => { const next = new Set(selected); if (v) next.add(tg.name); else next.delete(tg.name); setSelected(next); }} />
+                <span className="ss-at"><AgentIcon target={tg.name} size={17} /></span>
+                <Link to={`/targets/${encodeURIComponent(tg.name)}?tab=instructions`} className="w-[110px] shrink-0 truncate font-mono text-[13px] font-semibold hover:underline">{tg.name}</Link>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="truncate font-mono text-[12.5px] text-ink-2" title={tg.path}>{shortenHome(tg.path)}</span>
+                  {hint && <span className={`text-[12px] ${hint.kind === 'tooLong' || hint.kind === 'noSource' ? 'text-warn' : 'text-ink-3'}`}>{hintText(hint)}</span>}
+                </span>
+                {on && a && <span className="ss-tag shrink-0">{a.mode}</span>}
+                <span className="w-[90px] shrink-0">{on && a && <span className={`ss-st ${statusTone(a.status)}`}>{a.status}</span>}</span>
+                <button type="button" role="switch" aria-checked={on} aria-label={label} title={label}
+                  className={`ss-sw ${on ? 'on' : ''} disabled:opacity-50`} disabled={busy || Boolean(tg.same_as)} onClick={() => toggle(tg)}><i /></button>
+              </div>
+              {on && a?.status === 'modified' && (
+                <div className="ss-note warn mr-4 mb-3 ml-[82px] !items-center">
+                  <TriangleAlert size={16} className="!mt-0" />
+                  <span className="flex-1">{t('instructions.row.modified')}</span>
+                  <Button variant="secondary" size="sm" disabled={busy} onClick={() => resolve(tg, 'collect')}>{t('instructions.resolve.collect.item', { name })}</Button>
+                  <Button variant="secondary" size="sm" disabled={busy} onClick={() => resolve(tg, 'reapply')}>{t('instructions.resolve.reapply.item', { name })}</Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {chosen.length > 0 && (
+        <div className="ss-bulk" role="toolbar" aria-label={t('instructions.shared.selected', { count: chosen.length })}>
+          <b>{t('instructions.shared.selectedShort', { count: chosen.length })}</b>
+          <span className="dv" />
+          <Button variant="secondary" size="sm" disabled={busy || bulkOff.length === 0} title={bulkOff.length === 0 ? t('instructions.shared.noneOff', { name }) : undefined}
+            onClick={() => askConnect(connectPlan(bulkOff, file), t('instructions.shared.connect', { name }))}>
+            {t('instructions.shared.connect', { name })}
+          </Button>
+          <Button variant="secondary" size="sm" disabled={busy || bulkOn.length === 0} title={bulkOn.length === 0 ? t('instructions.shared.noneOn', { name }) : undefined}
+            onClick={() => askRestore(restorePlan(bulkOn, name), t('instructions.detail.restore'))}>
+            {t('instructions.detail.restore')}
+          </Button>
+          <span className="dv" />
+          <button type="button" className="ss-ib" aria-label={t('instructions.shared.clear')} onClick={() => setSelected(new Set())}><X size={16} /></button>
+        </div>
+      )}
+
+      {editing && content.data && (
+        <InstructionsEditorDialog
+          title={`${name} · ${file.file}`}
+          path={file.path}
+          content={content.data.content}
+          readers={connected.map((tg) => tg.name)}
+          warnings={connected.filter((tg) => tg.max_chars && file.chars > tg.max_chars).map((tg) =>
+            t('instructions.editor.tooLong', { target: tg.name, chars: file.chars.toLocaleString(), max: tg.max_chars!.toLocaleString() }))}
+          onSave={async (next) => {
+            await api.putSharedInstructionsContent(name, next);
+            refreshInstructions(queryClient);
+          }}
+          onClose={() => setEditing(false)}
+        />
+      )}
+      <SkillContextMenu open={menu !== null} anchorPoint={menu ?? undefined} onClose={() => setMenu(null)} items={[
+        { key: 'copy', label: t('instructions.shared.copyPath'), icon: <Copy size={14} />, onSelect: () => void copyPath() },
+        { key: 'delete', label: t('instructions.shared.delete', { name }), icon: <Trash2 size={14} />, danger: true, onSelect: remove },
+      ]} />
+      <ConfirmDialog
+        open={pending !== null}
+        title={pending?.title ?? ''}
+        message={pending?.message ?? ''}
+        confirmText={pending?.confirm}
+        variant={pending?.danger ? 'danger' : 'default'}
+        loading={busy}
+        onCancel={() => setPending(null)}
+        onConfirm={async () => {
+          const p = pending!;
+          await act(p.run);
+          setPending(null);
+          if (!p.danger) setSelected(new Set());
+        }}
+      />
+    </section>
+  );
+}
