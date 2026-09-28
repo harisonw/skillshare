@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Copy, Ellipsis, Link2, Plus, Trash2 } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, Copy, Link2, Plus, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import type { BackupInfo, RestoreValidateResponse } from '../api/client';
 import { mcpApi } from '../api/mcp';
@@ -12,15 +12,16 @@ import DialogShell from '../components/DialogShell';
 import EmptyState from '../components/EmptyState';
 import PageHeader from '../components/PageHeader';
 import { Select } from '../components/Select';
-import { PageSkeleton } from '../components/Skeleton';
-import { SkillContextMenu } from '../components/TargetMenu';
-import type { ContextMenuItem } from '../components/TargetMenu';
+import Skeleton from '../components/Skeleton';
+import Spinner from '../components/Spinner';
 import { useToast } from '../components/Toast';
 import FileBackups from '../components/backups/FileBackups';
 import MCPBackups from '../components/backups/MCPBackups';
 import { backupItem, filterItems } from '../components/backups/backupView';
+import { TargetAgents } from '../components/targetAgents';
 import { useAppContext } from '../context/AppContext';
 import { formatDateTime, formatRelativeTime, formatSize, useI18n, useT } from '../i18n';
+import type { Locale } from '../i18n/locales';
 import { shortenHome } from '../lib/paths';
 import { queryKeys, staleTimes } from '../lib/queryKeys';
 import { SettingsTabs } from './SettingsPage';
@@ -30,6 +31,29 @@ const TABS = ['folders', 'files', 'mcp'] as const;
 
 /** Backups all sit side by side, so any one of them names the folder they share. */
 const backupsDir = (path: string) => path.replace(/[/\\][^/\\]+$/, '');
+
+/** Consecutive rows (newest first) under one heading per day: today and yesterday by name, older days by date. */
+function dayGroups<T extends { backup: BackupInfo }>(rows: T[], locale: Locale) {
+  const groups: { key: string; label: string; sub: string; rows: T[] }[] = [];
+  const today = new Date().setHours(0, 0, 0, 0);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  for (const r of rows) {
+    const d = new Date(r.backup.date);
+    const key = d.toDateString();
+    let g = groups.at(-1);
+    if (g?.key !== key) {
+      const ago = Math.round((today - new Date(d).setHours(0, 0, 0, 0)) / 86_400_000);
+      const date = formatDateTime(d, locale, { dateStyle: 'medium' });
+      const named = rtf.format(-ago, 'day');
+      g = ago <= 1
+        ? { key, label: named.charAt(0).toLocaleUpperCase(locale) + named.slice(1), sub: date, rows: [] }
+        : { key, label: date, sub: formatDateTime(d, locale, { weekday: 'long' }), rows: [] };
+      groups.push(g);
+    }
+    g.rows.push(r);
+  }
+  return groups;
+}
 
 export default function BackupPage() {
   const t = useT();
@@ -69,7 +93,7 @@ export default function BackupPage() {
         )}
       </div>
 
-      {tab === 'files' ? <FileBackups /> : tab === 'mcp' ? <MCPBackups /> : <FolderBackups />}
+      {tab === 'files' ? <FileBackups /> : tab === 'mcp' ? <MCPBackups /> : <FolderBackups creating={create.isPending} />}
     </div>
   );
 }
@@ -89,7 +113,7 @@ function useCreateBackup() {
 }
 
 /** Snapshots of whole target folders, taken before each sync. */
-function FolderBackups() {
+function FolderBackups({ creating }: { creating: boolean }) {
   const t = useT();
   const { locale } = useI18n();
   const { toast } = useToast();
@@ -99,8 +123,9 @@ function FolderBackups() {
   const [filter, setFilter] = useState('');
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [deleting, setDeleting] = useState<BackupInfo | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
-  const [restore, setRestore] = useState<{ backup: BackupInfo; target: string | null } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [restore, setRestore] = useState<{ backup: BackupInfo; target: string } | null>(null);
+  const agentOf = useContext(TargetAgents);
 
   const backups = data?.backups ?? [];
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.backups });
@@ -122,23 +147,29 @@ function FolderBackups() {
   const bothKinds = items.some((i) => i.kind === 'agents') && items.some((i) => i.kind === 'skills');
   const rows = backups.map((b) => ({ backup: b, items: filterItems(b.targets.map(backupItem), filter) })).filter((r) => r.items.length > 0);
 
-  const openMenu = (e: React.MouseEvent<HTMLButtonElement>, b: BackupInfo) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setMenu({
-      x: r.left,
-      y: r.bottom + 4,
-      items: [
-        { key: 'copy', label: t('common.copyPath'), icon: <Copy size={14} />, onSelect: () => { void navigator.clipboard?.writeText(b.path); toast(t('backup.toast.pathCopied'), 'success'); } },
-        { key: 'delete', label: t('backup.actions.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setDeleting(b) },
-      ],
-    });
-  };
+  const copyPath = (b: BackupInfo) => { void navigator.clipboard?.writeText(b.path); toast(t('backup.toast.pathCopied'), 'success'); };
 
   return (
     <>
+      {creating && (
+        <div className="ss-note" role="status">
+          <span className="flex flex-1 flex-col gap-2">
+            <span>{t('backup.creating')}</span>
+            <span className="ss-bar indet"><span /></span>
+          </span>
+        </div>
+      )}
 
       {isPending ? (
-        <PageSkeleton />
+        <div className="ss-list" role="status">
+          <div className="ss-lh gap-2"><Spinner size="sm" />{t('backup.loading')}</div>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="ss-r">
+              <Skeleton className="h-4 w-[180px]" />
+              <Skeleton className="h-4 flex-1" />
+            </div>
+          ))}
+        </div>
       ) : error ? (
         <div className="ss-note bad"><span className="flex-1">{error.message}</span></div>
       ) : backups.length === 0 ? (
@@ -160,37 +191,56 @@ function FolderBackups() {
             />
           )}
           <div className="ss-list">
-            <div className="ss-lh">
-              <span className="w-[210px]">{t('backup.col.taken')}</span>
-              <span className="flex-1">{t('backup.col.content')}</span>
-              <span className="w-[80px] text-right">{t('backup.col.size')}</span>
-              <span className="w-[120px]" />
-            </div>
             {rows.length === 0 && <div className="ss-r text-[13px] text-ink-3">{t('backup.filter.empty')}</div>}
-            {rows.map(({ backup: b, items: shown }) => (
-              <div key={b.timestamp} className="ss-r">
-                <span className="flex w-[210px] shrink-0 flex-col gap-px">
-                  <span className="text-[13px] font-semibold">{formatRelativeTime(b.date, locale)}</span>
-                  <span className="font-mono text-xs text-ink-3">{date(b)}</span>
-                </span>
-                <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
-                  {shown.map((it) => (
-                    <span key={it.name} className="inline-flex items-center gap-1.5 text-[13px]">
-                      <span className="ss-at"><AgentIcon target={it.target} size={14} /></span>
-                      <span className="font-mono">{it.target}</span>
-                      <span className="ss-tag">{it.kind}</span>
-                    </span>
-                  ))}
-                </span>
-                <span className="w-[80px] shrink-0 text-right font-mono text-[13px] text-ink-2">{b.sizeBytes > 0 ? formatSize(b.sizeBytes, locale) : '—'}</span>
-                <span className="flex w-[120px] shrink-0 items-center justify-end gap-1">
-                  <Button variant="secondary" size="sm" onClick={() => setRestore({ backup: b, target: shown.length === 1 ? shown[0].name : null })}>
-                    {t('backup.actions.restore')}
-                  </Button>
-                  <button type="button" className="ss-ib" aria-label={t('backup.actions.more', { date: date(b) })} onClick={(e) => openMenu(e, b)}>
-                    <Ellipsis size={16} />
-                  </button>
-                </span>
+            {dayGroups(rows, locale).map((g, gi) => (
+              <div key={g.key}>
+                <div className="ss-lh !h-auto gap-2 py-2.5" style={gi ? { borderTop: 'var(--sep)' } : undefined}>
+                  <span className="font-semibold text-ink">{g.label}</span>
+                  <span>{g.sub}</span>
+                </div>
+                {g.rows.map(({ backup: b, items: shown }, ri) => {
+                  const expanded = open === b.timestamp;
+                  const entries = new Map((b.entries ?? []).map((e) => [e.name, e]));
+                  const icons = [...new Map(shown.map((it) => [agentOf[it.target] ?? it.target, it.target])).values()];
+                  return (
+                    <div key={b.timestamp} style={ri ? { borderTop: 'var(--sep)' } : undefined}>
+                      <button type="button" className="ss-r link w-full text-left" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : b.timestamp)}>
+                        <span className="flex w-[120px] shrink-0 flex-col gap-px">
+                          <span className="font-mono text-[13px] font-semibold">{formatDateTime(b.date, locale, { timeStyle: 'short' })}</span>
+                          <span className="text-xs text-ink-3">{formatRelativeTime(b.date, locale)}</span>
+                        </span>
+                        <span className="ss-stack shrink-0">
+                          {icons.map((target) => <span key={target} className="ss-at"><AgentIcon target={target} size={14} /></span>)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2">{shown.map((it) => (it.kind === 'agents' ? `${it.target} agents` : it.target)).join(', ')}</span>
+                        <span className="w-[80px] shrink-0 text-right font-mono text-[13px] text-ink-2">{b.sizeBytes > 0 ? formatSize(b.sizeBytes, locale) : '—'}</span>
+                        {expanded ? <ChevronDown size={15} className="shrink-0 text-ink-3" /> : <ChevronRight size={15} className="shrink-0 text-ink-3" />}
+                      </button>
+                      {expanded && (
+                        <div className="ss-r fold !flex-col !items-stretch !gap-0 !py-2 !pl-[148px]">
+                          {shown.map((it) => {
+                            const e = entries.get(it.name);
+                            return (
+                              <div key={it.name} className="flex items-center gap-2.5 py-1.5">
+                                <span className="ss-at"><AgentIcon target={it.target} size={14} /></span>
+                                <span className="font-mono text-[13px]">{it.target}</span>
+                                <span className="ss-tag">{it.kind}</span>
+                                {e && <span className="text-xs text-ink-3">{t(e.files === 1 ? 'backup.item.files.one' : 'backup.item.files.other', { count: e.files, size: formatSize(e.sizeBytes, locale) })}</span>}
+                                <span className="flex-1" />
+                                <Button variant="secondary" size="sm" onClick={() => setRestore({ backup: b, target: it.name })}>{t('backup.actions.restore')}</Button>
+                              </div>
+                            );
+                          })}
+                          <div className="mt-1 flex items-center gap-1 pt-2" style={{ borderTop: 'var(--sep)' }}>
+                            <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-3">{shortenHome(b.path)}</span>
+                            <button type="button" className="ss-btn sm ghost" onClick={() => copyPath(b)}><Copy size={14} />{t('common.copyPath')}</button>
+                            <button type="button" className="ss-btn sm ghost !text-bad" onClick={() => setDeleting(b)}><Trash2 size={14} />{t('backup.actions.delete')}</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>
@@ -218,7 +268,6 @@ function FolderBackups() {
         <RestoreDialog
           backup={restore.backup}
           target={restore.target}
-          onPick={(target) => setRestore({ backup: restore.backup, target })}
           onClose={() => setRestore(null)}
           onDone={() => {
             setRestore(null);
@@ -248,15 +297,13 @@ function FolderBackups() {
         onConfirm={() => deleting && remove.mutate(deleting)}
         onCancel={() => setDeleting(null)}
       />
-      <SkillContextMenu open={!!menu} anchorPoint={menu ?? undefined} items={menu?.items ?? []} onClose={() => setMenu(null)} />
     </>
   );
 }
 
-function RestoreDialog({ backup, target, onPick, onClose, onDone }: {
+function RestoreDialog({ backup, target, onClose, onDone }: {
   backup: BackupInfo;
-  target: string | null;
-  onPick: (target: string) => void;
+  target: string;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -266,15 +313,14 @@ function RestoreDialog({ backup, target, onPick, onClose, onDone }: {
   const [more, setMore] = useState(false);
 
   const check = useQuery<RestoreValidateResponse>({
-    queryKey: queryKeys.restoreValidate(backup.timestamp, target ?? ''),
-    queryFn: () => api.validateRestore({ timestamp: backup.timestamp, target: target! }),
-    enabled: target !== null,
+    queryKey: queryKeys.restoreValidate(backup.timestamp, target),
+    queryFn: () => api.validateRestore({ timestamp: backup.timestamp, target }),
     staleTime: 0,
   });
   const conflicts = check.data?.conflicts ?? [];
   const run = useMutation({
-    mutationFn: () => api.restore({ timestamp: backup.timestamp, target: target!, force: conflicts.length > 0 }),
-    onSuccess: () => { toast(t('backup.toast.restored', { target: target! }), 'success'); onDone(); },
+    mutationFn: () => api.restore({ timestamp: backup.timestamp, target, force: conflicts.length > 0 }),
+    onSuccess: () => { toast(t('backup.toast.restored', { target }), 'success'); onDone(); },
     onError: (e: Error) => toast(e.message, 'error'),
   });
 
@@ -289,57 +335,39 @@ function RestoreDialog({ backup, target, onPick, onClose, onDone }: {
         </div>
       </div>
 
-      {target === null ? (
-        <>
-          <div className="db">
-            <p className="text-[13px] text-ink-2">{t('backup.restore.pickTarget')}</p>
-            <div className="ss-list">
-              {backup.targets.map(backupItem).map((it) => (
-                <button key={it.name} type="button" className="ss-r link w-full text-left" onClick={() => onPick(it.name)}>
-                  <ItemLabel name={it.name} />
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="df"><Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button></div>
-        </>
-      ) : (
-        <>
-          <div className="db">
-            <div className="ss-r !min-h-0 !px-0">
-              <ItemLabel name={target} />
-            </div>
-            {check.isPending ? (
-              <p className="text-[13px] text-ink-3">{t('backup.restore.checkingTarget')}</p>
-            ) : check.error ? (
-              <div className="ss-note bad"><span className="flex-1">{check.error.message}</span></div>
-            ) : conflicts.length > 0 ? (
-              <div className="ss-note warn flex-col !items-stretch">
-                <span>{t(conflicts.length === 1 ? 'backup.restore.overwriteWarning.one' : 'backup.restore.overwriteWarning.other', { count: conflicts.length })}</span>
-                <ul className="mt-2 flex flex-col gap-1 font-mono text-[12px]">
-                  {(more ? conflicts : conflicts.slice(0, CONFLICTS_SHOWN)).map((f) => <li key={f}>{f}</li>)}
-                </ul>
-                {!more && conflicts.length > CONFLICTS_SHOWN && (
-                  <button type="button" className="ss-btn sm ghost mt-1 self-start !px-0" onClick={() => setMore(true)}>
-                    {t('backup.restore.moreConflicts', { count: conflicts.length - CONFLICTS_SHOWN })}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p className="text-[13px] text-ink-2">{t('backup.restore.emptyOrMissing')}</p>
-            )}
-            {check.data?.currentIsSymlink && (
-              <div className="ss-note inf"><Link2 size={15} /><span className="flex-1">{t('backup.restore.symlinkNote')}</span></div>
+      <div className="db">
+        <div className="ss-r !min-h-0 !px-0">
+          <ItemLabel name={target} />
+        </div>
+        {check.isPending ? (
+          <p className="text-[13px] text-ink-3">{t('backup.restore.checkingTarget')}</p>
+        ) : check.error ? (
+          <div className="ss-note bad"><span className="flex-1">{check.error.message}</span></div>
+        ) : conflicts.length > 0 ? (
+          <div className="ss-note warn flex-col !items-stretch">
+            <span>{t(conflicts.length === 1 ? 'backup.restore.overwriteWarning.one' : 'backup.restore.overwriteWarning.other', { count: conflicts.length })}</span>
+            <ul className="mt-2 flex flex-col gap-1 font-mono text-[12px]">
+              {(more ? conflicts : conflicts.slice(0, CONFLICTS_SHOWN)).map((f) => <li key={f}>{f}</li>)}
+            </ul>
+            {!more && conflicts.length > CONFLICTS_SHOWN && (
+              <button type="button" className="ss-btn sm ghost mt-1 self-start !px-0" onClick={() => setMore(true)}>
+                {t('backup.restore.moreConflicts', { count: conflicts.length - CONFLICTS_SHOWN })}
+              </button>
             )}
           </div>
-          <div className="df">
-            <Button variant="ghost" onClick={onClose} disabled={run.isPending}>{t('common.cancel')}</Button>
-            <Button variant="danger" onClick={() => run.mutate()} loading={run.isPending} disabled={check.isPending || !!check.error}>
-              {conflicts.length > 0 ? t('backup.actions.restoreOverwrite') : t('backup.actions.restore')}
-            </Button>
-          </div>
-        </>
-      )}
+        ) : (
+          <p className="text-[13px] text-ink-2">{t('backup.restore.emptyOrMissing')}</p>
+        )}
+        {check.data?.currentIsSymlink && (
+          <div className="ss-note inf"><Link2 size={15} /><span className="flex-1">{t('backup.restore.symlinkNote')}</span></div>
+        )}
+      </div>
+      <div className="df">
+        <Button variant="ghost" onClick={onClose} disabled={run.isPending}>{t('common.cancel')}</Button>
+        <Button variant="danger" onClick={() => run.mutate()} loading={run.isPending} disabled={check.isPending || !!check.error}>
+          {conflicts.length > 0 ? t('backup.actions.restoreOverwrite') : t('backup.actions.restore')}
+        </Button>
+      </div>
     </DialogShell>
   );
 }

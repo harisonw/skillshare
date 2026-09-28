@@ -20,6 +20,7 @@ vi.mock('../api/client', async (load) => {
       ...actual.api,
       getOverview: vi.fn(),
       listBackups: vi.fn(),
+      createBackup: vi.fn(),
       deleteBackup: vi.fn(),
       validateRestore: vi.fn(),
       restore: vi.fn(),
@@ -49,7 +50,7 @@ describe('BackupPage', () => {
     vi.mocked(api.getOverview).mockResolvedValue({} as Overview);
     vi.mocked(api.listBackups).mockResolvedValue({
       totalSizeBytes: 10,
-      backups: [{ timestamp: TS, path: `/home/me/.local/share/skillshare/backups/${TS}`, targets: ['claude-agents'], date: new Date().toISOString(), sizeBytes: 10 }],
+      backups: [{ timestamp: TS, path: `/home/me/.local/share/skillshare/backups/${TS}`, targets: ['claude-agents'], entries: [{ name: 'claude-agents', sizeBytes: 10, files: 2 }], date: new Date().toISOString(), sizeBytes: 10 }],
     });
     vi.mocked(api.listFileBackups).mockResolvedValue({ files: [{ path: '/home/me/.claude/CLAUDE.md', versions: 1, latest: new Date().toISOString(), target: 'claude' }] });
     vi.mocked(mcpApi.list).mockResolvedValue({
@@ -67,12 +68,45 @@ describe('BackupPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Restore' }));
+    await user.click(await screen.findByRole('button', { expanded: false }));
+    await user.click(screen.getByRole('button', { name: 'Restore' }));
     const dialog = await screen.findByRole('dialog');
     await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Restore' })).toBeEnabled());
     await user.click(within(dialog).getByRole('button', { name: 'Restore' }));
 
     await waitFor(() => expect(api.restore).toHaveBeenCalledWith({ timestamp: TS, target: 'claude-agents', force: false }));
+  });
+
+  it('says the list is loading while backups are read', async () => {
+    vi.mocked(api.listBackups).mockReturnValue(new Promise(() => {}));
+    renderPage();
+
+    expect(await screen.findByText('Loading backups…')).toBeInTheDocument();
+  });
+
+  it('says a backup is running until it finishes', async () => {
+    vi.mocked(api.createBackup).mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Back up now/ }));
+
+    expect(await screen.findByText(/Backing up…/)).toBeInTheDocument();
+  });
+
+  it('groups backups under the day they were taken', async () => {
+    renderPage();
+
+    expect(await screen.findByText('Today')).toBeInTheDocument();
+  });
+
+  it('shows how many files each snapshot folder holds once a backup is opened', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { expanded: false }));
+
+    expect(screen.getByText('2 files · 10 B')).toBeInTheDocument();
   });
 
   it('counts a single snapshot in the singular', async () => {
@@ -86,8 +120,8 @@ describe('BackupPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: /More actions for the backup/ }));
-    await user.click(screen.getByText('Delete this backup'));
+    await user.click(await screen.findByRole('button', { expanded: false }));
+    await user.click(screen.getByRole('button', { name: 'Delete this backup' }));
     expect(api.deleteBackup).not.toHaveBeenCalled();
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
 

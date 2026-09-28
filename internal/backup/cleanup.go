@@ -105,17 +105,24 @@ func CleanupByCount(maxCount int) (int, error) {
 
 // dirSize calculates the total size of a directory
 func dirSize(path string) int64 {
-	var size int64
+	size, _ := Stats(path)
+	return size
+}
+
+// Stats returns the total size in bytes and the number of files under path,
+// in a single walk.
+func Stats(path string) (size int64, files int) {
 	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
 		if !info.IsDir() {
 			size += info.Size()
+			files++
 		}
 		return nil
 	})
-	return size
+	return size, files
 }
 
 // cleanEmptyDirs removes empty directories in the backup directory.

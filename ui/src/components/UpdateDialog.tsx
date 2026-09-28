@@ -96,7 +96,8 @@ export default function UpdateDialog() {
         return;
       }
       setStatus(t('updateDialog.restarting', {}, 'Restarting local UI server…'));
-      await api.restartApp({ clearCache: true });
+      // The upgrade already cached the new version's UI; clearing it would force a re-download.
+      await api.restartApp({ clearCache: false });
       void waitForRestartThenReload();
     } catch (err) {
       setStatus(err instanceof ApiError && err.code === 'upgrade.needs_sudo' ? t('updateDialog.needsSudo') : (err as Error).message);

@@ -134,7 +134,7 @@ Versions saved by older releases have no reason. The last 10 of each kind are ke
 
 **Settings › Backup** in [`skillshare ui`](/docs/reference/commands/ui) has three tabs:
 
-- **Target folders** — the snapshots above. Filter by target or **Agents only**, **Restore** a snapshot (skill and agent entries alike), and use **⋯** to **Copy path** or **Delete this backup**. **Back up now** and **Clean up old backups** match `backup` and `--cleanup`.
+- **Target folders** — the snapshots above, grouped by day. Filter by target or **Agents only**. Open a snapshot to see each folder's file count and size, **Restore** any one of them (skill and agent entries alike), **Copy path**, or **Delete this backup**. **Back up now** and **Clean up old backups** match `backup` and `--cleanup`.
 - **Files** — the file history above. Pick a file to see its versions with their reason, then **Preview and restore** shows the diff with the current file or the full version. A linked location is replaced by a regular file only after you confirm **Restore and cut the link**.
 - **MCP** — the backups taken before each MCP config write, grouped by Agent config, with the servers each one added, changed or removed. **Preview and restore** opens the same restore dialog as the **MCP** page (or [`mcp restore`](/docs/reference/commands/mcp) on the command line).
 

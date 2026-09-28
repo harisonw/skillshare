@@ -15,20 +15,37 @@ import (
 )
 
 type backupInfoJSON struct {
-	Timestamp string   `json:"timestamp"`
-	Path      string   `json:"path"`
-	Targets   []string `json:"targets"`
-	Date      string   `json:"date"`
-	SizeBytes int64    `json:"sizeBytes"`
+	Timestamp string            `json:"timestamp"`
+	Path      string            `json:"path"`
+	Targets   []string          `json:"targets"`
+	Entries   []backupEntryJSON `json:"entries"`
+	Date      string            `json:"date"`
+	SizeBytes int64             `json:"sizeBytes"`
 }
 
+// backupEntryJSON is one snapshot folder inside a backup.
+type backupEntryJSON struct {
+	Name      string `json:"name"`
+	SizeBytes int64  `json:"sizeBytes"`
+	Files     int    `json:"files"`
+}
+
+// toBackupJSON walks each snapshot folder once; the backup's size is their sum.
 func toBackupJSON(b backup.BackupInfo) backupInfoJSON {
+	entries := make([]backupEntryJSON, 0, len(b.Targets))
+	var total int64
+	for _, name := range b.Targets {
+		size, files := backup.Stats(filepath.Join(b.Path, name))
+		entries = append(entries, backupEntryJSON{Name: name, SizeBytes: size, Files: files})
+		total += size
+	}
 	return backupInfoJSON{
 		Timestamp: b.Timestamp,
 		Path:      b.Path,
 		Targets:   b.Targets,
+		Entries:   entries,
 		Date:      b.Date.Format("2006-01-02T15:04:05Z07:00"),
-		SizeBytes: backup.Size(b.Path),
+		SizeBytes: total,
 	}
 }
 
@@ -69,12 +86,15 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sum the per-backup sizes instead of walking every snapshot a second time.
 	items := make([]backupInfoJSON, 0, len(backups))
+	var total int64
 	for _, b := range backups {
-		items = append(items, toBackupJSON(b))
+		item := toBackupJSON(b)
+		total += item.SizeBytes
+		items = append(items, item)
 	}
 
-	total, _ := backup.TotalSizeInDir(s.backupDir())
 	writeJSON(w, map[string]any{
 		"backups":        items,
 		"totalSizeBytes": total,

@@ -1384,6 +1384,8 @@ export interface BackupInfo {
   timestamp: string;
   path: string;
   targets: string[];
+  /** Each snapshot folder's size and file count, in `targets` order. */
+  entries?: { name: string; sizeBytes: number; files: number }[];
   date: string;
   sizeBytes: number;
 }

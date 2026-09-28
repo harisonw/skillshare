@@ -58,7 +58,8 @@ export default function DoctorPage() {
         return;
       }
       setUpgradeMessage(t('updateDialog.restarting'));
-      await api.restartApp({ clearCache: true });
+      // The upgrade already cached the new version's UI; clearing it would force a re-download.
+      await api.restartApp({ clearCache: false });
       // The server is coming back up; poll until it answers, then show the new build.
       for (let i = 0; i < 40; i++) {
         await new Promise((resolve) => setTimeout(resolve, 500));

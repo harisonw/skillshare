@@ -34,6 +34,57 @@ func TestHandleListBackups_Empty(t *testing.T) {
 	}
 }
 
+func TestHandleListBackups_TotalIsSumOfSizes(t *testing.T) {
+	s, _ := newTestServer(t)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	seedSnapshot(t, s.backupDir(), "2026-01-01_00-00-00", "claude", "a.md", "12345")
+	seedSnapshot(t, s.backupDir(), "2026-01-02_00-00-00", "claude", "b.md", "1234567")
+
+	rr := serveJSON(t, s, http.MethodGet, "/api/backups", "")
+	var resp struct {
+		Backups []struct {
+			SizeBytes int64 `json:"sizeBytes"`
+		} `json:"backups"`
+		TotalSizeBytes int64 `json:"totalSizeBytes"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v: %s", err, rr.Body.String())
+	}
+	if len(resp.Backups) != 2 || resp.TotalSizeBytes != 12 {
+		t.Fatalf("want 2 backups totalling 12 bytes, got %d totalling %d", len(resp.Backups), resp.TotalSizeBytes)
+	}
+}
+
+func TestHandleListBackups_EntriesReportFilesAndSize(t *testing.T) {
+	s, _ := newTestServer(t)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	seedSnapshot(t, s.backupDir(), "2026-01-01_00-00-00", "claude", "a.md", "12345")
+	seedSnapshot(t, s.backupDir(), "2026-01-01_00-00-00", "claude", "b.md", "12")
+	seedSnapshot(t, s.backupDir(), "2026-01-01_00-00-00", "claude-agents", "c.md", "1")
+
+	rr := serveJSON(t, s, http.MethodGet, "/api/backups", "")
+	var resp struct {
+		Backups []struct {
+			Entries []struct {
+				Name      string `json:"name"`
+				SizeBytes int64  `json:"sizeBytes"`
+				Files     int    `json:"files"`
+			} `json:"entries"`
+		} `json:"backups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v: %s", err, rr.Body.String())
+	}
+	got := map[string][2]int64{}
+	for _, e := range resp.Backups[0].Entries {
+		got[e.Name] = [2]int64{int64(e.Files), e.SizeBytes}
+	}
+	want := map[string][2]int64{"claude": {2, 7}, "claude-agents": {1, 1}}
+	if len(got) != 2 || got["claude"] != want["claude"] || got["claude-agents"] != want["claude-agents"] {
+		t.Fatalf("entries = %v, want %v", got, want)
+	}
+}
+
 // seedSnapshot writes <backupDir>/<ts>/<entry>/<file> with content.
 func seedSnapshot(t *testing.T, backupDir, ts, entry, file, content string) {
 	t.Helper()
