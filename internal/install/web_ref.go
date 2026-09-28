@@ -148,3 +148,14 @@ func listRemoteRefs(s *Source) (map[string]bool, error) {
 	}
 	return refs, nil
 }
+
+// ApplyRecordedBranch sets the branch a skill was installed with, for
+// reinstalling it from its recorded source URL. An empty branch means the
+// remote default even when the URL names a ref: installs from before URL refs
+// were honoured recorded none, and updating them must not switch branch.
+func (s *Source) ApplyRecordedBranch(branch string) {
+	s.Branch = branch
+	if branch == "" {
+		s.webRef = webRef{}
+	}
+}

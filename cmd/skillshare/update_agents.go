@@ -427,9 +427,7 @@ func reinstallAgent(agentsDir string, r check.AgentCheckResult, store *install.M
 	if parseErr != nil {
 		return fmt.Errorf("invalid source: %w", parseErr)
 	}
-	if entry.Branch != "" {
-		source.Branch = entry.Branch
-	}
+	source.ApplyRecordedBranch(entry.Branch)
 	repoSubdir := strings.TrimSuffix(source.Subdir, entry.Subdir)
 	repoSubdir = strings.TrimRight(repoSubdir, "/")
 	source.Subdir = repoSubdir

@@ -126,7 +126,7 @@ func rehydrateMissingTrackedReposImpl(sourceDir string, parseOpts ParseOptions, 
 			continue
 		}
 		source.Name = bareName
-		source.Branch = entry.Branch
+		source.ApplyRecordedBranch(entry.Branch)
 
 		trackOpts := opts
 		trackOpts.Name = bareName

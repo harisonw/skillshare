@@ -116,3 +116,39 @@ func TestInstallWebURLRef_UnknownRefFails(t *testing.T) {
 		t.Error("foo should not be installed from an unknown ref")
 	}
 }
+
+// Skills installed before URL refs were honoured got the default branch and
+// recorded no branch. Updating one by name must keep it on the default
+// branch, as update --all does, including when the URL's ref no longer exists.
+func TestUpdateWebURLRef_LegacyInstallKeepsDefaultBranch(t *testing.T) {
+	for _, ref := range []string{"v1.0", "nope"} {
+		t.Run(ref, func(t *testing.T) {
+			sb := testutil.NewSandbox(t)
+			defer sb.Cleanup()
+			sb.WriteConfig("source: " + sb.SourcePath + "\ntargets: {}\n")
+			workDir := setupWebRefRemote(t, sb)
+
+			sb.RunCLI("install", "github.com/acme/skills/skills/foo", "--skip-audit").AssertSuccess(t)
+			store, err := install.LoadMetadata(sb.SourcePath)
+			if err != nil {
+				t.Fatalf("load metadata: %v", err)
+			}
+			entry := store.Get("foo")
+			if entry == nil {
+				t.Fatal("expected metadata entry for foo")
+			}
+			entry.Source = "github.com/acme/skills/tree/" + ref + "/skills/foo"
+			entry.Branch = ""
+			if err := store.Save(sb.SourcePath); err != nil {
+				t.Fatalf("save metadata: %v", err)
+			}
+
+			writeSkill(t, workDir, "skills/foo", "foo", "V2")
+			gitAddCommit(t, workDir, "v2")
+			gitPush(t, workDir)
+
+			sb.RunCLI("update", "foo", "--skip-audit").AssertSuccess(t)
+			assertSkillBody(t, sb, "foo", "V2")
+		})
+	}
+}

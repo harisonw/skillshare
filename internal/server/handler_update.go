@@ -215,9 +215,7 @@ func (s *Server) updateAgent(name string, force, skipAudit bool) updateResultIte
 	if err != nil {
 		return updateResultItem{Name: metaKey, Kind: "agent", Action: "error", Message: "invalid source: " + err.Error()}
 	}
-	if entry.Branch != "" {
-		source.Branch = entry.Branch
-	}
+	source.ApplyRecordedBranch(entry.Branch)
 
 	repoSubdir := strings.TrimSuffix(source.Subdir, entry.Subdir)
 	repoSubdir = strings.TrimRight(repoSubdir, "/")
@@ -418,9 +416,7 @@ func (s *Server) updateRegularSkill(name, skillPath string, force, skipAudit boo
 			Message: "invalid source: " + err.Error(),
 		}
 	}
-	if entry.Branch != "" {
-		source.Branch = entry.Branch
-	}
+	source.ApplyRecordedBranch(entry.Branch)
 
 	sourceDir := s.cfg.EffectiveSkillsSource()
 	opts := install.InstallOptions{
