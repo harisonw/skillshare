@@ -7,6 +7,9 @@ targets:
     skills:
       global: "~/.agents/skills"
       project: ".agents/skills"
+    instructions:
+      global: "~/.agents/AGENTS.md"
+      project: "AGENTS.md"
     aliases: [agents]
   - name: amp
     skills:
@@ -33,6 +36,11 @@ targets:
     skills:
       global: "~/.gemini/antigravity-cli/skills"
       project: ".agents/skills"
+    # Same global file as gemini, so it always shares gemini's instructions.
+    instructions:
+      global: "~/.gemini/GEMINI.md"
+      project: "AGENTS.md"
+      same_as: gemini
   - name: aiderdesk
     skills:
       global: "~/.aider-desk/skills"
@@ -83,10 +91,25 @@ targets:
       project: ".cline/skills"
     also_scans:
       project: [".clinerules/skills", ".claude/skills"]
+    instructions:
+      global: "~/.agents/AGENTS.md"
+      project: "AGENTS.md"
+      same_as: universal
+      rules:
+        global: "~/Documents/Cline/Rules"
+        project: ".clinerules"
   - name: codebuddy
     skills:
       global: "~/.codebuddy/skills"
       project: ".codebuddy/skills"
+    instructions:
+      global: "~/.codebuddy/CODEBUDDY.md"
+      project: "CODEBUDDY.md"
+      import: true
+      project_fallback: "AGENTS.md"
+      rules:
+        global: "~/.codebuddy/rules"
+        project: ".codebuddy/rules"
   - name: codestudio
     skills:
       global: "~/.codestudio/skills"
@@ -115,6 +138,10 @@ targets:
     also_scans:
       global: ["~/.agents/skills"]
       project: [".agents/skills"]
+    instructions:
+      global: "~/.commandcode/AGENTS.md"
+      project: "AGENTS.md"
+      import: true
     aliases: [command-code]
   - name: continue
     skills:
@@ -134,6 +161,9 @@ targets:
     also_scans:
       global: ["~/.agents/skills"]
       project: [".claude/skills", ".agents/skills"]
+    instructions:
+      global: "~/.copilot/copilot-instructions.md"
+      project: ".github/copilot-instructions.md"
     aliases: [github-copilot]
   - name: crush
     skills:
@@ -162,11 +192,17 @@ targets:
     also_scans:
       global: ["~/.agents/skills"]
       project: [".agents/skills"]
+    instructions:
+      global: "~/.deepagents/agent/AGENTS.md"
+      project: ".deepagents/AGENTS.md"
     aliases: [deep-agents]
   - name: devin
     skills:
       global: "~/.config/devin/skills"
       project: ".devin/skills"
+    instructions:
+      global: "~/.config/devin/AGENTS.md"
+      project: "AGENTS.md"
     aliases: [devin-terminal]
   - name: dexto
     skills:
@@ -182,6 +218,9 @@ targets:
     also_scans:
       global: ["~/.agents/skills", "~/.agent/skills"]
       project: [".agents/skills", ".agent/skills"]
+    instructions:
+      global: "~/.factory/AGENTS.md"
+      project: "AGENTS.md"
     aliases: [factory]
   - name: firebender
     skills:
@@ -189,10 +228,16 @@ targets:
       project: ".firebender/skills"
     also_scans:
       global: ["~/.agents/skills", "~/.claude/skills", "~/.codex/skills", "~/.cursor/skills", "~/.goose/skills"]
+    instructions:
+      global: "~/.firebender/AGENTS.md"
+      project: "AGENTS.md"
   - name: forgecode
     skills:
       global: "~/forge/skills"
       project: ".forge/skills"
+    instructions:
+      global: "~/forge/AGENTS.md"
+      project: "AGENTS.md"
     aliases: [forge-code]
   - name: gemini
     skills:
@@ -223,6 +268,12 @@ targets:
       project: ".grok/skills"
     also_scans:
       global: ["~/.agents/skills"]
+    instructions:
+      global: "~/.grok/AGENTS.md"
+      project: "AGENTS.md"
+      rules:
+        global: "~/.grok/rules"
+        project: ".grok/rules"
     aliases: [xai, grok-cli]
   - name: hermes
     skills:
@@ -233,11 +284,18 @@ targets:
     skills:
       global: "~/.iflow/skills"
       project: ".iflow/skills"
+    instructions:
+      global: "~/.iflow/IFLOW.md"
+      project: "IFLOW.md"
+      import: true
     aliases: [iflow-cli]
   - name: junie
     skills:
       global: "~/.junie/skills"
       project: ".junie/skills"
+    instructions:
+      global: "~/.junie/AGENTS.md"
+      project: "AGENTS.md"
   - name: kilocode
     skills:
       global: "~/.kilo/skills"
@@ -292,6 +350,10 @@ targets:
     skills:
       global: "~/.omp/agent/skills"
       project: ".omp/skills"
+    instructions:
+      global: "~/.omp/agent/AGENTS.md"
+      project: "AGENTS.md"
+      import: true
     aliases: [oh-my-pi]
   - name: openclaw
     skills:
@@ -329,10 +391,16 @@ targets:
     also_scans:
       global: ["~/.agents/skills"]
       project: [".agents/skills"]
+    instructions:
+      global: "~/.pi/agent/AGENTS.md"
+      project: "AGENTS.md"
   - name: pochi
     skills:
       global: "~/.pochi/skills"
       project: ".pochi/skills"
+    instructions:
+      global: "~/.pochi/README.pochi.md"
+      project: "AGENTS.md"
   - name: purecode
     skills:
       global: "~/.purecode/skills"
@@ -342,10 +410,21 @@ targets:
     skills:
       global: "~/.qoder/skills"
       project: ".qoder/skills"
+    instructions:
+      global: "~/.qoder/AGENTS.md"
+      project: "AGENTS.md"
+      import: true
+      rules:
+        global: "~/.qoder/rules"
+        project: ".qoder/rules"
   - name: qwen
     skills:
       global: "~/.qwen/skills"
       project: ".qwen/skills"
+    instructions:
+      global: "~/.qwen/QWEN.md"
+      project: "QWEN.md"
+      import: true
     aliases: [qwen-code]
   - name: roo
     skills:
@@ -361,6 +440,9 @@ targets:
     skills:
       global: "~/.rovodev/skills"
       project: ".rovodev/skills"
+    instructions:
+      global: "~/.rovodev/AGENTS.md"
+      project: "AGENTS.md"
     aliases: [rovo-dev]
   - name: tabnine
     skills:
@@ -379,15 +461,25 @@ targets:
     skills:
       global: "~/.vibe/skills"
       project: ".vibe/skills"
+    instructions:
+      global: "~/.vibe/AGENTS.md"
+      project: "AGENTS.md"
     aliases: [mistral-vibe]
   - name: verdent
     skills:
       global: "~/.verdent/skills"
       project: ".verdent/skills"
+    instructions:
+      global: "~/.verdent/VERDENT.md"
+      project: "AGENTS.md"
   - name: warp
     skills:
       global: "~/.agents/skills"
       project: ".agents/skills"
+    instructions:
+      global: "~/.agents/AGENTS.md"
+      project: "AGENTS.md"
+      same_as: universal
   - name: windsurf
     skills:
       global: "~/.codeium/windsurf/skills"
@@ -413,6 +505,9 @@ targets:
     skills:
       global: "~/.agents/skills"
       project: ".agents/skills"
+    instructions:
+      global: "~/.config/zed/AGENTS.md"
+      project: "AGENTS.md"
   - name: zencoder
     skills:
       global: "~/.zencoder/skills"

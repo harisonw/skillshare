@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ssync "skillshare/internal/sync"
+	"skillshare/internal/utils"
 )
 
 // --- Scan types ---
@@ -208,7 +209,7 @@ func (s *Server) handleCollect(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "skill not found: "+ref.Name+" in "+ref.TargetName)
 				return
 			}
-			if info.Mode()&os.ModeSymlink != 0 {
+			if utils.IsLinkMode(skillPath, info.Mode()) {
 				writeError(w, http.StatusBadRequest, "skill is a symlink (not local): "+ref.Name)
 				return
 			}
@@ -260,7 +261,7 @@ func (s *Server) handleCollect(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "agent not found: "+ref.Name+" in "+ref.TargetName)
 				return
 			}
-			if info.Mode()&os.ModeSymlink != 0 {
+			if utils.IsLinkMode(filePath, info.Mode()) {
 				writeError(w, http.StatusBadRequest, "agent is a symlink (not local): "+ref.Name)
 				return
 			}

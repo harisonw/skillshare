@@ -140,7 +140,7 @@ SSH hub source 會使用你的 SSH agent/金鑰進行 clone，因此適用於私
 
 ### 不寫 JSON 也能建立 Hub
 
-在 dashboard（`skillshare ui`）中開啟 **Skills → My Hubs → New Hub**。
+在 dashboard（`skillshare ui`）中開啟 **Skills → Hubs → My hubs → New Hub**。
 
 1. 為草稿命名並填寫（選用的）描述。這些資訊僅用於在本機識別草稿；不會包含在匯出的索引中。
 2. 選擇 **Choose installed skills**，挑選要分享的 skills 並新增。或使用 **Add source manually**。
@@ -148,6 +148,10 @@ SSH hub source 會使用你的 SSH agent/金鑰進行 clone，因此適用於私
 4. 選擇 **Save draft**。頁面會檢查每個項目，並顯示任何阻擋匯出的問題。
 5. 選擇 **Download index** 以取得 `skillshare-hub.json`。
 6. 將下載的檔案提交到你自己的 Git repository，或上傳到 HTTP 伺服器。在頁面中輸入該位置，即可複製一段供接收者使用的 `skillshare hub add` 指令。
+
+下圖的草稿中，有一個 skill 只有本機 source，因此在補上遠端 source 之前無法匯出：
+
+![My hubs：一份 hub 草稿，其中一個項目無法匯出](/img/hub-builder-draft.png)
 
 下載動作**不會**發布任何東西。目錄只是參照 skills，並不會打包它們的檔案。Source 驗證只會檢查語法，不會確認 repository 是否存在，或接收者是否有權限。私有 repositories 仍然需要存取權限。
 
@@ -171,7 +175,7 @@ SSH hub source 會使用你的 SSH agent/金鑰進行 clone，因此適用於私
 2. 從搜尋 source 選擇器中選擇一個 Hub。使用安裝對話框中的 Hub manager 新增 URL、SSH repository，或本機索引路徑。
 3. 搜尋、預覽並安裝 skills。
 
-已訂閱的 Hub source 會儲存在目前使用中的 skillshare 設定中，並與 CLI 共用。它們與 **My Hubs** 中的草稿是分開的。
+已訂閱的 Hub source 會儲存在目前使用中的 skillshare 設定中，並與 CLI 共用。它們與 **My hubs** 中的草稿是分開的。
 
 既有的 `skillshare hub index` 指令與 `/api/hub/index` 端點仍會如往常一樣產生索引，包括支援本機 source。上述的可攜式匯出規則同樣適用於 dashboard 的建構工具。
 

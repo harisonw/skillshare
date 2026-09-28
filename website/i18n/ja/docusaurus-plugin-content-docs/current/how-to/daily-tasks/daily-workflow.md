@@ -62,6 +62,10 @@ Sync は意図的に install/update/uninstall から切り離されています�
 skillshare sync --dry-run
 ```
 
+ダッシュボードの **Sync** ページでも、書き込む前に Target ごとに同じプレビューを確認できます。
+
+![書き込み前に Target ごとの変更をプレビューする Sync ページ](/img/web-sync-demo.png)
+
 ### Agent のみを Sync する
 
 Agent のみを変更した（または Agent 対応の Target にのみ Agent を配布したい）場合は、Sync のスコープを絞ります。

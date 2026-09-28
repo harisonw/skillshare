@@ -79,7 +79,7 @@ flowchart LR
 | 平台 | Source 路徑 | 連結型態 |
 |----------|-------------|-----------|
 | macOS/Linux | `~/.config/skillshare/skills/` | Symlinks |
-| Windows | `%AppData%\skillshare\skills\` | NTFS Junctions |
+| Windows | `%AppData%\skillshare\skills\` | 資料夾用 NTFS Junctions；單一檔案用 symlinks（需要開發人員模式，否則改為複製） |
 
 ## 下一步
 

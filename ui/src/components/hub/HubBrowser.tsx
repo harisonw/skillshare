@@ -199,7 +199,7 @@ export default function HubBrowser({ previewURL, previewLabel }: Props) {
                     onClick={() => { setPicked(DRAFT + d.id); setFilter(''); setTag(''); }}
                   >
                     <span className="font-semibold text-[13.5px]">{d.name || t('hubBuilder.untitled')}</span>
-                    <span className="text-xs text-ink-3">{t('hubBuilder.count', { count: d.entries.length })}</span>
+                    <span className="text-xs text-ink-3">{t(d.entries.length === 1 ? 'hubBuilder.count.one' : 'hubBuilder.count.other', { count: d.entries.length })}</span>
                   </button>
                 </div>
               ))}

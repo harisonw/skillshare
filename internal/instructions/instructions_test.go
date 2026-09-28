@@ -300,3 +300,20 @@ func TestPlanConvert_RenameRefusesManagedBlock(t *testing.T) {
 		t.Fatal("rename of a file with a managed import block should be refused")
 	}
 }
+
+func TestAssignments_DirectoryInTheWay(t *testing.T) {
+	home := t.TempDir()
+	src := filepath.Join(home, "extras")
+	write(t, filepath.Join(src, "team", "AGENTS.md"), "shared\n")
+	target := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	extras := []config.ExtraConfig{{Name: "team", File: "AGENTS.md", Targets: []config.ExtraTargetConfig{{Path: filepath.Dir(target), Mode: "symlink"}}}}
+	r := Resolver{SourceDir: func(e config.ExtraConfig) string { return filepath.Join(src, e.Name) }, TargetDir: func(p string) string { return p }}
+
+	got := Assignments(extras, target, r)
+	if len(got) != 1 || got[0].Reason != ReasonDirectory {
+		t.Fatalf("Assignments = %+v, want reason %q", got, ReasonDirectory)
+	}
+}

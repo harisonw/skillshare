@@ -81,7 +81,9 @@ func (s *Server) handlePluginList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePluginDiscover(w http.ResponseWriter, r *http.Request) {
+	// Name is set for a plugin already managed here, whose snapshot can answer instead of the network.
 	var body struct {
+		Name      string `json:"name,omitempty"`
 		Source    string `json:"source"`
 		SourceRef string `json:"sourceRef,omitempty"`
 		Entry     string `json:"entry,omitempty"`
@@ -91,8 +93,13 @@ func (s *Server) handlePluginDiscover(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	result, err := s.pluginService().Discover(r.Context(), body.Source, body.SourceRef, body.Entry)
+	result, err := s.pluginService().DiscoverManaged(r.Context(), body.Name, body.Source, body.SourceRef, body.Entry)
 	if err != nil {
+		// A fixed failure carries its key as the error code, so the dashboard can translate it.
+		if key, args := plugin.ErrorKey(err); key != "" {
+			writeCodedError(w, 400, key, err.Error(), args)
+			return
+		}
 		writeError(w, 400, err.Error())
 		return
 	}

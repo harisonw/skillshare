@@ -18,44 +18,52 @@ skillshare status
 - Verify the active audit policy (profile, threshold, dedupe mode)
 - Check for CLI or skill updates
 
-![status demo](/img/status-demo.png)
-
 ## Example Output
 
 ```
 Source
-✓ ~/.config/skillshare/skills (12 skills, 2026-01-20 15:30)
-→ .skillignore: 5 patterns, 2 skills ignored
-✓ ~/.config/skillshare/agents (8 agents, 2026-01-20 15:30)
+─────────────────────────────────────────
+✓ ~/.config/skillshare/skills (43 skills, 2026-09-28 12:52)
+✓ ~/.config/skillshare/agents (2 agents, 2026-09-28 12:39)
 
 Tracked Repositories
-_team-skills    ✓  5 skills, up-to-date
-_personal-repo  !  3 skills, has uncommitted changes
+─────────────────────────────────────────
+_superpowers ✓            15 skills, up-to-date
 
 Targets
+─────────────────────────────────────────
 claude
-  skills   merged       [merge] ~/.claude/skills (8 shared, 2 local)
-  agents   merged       [merge] 8/8 linked
+  skills   merged       [merge] ~/.claude/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
 cursor
-  skills   merged       [merge] ~/.cursor/skills (3 shared, 0 local)
-  agents   merged       [merge] 8/8 linked
-windsurf
-  skills   has files    [merge->needs sync] ~/.windsurf/skills
-⚠ 2 skill(s) not synced — run 'skillshare sync'
+  skills   merged       [merge] ~/.cursor/skills (43 shared, 1 local)
+  agents   merged       [merge] 2/2 linked
+gemini
+  skills   merged       [merge] ~/.gemini/skills (43 shared, 0 local)
+…
+universal
+  skills   merged       [merge] ~/.agents/skills (43 shared, 0 local)
 
 Extras
-rules        has files  [merge] .cursor/rules (4 files)
-commands     has files  [merge] .claude/commands (3 files)
+─────────────────────────────────────────
+rules        has files    [merge] ~/.claude/rules (2 files)
+rules        has files    [merge] ~/.cursor/rules (2 files)
+commands     has files    [merge] ~/.claude/commands (1 files)
+team         has files    [symlink] ~/.codex (1 files)
+team         has files    [import] ~/.claude (1 files)
+…
 
 Audit
+─────────────────────────────────────────
 → Profile:    DEFAULT
 → Block:      severity >= CRITICAL
 → Dedupe:     GLOBAL
 → Analyzers:  ALL
 
 Version
-✓ CLI: 0.17.0
-✓ Skill: 0.17.0 (up to date)
+─────────────────────────────────────────
+! Skill: 0.21.12 (update available: 0.21.13)
+→   Run: skillshare upgrade --skill && skillshare sync
 ```
 
 ## Sections
@@ -87,8 +95,9 @@ claude
 - **Shared/local counts**: In merge and copy modes, counts use that target's expected set (after `include`/`exclude` filters). Copy mode shows "managed" instead of "shared".
 
 **Agents sub-item** shows:
-- **Status**: `synced` or `drift`
-- **Linked count**: e.g. `8/8 linked`
+- **Sync mode**: the mode agents actually sync with. On Windows without Developer Mode, `merge` shows as `[copy]` because agent files are copied instead of linked
+- **Status**: `merged`, `copied`, `linked`, or `drift`
+- **Linked count**: e.g. `8/8 linked` (up-to-date copies count as linked). In copy fallback, identical local files that skillshare does not own are kept and shown separately, e.g. `0/1 linked, 1 local preserved`
 
 If agents source does not exist or the target has no agent path configured, the agents sub-item is omitted.
 
@@ -111,7 +120,7 @@ rules        has files  [merge] .cursor/rules (4 files)
 commands     has files  [merge] .claude/commands (3 files)
 ```
 
-Each entry shows the name, status, sync mode, target path, and file count.
+Each entry shows the name, status, sync mode, target path, and file count. The sync mode is the one files are actually synced with: on Windows without Developer Mode, a target that links files shows `[copy]`.
 
 ### Audit
 

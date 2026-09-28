@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"time"
 
 	"skillshare/internal/config"
@@ -28,10 +29,16 @@ func (s *Server) instructionsResolver() instructions.Resolver {
 }
 
 // targetInstructions returns the named target's instruction file with
-// absolute paths. Callers must hold s.mu.
+// absolute paths. In global mode a rider of a configured target (a tool that
+// reads its skills but keeps its own file, see config.InstructionRiders)
+// resolves too, so its file can be edited and shared without configuring it.
+// Callers must hold s.mu.
 func (s *Server) targetInstructions(name string) (config.InstructionsTarget, bool, bool) {
 	tc, found := s.cfg.Targets[name]
 	if !found {
+		if rider, ok := s.instructionRider(name); ok {
+			return rider.InstructionsTarget, true, true
+		}
 		return config.InstructionsTarget{}, false, false
 	}
 	it, ok := config.TargetInstructions(name, tc, s.IsProjectMode())
@@ -39,6 +46,47 @@ func (s *Server) targetInstructions(name string) (config.InstructionsTarget, boo
 		return config.InstructionsTarget{}, true, false
 	}
 	return instructions.Resolve(it, s.projectRoot), true, true
+}
+
+// instructionRiders returns the riders of every configured target, sorted by
+// name, each listed once. Empty in project mode. Callers must hold s.mu.
+func (s *Server) instructionRiders() []config.InstructionsRider {
+	if s.IsProjectMode() {
+		return nil
+	}
+	names := make([]string, 0, len(s.cfg.Targets))
+	for name := range s.cfg.Targets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	seen := map[string]bool{}
+	var out []config.InstructionsRider
+	for _, name := range names {
+		for _, r := range config.InstructionRiders(name, s.cfg.Targets) {
+			if !seen[r.Name] {
+				seen[r.Name] = true
+				out = append(out, r)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// instructionRider finds a rider by name. Callers must hold s.mu.
+func (s *Server) instructionRider(name string) (config.InstructionsRider, bool) {
+	for _, r := range s.instructionRiders() {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return config.InstructionsRider{}, false
+}
+
+type instructionsRiderFile struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Exists bool   `json:"exists"`
 }
 
 type instructionsFileResponse struct {
@@ -60,6 +108,10 @@ type instructionsFileResponse struct {
 	Shared      []instructions.Assignment        `json:"shared"`
 	Convert     []string                         `json:"convert"` // conversion methods on offer
 	Blocked     map[string]string                `json:"convert_blocked,omitempty"`
+	RiderOf     string                           `json:"rider_of,omitempty"`     // configured target whose skills this unconfigured tool reads
+	Riders      []instructionsRiderFile          `json:"riders"`                 // tools reading this target's skills from their own file
+	ReadBy      []string                         `json:"read_by"`                // other tools that read this very file
+	DefaultPath string                           `json:"default_path,omitempty"` // built-in file, used when no location is set
 }
 
 // handleGetTargetInstructions — GET /api/targets/{name}/instructions
@@ -70,22 +122,43 @@ func (s *Server) handleGetTargetInstructions(w http.ResponseWriter, r *http.Requ
 
 	it, found, ok := s.targetInstructions(name)
 	if !found {
-		writeError(w, http.StatusNotFound, "target not found: "+name)
+		writeCodedError(w, http.StatusNotFound, "instructions_target_not_found", "target not found: "+name, map[string]string{"target": name})
 		return
 	}
-	resp := instructionsFileResponse{Target: name, Project: s.IsProjectMode(), ReadOrder: []instructions.Entry{}, ImportLines: []int{}, Shared: []instructions.Assignment{}, Convert: []string{}}
+	resp := instructionsFileResponse{Target: name, Project: s.IsProjectMode(), ReadOrder: []instructions.Entry{}, ImportLines: []int{}, Shared: []instructions.Assignment{}, Convert: []string{}, Riders: []instructionsRiderFile{}, ReadBy: []string{}}
+	tc, configured := s.cfg.Targets[name]
+	if configured && !s.IsProjectMode() {
+		for _, r := range config.InstructionRiders(name, s.cfg.Targets) {
+			_, err := os.Stat(r.Path)
+			resp.Riders = append(resp.Riders, instructionsRiderFile{Name: r.Name, Path: r.Path, Exists: err == nil})
+		}
+	} else if rider, isRider := s.instructionRider(name); !configured && isRider {
+		resp.RiderOf = rider.Via
+	}
 	if !ok {
 		writeJSON(w, resp)
 		return
 	}
 	resp.Supported, resp.Path, resp.Import, resp.MaxChars = true, it.Path, it.Import, it.MaxChars
-	resp.Setup = s.cfg.Targets[name].Instructions
+	resp.Setup = tc.Instructions
 	resp.Custom = resp.Setup != nil
+	if configured {
+		plain := tc
+		plain.Instructions = nil
+		if def, ok := config.TargetInstructions(name, plain, s.IsProjectMode()); ok {
+			resp.DefaultPath = instructions.Resolve(def, s.projectRoot).Path
+		}
+	}
+	if !s.IsProjectMode() {
+		if readers := config.InstructionReaders(name, it.Path); readers != nil {
+			resp.ReadBy = readers
+		}
+	}
 	resp.ReadOrder = instructions.ReadOrder(it, !s.IsProjectMode())
 	if info, err := os.Stat(it.Path); err == nil && !info.IsDir() {
 		data, err := readLimited(it.Path)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeCodedError(w, http.StatusInternalServerError, "instructions_read_failed", err.Error(), map[string]string{"detail": err.Error()})
 			return
 		}
 		resp.Exists, resp.Size, resp.Content = true, info.Size(), string(data)
@@ -104,20 +177,7 @@ func (s *Server) handleGetTargetInstructions(w http.ResponseWriter, r *http.Requ
 // the symlink at path points to, or "" when it is not one, such as a link the
 // user made to their own dotfiles. Callers must hold s.mu.
 func (s *Server) sharedLinkName(path string) string {
-	dest, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return ""
-	}
-	for _, extra := range s.extrasConfig() {
-		if extra.File == "" {
-			continue
-		}
-		src, err := filepath.EvalSymlinks(filepath.Join(s.extrasSourceDir(extra), extra.File))
-		if err == nil && src == dest {
-			return extra.Name
-		}
-	}
-	return ""
+	return config.ExtraSourceAt(s.extrasConfig(), path, s.extrasSourceDir)
 }
 
 // usesShared reports whether a shared instruction file is attached to path,
@@ -175,7 +235,7 @@ func (s *Server) handlePutTargetInstructions(w http.ResponseWriter, r *http.Requ
 		Content string `json:"content"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxInstructionsBytes+4096)).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_json", "invalid JSON body", map[string]string{})
 		return
 	}
 
@@ -183,20 +243,20 @@ func (s *Server) handlePutTargetInstructions(w http.ResponseWriter, r *http.Requ
 	defer s.mu.Unlock()
 	it, found, ok := s.targetInstructions(name)
 	if !found {
-		writeError(w, http.StatusNotFound, "target not found: "+name)
+		writeCodedError(w, http.StatusNotFound, "instructions_target_not_found", "target not found: "+name, map[string]string{"target": name})
 		return
 	}
 	if !ok {
-		writeError(w, http.StatusBadRequest, name+" has no instruction file")
+		writeCodedError(w, http.StatusBadRequest, "instructions_no_file", name+" has no instruction file", map[string]string{"target": name})
 		return
 	}
 	if shared := s.sharedLinkName(it.Path); shared != "" {
-		writeError(w, http.StatusConflict, it.Path+" is a link to the shared instruction file "+shared+"; edit the shared file instead")
+		writeCodedError(w, http.StatusConflict, "instructions_edit_shared", it.Path+" is a link to the shared instruction file "+shared+"; edit the shared file instead", map[string]string{"path": it.Path, "name": shared})
 		return
 	}
 	if err := writeInstructionsFile(it.Path, body.Content); err != nil {
 		s.writeOpsLog("instructions-edit", "error", start, map[string]any{"target": name, "scope": "ui"}, err.Error())
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_write_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	s.writeOpsLog("instructions-edit", "ok", start, map[string]any{"target": name, "path": it.Path, "scope": "ui"}, "")
@@ -206,7 +266,7 @@ func (s *Server) handlePutTargetInstructions(w http.ResponseWriter, r *http.Requ
 // writeInstructionsFile backs up an existing file, then writes content.
 func writeInstructionsFile(path, content string) error {
 	if _, err := os.Stat(path); err == nil {
-		if err := syncpkg.BackupFile(path); err != nil {
+		if err := syncpkg.BackupFile(path, syncpkg.BackupReasonEdit); err != nil {
 			return err
 		}
 	}
@@ -229,7 +289,7 @@ func (s *Server) handleConvertTargetInstructions(w http.ResponseWriter, r *http.
 		Apply         bool   `json:"apply"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_json", "invalid JSON body", map[string]string{})
 		return
 	}
 
@@ -237,16 +297,16 @@ func (s *Server) handleConvertTargetInstructions(w http.ResponseWriter, r *http.
 	defer s.mu.Unlock()
 	it, found, ok := s.targetInstructions(name)
 	if !found {
-		writeError(w, http.StatusNotFound, "target not found: "+name)
+		writeCodedError(w, http.StatusNotFound, "instructions_target_not_found", "target not found: "+name, map[string]string{"target": name})
 		return
 	}
 	if !ok {
-		writeError(w, http.StatusBadRequest, name+" has no instruction file")
+		writeCodedError(w, http.StatusBadRequest, "instructions_no_file", name+" has no instruction file", map[string]string{"target": name})
 		return
 	}
 	methods, _ := convertMethods(it, true, s.IsProjectMode(), s.usesShared(it.Path))
 	if !slices.Contains(methods, body.Method) {
-		writeError(w, http.StatusBadRequest, "method "+body.Method+" is not available for "+name)
+		writeCodedError(w, http.StatusBadRequest, "instructions_method_unavailable", "method "+body.Method+" is not available for "+name, map[string]string{"method": body.Method, "target": name})
 		return
 	}
 	opts := instructions.ConvertOptions{Method: body.Method, KeepToolLines: body.KeepToolLines, Project: s.IsProjectMode()}
@@ -254,22 +314,22 @@ func (s *Server) handleConvertTargetInstructions(w http.ResponseWriter, r *http.
 	into := -1 // index of the existing shared file for share_into
 	if body.ShareAs != "" || body.ShareInto != "" {
 		if s.IsProjectMode() || body.Method != instructions.MethodImport {
-			writeError(w, http.StatusBadRequest, "sharing is only possible for import in global mode")
+			writeCodedError(w, http.StatusBadRequest, "instructions_sharing_requires_import", "sharing is only possible for import in global mode", map[string]string{})
 			return
 		}
 		if body.ShareAs != "" && body.ShareInto != "" {
-			writeError(w, http.StatusBadRequest, "share_as and share_into cannot both be set")
+			writeCodedError(w, http.StatusBadRequest, "instructions_share_choice", "share_as and share_into cannot both be set", map[string]string{})
 			return
 		}
 	}
 	if body.ShareInto != "" {
 		i, j := instructions.Find(s.cfg.Extras, body.ShareInto, it.Path, s.instructionsResolver())
 		if i == -1 {
-			writeError(w, http.StatusNotFound, "shared instruction file not found: "+body.ShareInto)
+			writeCodedError(w, http.StatusNotFound, "instructions_shared_not_found", "shared instruction file not found: "+body.ShareInto, map[string]string{"name": body.ShareInto})
 			return
 		}
 		if j != -1 {
-			writeError(w, http.StatusConflict, name+" already uses "+body.ShareInto)
+			writeCodedError(w, http.StatusConflict, "instructions_already_attached", name+" already uses "+body.ShareInto, map[string]string{"target": name, "name": body.ShareInto})
 			return
 		}
 		into, shared = i, s.cfg.Extras[i]
@@ -277,11 +337,11 @@ func (s *Server) handleConvertTargetInstructions(w http.ResponseWriter, r *http.
 	}
 	if body.ShareAs != "" {
 		if err := config.ValidateExtraName(body.ShareAs); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeCodedError(w, http.StatusBadRequest, "instructions_invalid_name", err.Error(), map[string]string{"name": body.ShareAs})
 			return
 		}
 		if err := config.ValidateExtraNameUnique(body.ShareAs, s.extrasConfig()); err != nil {
-			writeError(w, http.StatusConflict, err.Error())
+			writeCodedError(w, http.StatusConflict, "instructions_name_taken", err.Error(), map[string]string{"name": body.ShareAs})
 			return
 		}
 		shared = config.ExtraConfig{Name: body.ShareAs, File: instructions.AgentsFile, Targets: []config.ExtraTargetConfig{{
@@ -291,7 +351,7 @@ func (s *Server) handleConvertTargetInstructions(w http.ResponseWriter, r *http.
 	}
 	changes, err := instructions.PlanConvert(it.Path, opts)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeCodedError(w, http.StatusBadRequest, "instructions_convert_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	if !body.Apply {
@@ -302,7 +362,7 @@ func (s *Server) handleConvertTargetInstructions(w http.ResponseWriter, r *http.
 	args := map[string]any{"target": name, "method": body.Method, "share_as": body.ShareAs, "share_into": body.ShareInto, "scope": "ui"}
 	if err := instructions.Apply(changes); err != nil {
 		s.writeOpsLog("instructions-convert", "error", start, args, err.Error())
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_convert_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	if body.ShareAs != "" || into != -1 {
@@ -317,7 +377,7 @@ func (s *Server) handleConvertTargetInstructions(w http.ResponseWriter, r *http.
 		}
 		if err := s.saveAndReloadConfig(); err != nil {
 			s.writeOpsLog("instructions-convert", "error", start, args, err.Error())
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeCodedError(w, http.StatusInternalServerError, "instructions_convert_failed", err.Error(), map[string]string{"detail": err.Error()})
 			return
 		}
 	}

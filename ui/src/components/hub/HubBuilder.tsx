@@ -147,7 +147,7 @@ export default function HubBuilder() {
                     onClick={() => requestAction({ type: 'open', id: item.id })}>
                     <span className="nm m break-words">{item.name || t('hubBuilder.untitled')}</span>
                     <span className="text-xs text-ink-3">
-                      {t('hubBuilder.count', { count: item.entries.length })}
+                      {t(item.entries.length === 1 ? 'hubBuilder.count.one' : 'hubBuilder.count.other', { count: item.entries.length })}
                       {published && ` \u00b7 ${t('hubBuilder.published')}`}
                     </span>
                     {published && <span className="w-full truncate font-mono text-[11px] text-ink-3">{published}</span>}
@@ -173,7 +173,7 @@ export default function HubBuilder() {
 
           <div className={`ss-note ${blocked ? 'bad' : dirty ? 'warn' : 'ok'}`}>
             {blocked ? <AlertTriangle size={16} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={16} className="mt-0.5 shrink-0" />}
-            <span className="flex-1">{blocked ? t('hubBuilder.blocked', { count: problems.length }) : dirty ? t('hubBuilder.unsaved') : t('hubBuilder.ready')}</span>
+            <span className="flex-1">{blocked ? t(problems.length === 1 ? 'hubBuilder.blocked.one' : 'hubBuilder.blocked.other', { count: problems.length }) : dirty ? t('hubBuilder.unsaved') : t('hubBuilder.ready')}</span>
           </div>
 
           <fieldset disabled={busy} className="flex min-w-0 flex-col gap-[18px]">

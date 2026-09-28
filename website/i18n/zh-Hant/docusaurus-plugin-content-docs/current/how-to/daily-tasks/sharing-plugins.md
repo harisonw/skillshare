@@ -15,6 +15,8 @@ Skillshare 會保持這個套件完整，並讓你選擇哪些工具要接收它
 2. 若來源包含多個 plugin，選擇其中一個，然後選取相容的工具。
 3. 檢視變更並套用。
 
+![Add plugin 對話框：找到的 plugin，以及相容與不支援的 targets](/img/plugins-add-dialog.png)
+
 大多數使用者只需要一個 repository 與 target 勾選框。**進階選項**可新增 Git ref，以選擇特定 release。探索結果會分別顯示每個 target 的元件與相容性。當 OpenCode 因為偵測不到其進入點而被列為不支援時，該列的 **Set entry path** 會使用已建置的檔案並重新搜尋來源，同時保留你先前的選擇。安全的相對 repository symlinks 會被保留。
 
 同樣的引導式流程也能在終端機中使用：

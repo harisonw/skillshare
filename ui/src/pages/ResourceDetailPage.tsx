@@ -428,7 +428,7 @@ function MetaBox({ resource, frontmatter, body, fileCount, check, audit, auditPe
     rows.push([t('resourceDetail.meta.size'), [
       t(fileCount === 1 ? 'resourceDetail.meta.file' : 'resourceDetail.meta.files', { count: fileCount }),
       t(lineCount === 1 ? 'resourceDetail.meta.line' : 'resourceDetail.meta.lines', { count: compact.format(lineCount) }),
-      t('resourceDetail.meta.words', { count: compact.format(words(body)) }),
+      t(words(body) === 1 ? 'resourceDetail.meta.words.one' : 'resourceDetail.meta.words.other', { count: compact.format(words(body)) }),
     ].join(' · ')]);
   }
   rows.push([t('resourceDetail.meta.context'), t('resourceDetail.meta.contextValue', { always: compact.format(always), onDemand: compact.format(onDemand) })]);

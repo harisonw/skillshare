@@ -12,6 +12,7 @@ import (
 
 	"skillshare/internal/config"
 	"skillshare/internal/projectdir"
+	"skillshare/internal/utils"
 )
 
 const stagingDirPrefix = ".snapshot-"
@@ -52,7 +53,7 @@ func createInDir(backupDir, targetName, targetPath string, copyDirectory func(st
 	}
 
 	// Skip if it's already a symlink (no local data to backup)
-	if info.Mode()&os.ModeSymlink != 0 {
+	if utils.IsLinkMode(targetPath, info.Mode()) {
 		return "", nil
 	}
 
@@ -326,7 +327,7 @@ func copyDir(src, dst string) error {
 		}
 
 		// Skip symlinks and junctions — they point to source, not local data
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(srcPath, info.Mode()) {
 			continue
 		}
 

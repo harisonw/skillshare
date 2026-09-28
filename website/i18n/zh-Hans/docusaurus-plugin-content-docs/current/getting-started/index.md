@@ -11,7 +11,7 @@ flowchart LR
     SRC["~/.config/skillshare/skills/<br/>(your Git repo)"]
     SRC --> CLAUDE["~/.claude/skills/"]
     SRC --> CURSOR["~/.cursor/skills/"]
-    SRC --> CODEX["~/.codex/skills/"]
+    SRC --> CODEX["~/.agents/skills/"]
 ```
 
 Source 就是一个你自己的普通 Git repo。在一台机器上 push，在另一台 pull，或者分享给同事 —— 底层的 symlink 由 skillshare 负责处理。

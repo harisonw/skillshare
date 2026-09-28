@@ -319,9 +319,12 @@ func (s *Server) handleRemoveTarget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, name+" belongs to a project; remove the project instead")
 		return
 	}
-	if status, err := s.detachSkillsTarget(sc.Path); err != nil {
-		writeError(w, status, err.Error())
-		return
+	// Another target writing the same folder (codex and universal) still owns its links.
+	if config.SkillsPathKeptBy(s.cfg.Targets, name, nil) == "" {
+		if status, err := s.detachSkillsTarget(sc.Path); err != nil {
+			writeError(w, status, err.Error())
+			return
+		}
 	}
 
 	// Read the MCP config before it is saved without the target: afterwards its own
@@ -551,7 +554,7 @@ func (s *Server) detachSkillsTarget(path string) (int, error) {
 	if err != nil {
 		return http.StatusInternalServerError, fmt.Errorf("failed to inspect target: %w", err)
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
+	if utils.IsLinkMode(path, info.Mode()) {
 		// Symlink mode: entire directory is a symlink
 		if err := removeTargetPath(path); err != nil {
 			return http.StatusInternalServerError, fmt.Errorf("failed to remove target symlink: %w", err)

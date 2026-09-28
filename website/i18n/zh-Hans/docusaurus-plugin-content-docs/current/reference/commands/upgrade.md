@@ -18,7 +18,20 @@ skillshare upgrade --skill      # 仅升级 skill
 - 内置的 skillshare skill 需要更新
 - `doctor` 报告有可用更新时
 
-![upgrade demo](/img/upgrade-demo.png)
+```text
+skillshare upgrade --skill --dry-run
+
+! Dry run mode - no changes will be made
+
+▸  Skill  skillshare
+│
+├─ Current  v0.21.12
+│
+├─ Checking latest version...
+├─ Latest: v0.21.13 (1.0s)
+│
+└─ Action  Would upgrade to v0.21.13
+```
 
 ## 会发生什么
 
@@ -97,6 +110,12 @@ Downloading v0.21.4...  3.2 MB / 9.1 MB
 ```
 
 如果该二进制文件位于受保护的目录中（例如 `/usr/local/bin`），skillshare 只会使用 `sudo` 替换二进制文件——无需手动加前缀。内置 skill、UI 资源和日志仍以你的身份写入，所以不要用 `sudo` 运行整个升级：这会在 skill 源目录留下 root 拥有的文件，之后 `git pull` 会出现 `Permission denied`。
+
+如果之前的升级已经留下这类文件，更新内置 skill 会以 `permission denied` 失败，错误信息会附上把 skill 源目录还给你的命令，例如：
+
+```bash
+sudo chown -R "$(id -un)" ~/.config/skillshare/skills
+```
 
 没有终端可以输入密码时（Dashboard 的 **立即更新** 按钮、CI），升级会立即停止，并提示你改在终端中运行 `skillshare upgrade`，而不是一直等待输入。已缓存的 `sudo` 凭据和 `NOPASSWD` 配置仍会直接升级，不会出现提示。
 

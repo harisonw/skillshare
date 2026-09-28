@@ -315,6 +315,12 @@ extras:
 
 동작 방식은 skill sync mode와 동일합니다 — merge는 파일별 symlink를 생성하고, copy는 실제 파일 사본을 생성합니다.
 
+:::note Developer Mode가 없는 Windows
+merge mode는 단일 파일을 링크하는데, Windows는 Developer Mode에서만 이를 허용합니다. Developer Mode가 없으면 merge mode의 agents와 extras는 대신 복사되며, 이 복사본은 링크처럼 업데이트되고 pruning됩니다. skills는 폴더이므로 어느 경우든 (junction으로) 링크됩니다. [Windows 문제 해결](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)을 참고하세요.
+
+skillshare가 소유하지 않는 내용이 같은 로컬 파일은 유지됩니다. copy fallback에서 agent 개수는 이를 `local preserved`로 따로 표시합니다(예: `0/1 linked, 1 local preserved`).
+:::
+
 ---
 
 ## 참고

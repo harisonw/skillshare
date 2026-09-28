@@ -74,7 +74,9 @@ func ValidateConfig(cfg *Config) (warnings []string, err error) {
 		}
 	}
 
-	errs = append(errs, validateExtras(cfg.Extras)...)
+	if err := cfg.ValidateExtras(); err != nil {
+		errs = append(errs, err.Error())
+	}
 
 	if len(errs) > 0 {
 		return warnings, errors.New(strings.Join(errs, "; "))
@@ -147,7 +149,9 @@ func ValidateProjectConfig(cfg *ProjectConfig, projectRoot string) (warnings []s
 		}
 	}
 
-	errs = append(errs, validateExtras(cfg.Extras)...)
+	if err := cfg.ValidateExtras(projectRoot); err != nil {
+		errs = append(errs, err.Error())
+	}
 
 	if len(errs) > 0 {
 		return warnings, errors.New(strings.Join(errs, "; "))
@@ -174,33 +178,6 @@ func ValidateTargetInstructions(ic *TargetInstructionsConfig, project bool) erro
 		return fmt.Errorf("instructions.path %q must be absolute or start with ~/", path)
 	}
 	return nil
-}
-
-// validateExtras checks extras that use single-file settings. Directory extras
-// are left to sync, which already reports their per-target errors.
-func validateExtras(extras []ExtraConfig) []string {
-	var errs []string
-	for _, extra := range extras {
-		if !usesSingleFileSettings(extra) {
-			continue
-		}
-		if err := ValidateExtraConfig(extra); err != nil {
-			errs = append(errs, err.Error())
-		}
-	}
-	return errs
-}
-
-func usesSingleFileSettings(extra ExtraConfig) bool {
-	if extra.File != "" {
-		return true
-	}
-	for _, t := range extra.Targets {
-		if t.As != "" || t.Mode == "import" {
-			return true
-		}
-	}
-	return false
 }
 
 // resolveProjectTargetPath returns an absolute path for a project target.

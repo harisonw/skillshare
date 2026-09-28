@@ -97,7 +97,9 @@ skillshare ui start --clear-cache
 | **Targets** | ステータス付きの Target 一覧。**ターゲットを追加** では **別のアカウント** も選べます。すでに使っている Agent の 2 つ目の config フォルダで、書き込み先のプレビューが付きます。各 Target のページで include/exclude フィルタを編集し、ローカルのみの Skill を Source に collect し戻せる。一覧には各 Agent が受け取る MCP サーバー数も表示される。MCP 設定ファイルを持つ Target には **MCP** タブがあり、サーバーごとに 1 行で選ぶ。クリックするとすぐ保存され、**Sync all targets** ですべての Target の MCP ファイルに書き込まれる。各 Target には、そのファイル名のタブ（**CLAUDE.md**、**GEMINI.md**、**AGENTS.md** など）もあり、読み込み順を表示し、ファイルを編集し、`AGENTS.md` に変換できる |
 | **Projects** | global mode のみ。global config が sync する project フォルダーで、[`projects`](/docs/reference/targets/configuration#projects) と [`mcp.projects`](./mcp.md#projects-in-the-dashboard) から一覧される。**プロジェクトを追加** はフォルダー、その target、sync する内容を指定する。各 project には **Skills** と **Agents** タブがあり、フィルター、プレビュー、書き込まれるフォルダーを表示する。**MCP** タブでは、そのフォルダー内で global サーバーをオフにしたり、その project 独自のサーバーを追加したりできる。**Sync project** はプレビューしてから、その project の skills、agents、MCP だけを sync する。すでに project フォルダーを指している Target は変換できる |
 | **Audit** | Skill と Agent のセキュリティスキャン。重大度別の検出結果を表示。**Rules** タブでは、カテゴリごとにすべてのルールを閲覧できる: ルールをオフにする、重大度を変更する、カテゴリ全体に重大度を適用する、スキャンプロファイル（`default`、`strict`、`permissive`）を選ぶ、カスタム `audit-rules.yaml` のエディタを開く、のいずれかができる |
-| **Settings** | タブ分け: **General**（Source パス、sync モード、外観）、**Backup**（スナップショットと復元）、**Log**（操作履歴）、**Health**（[`doctor`](/docs/reference/commands/doctor) と同じチェック）、**Extensions**（sync 時のファイル変換）、**Files**（`config.yaml`、`.skillignore`、`.agentignore` の直接編集） |
+| **Settings** | タブ分け: **General**（Source パス、sync モード、外観）、**Backup**（Target フォルダのスナップショット、`AGENTS.md` などのファイルの以前のバージョン、MCP 設定のバックアップ。[`backup`](./backup.md#dashboard) を参照）、**Log**（操作履歴）、**Health**（[`doctor`](/docs/reference/commands/doctor) と同じチェック）、**Extensions**（sync 時のファイル変換）、**Files**（`config.yaml`、`.skillignore`、`.agentignore` の直接編集） |
+
+**Updates** タブでは、プログレスバーに更新の進行状況が表示され、更新中の行が示されます。ブロックされた更新や失敗した更新は別のセクションに表示されます。
 
 `/collect`、`/install`、`/search`、`/trash`、`/analyze`、`/backup`、`/log`、`/doctor` などの古いリンクは、新しい場所にリダイレクトされます。
 
@@ -138,6 +140,7 @@ Project mode（`-p`）で実行すると、ダッシュボードは以下のよ�
   <img src="/img/web-skill-detail-demo.png" alt="Skill detail view" />
   <img src="/img/web-sync-demo.png" alt="Sync controls" />
   <img src="/img/web-search-skills-demo.png" alt="GitHub search view" />
+  <img src="/img/web-projects-demo.png" alt="プロジェクトフォルダーを一覧表示する Projects ページ" />
 </div>
 
 ## REST API

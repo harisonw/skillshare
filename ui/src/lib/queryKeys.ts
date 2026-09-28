@@ -21,6 +21,11 @@ export const queryKeys = {
 
   backups: ['backups'] as const,
   restoreValidate: (timestamp: string, target: string) => ['restore-validate', timestamp, target] as const,
+  fileBackups: {
+    all: ['file-backups'] as const,
+    versions: (path: string) => ['file-backups', 'versions', path] as const,
+    version: (path: string, id: string) => ['file-backups', 'version', path, id] as const,
+  },
   trash: ['trash'] as const,
   gitStatus: ['git-status'] as const,
   gitBranches: ['git-branches'] as const,
@@ -52,6 +57,8 @@ export const queryKeys = {
     target: (name: string) => ['instructions', 'target', name] as const,
     shared: ['instructions', 'shared'] as const,
     sharedContent: (name: string) => ['instructions', 'shared', name] as const,
+    restorePreview: (name: string, target: string) => ['instructions', 'restore-preview', name, target] as const,
+    locationRestorePreview: (name: string, path: string) => ['instructions', 'location-restore-preview', name, path] as const,
     project: ['instructions', 'project'] as const,
   },
   mcp: ['mcp'] as const,

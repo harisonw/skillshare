@@ -12,13 +12,15 @@ import { backupTime, describeMessage } from './mcpView';
 
 interface Props {
   backups: { id: string; target: string; path: string }[];
+  /** The backup selected when the dialog opens; the newest when left out. */
+  initialId?: string;
   onClose: () => void;
   onRestored: () => void;
 }
 
-export default function MCPRestoreDialog({ backups, onClose, onRestored }: Props) {
+export default function MCPRestoreDialog({ backups, initialId, onClose, onRestored }: Props) {
   const { t, locale } = useI18n();
-  const [selected, setSelected] = useState(backups[0]?.id ?? '');
+  const [selected, setSelected] = useState(initialId ?? backups[0]?.id ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const preview = useQuery({ queryKey: ['mcp-restore-preview', selected], queryFn: () => mcpApi.previewRestore(selected), enabled: Boolean(selected), gcTime: 0, retry: false });

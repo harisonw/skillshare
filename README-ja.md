@@ -89,7 +89,7 @@ skillshare はこの問題を解決します。
 | プラットフォーム | Skills のソース | Agents のソース | Extras のソース | リンク方式 |
 |----------|---------------|---------------|---------------|-----------|
 | macOS/Linux | `~/.config/skillshare/skills/` | `~/.config/skillshare/agents/` | `~/.config/skillshare/extras/` | Symlinks |
-| Windows | `%AppData%\skillshare\skills\` | `%AppData%\skillshare\agents\` | `%AppData%\skillshare\extras\` | NTFS Junction（管理者権限は不要） |
+| Windows | `%AppData%\skillshare\skills\` | `%AppData%\skillshare\agents\` | `%AppData%\skillshare\extras\` | フォルダーは NTFS Junction（管理者権限は不要）。ファイルのシンボリックリンクには Developer Mode が必要で、ない場合はコピー |
 
 | | 命令型（コマンドごとにインストール） | 宣言型（skillshare） |
 |---|---|---|

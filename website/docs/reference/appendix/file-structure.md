@@ -400,6 +400,18 @@ Entire directory is symlinked:
 ~/.claude/skills -> ~/.config/skillshare/skills/
 ```
 
+### Copies in place of file links (Windows)
+
+On Windows without Developer Mode, agent targets and directory extras in `merge` mode get copies instead of file links. The target directory then has a `.skillshare-manifest.json` that records a checksum for each copy, so later syncs can update or prune them and leave your own files alone:
+```
+~/.claude/agents/
+├── reviewer.md                # Copy of the source agent
+├── local-agent.md             # User-created, preserved
+└── .skillshare-manifest.json  # Tracks copied agents + checksums
+```
+
+A single-file extra (such as a shared `AGENTS.md`) records its copy in skillshare's [extras backup folder](../commands/extras.md#single-file-extras) instead of the target directory.
+
 ---
 
 ## Tracked Repositories
@@ -470,7 +482,7 @@ See [Environment Variables](./environment-variables.md#xdg_config_home) for deta
 | Logs | `%AppData%\skillshare\logs\` |
 | Version cache | `%AppData%\skillshare\version-check.json` |
 | UI cache | `%AppData%\skillshare\ui\{version}\` |
-| Link type | NTFS Junctions |
+| Link type | NTFS Junctions for folders; symlinks for single files (need Developer Mode, otherwise copied) |
 
 ## XDG Base Directory Layout
 

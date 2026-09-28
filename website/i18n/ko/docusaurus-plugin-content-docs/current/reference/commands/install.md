@@ -106,9 +106,30 @@ skillshare install git@ssh.dev.azure.com:v3/myorg/myproject/myrepo
 skillshare install anthropics/skills
 ```
 
-<p>
-  <img src="/img/install-demo.png" alt="install demo" width="720" />
-</p>
+```text
+$ skillshare install anthropics/skills
+
+▸  Source  github.com/anthropics/skills
+│
+├─ Cloned  (1.8s)
+│
+└─ Found  20 skill(s)
+
+  Select skills to install (0/20 selected)
+
+▌ [ ] academy-guide (Complete terms in LICENSE.txt)
+▌ [ ] algorithmic-art (Complete terms in LICENSE.txt)
+▌ [ ] brand-guidelines (Complete terms in LICENSE.txt)
+▌ [ ] canvas-design (Complete terms in LICENSE.txt)
+▌ [ ] claude-api (Complete terms in LICENSE.txt)
+▌ [ ] discernment-nudge (Complete terms in LICENSE.txt)
+▌ [ ] doc-coauthoring
+▌ [ ] docx (Proprietary. LICENSE.txt has complete terms)
+  …
+
+  20 skills
+  ↑↓ navigate  space toggle  a all  enter confirm  / filter  esc cancel
+```
 
 Discovery는 `.git`만 건너뛰고 모든 디렉터리에서 `SKILL.md` 파일을 스캔합니다. 즉 `.curated/`나 `.system/`과 같은 숨김 디렉터리 안의 skill도 자동으로 발견됩니다. 여러 skill이 발견되면, 선택 화면은 더 쉽게 둘러볼 수 있도록 디렉터리별로 그룹화합니다.
 
@@ -456,12 +477,34 @@ skillshare install github.com/team/skills --branch 8f14e45fceea167a5a36dedd4bea2
 
 **팀 repo 설치 (tracked):**
 ```bash
-skillshare install anthropics/skills --track
+skillshare install addyosmani/web-quality-skills --track --name team-skills
 ```
 
-<p>
-  <img src="/img/team-reack-demo.png" alt="tracked repo install demo" width="720" />
-</p>
+```text
+$ skillshare install addyosmani/web-quality-skills --track --name team-skills
+
+▸  Source  github.com/addyosmani/web-quality-skills
+│
+├─ Name  _team-skills
+│
+├─ Cloned (1.9s)
+│
+├─ Found  6 skill(s)
+│
+├─ Tracked  _team-skills
+│
+├─ Skills  accessibility, best-practices, core-web-vitals, performance, seo, web-quality-audit
+│
+└─ Location  ~/.config/skillshare/skills/_team-skills
+
+- Audit Findings
+→ 63 finding(s): HIGH=1, MEDIUM=1, LOW=60, INFO=1 — findings detected, but none at/above block threshold (CRITICAL)
+→ risk: CRITICAL (100/100)
+
+- Next Steps
+→ Run 'skillshare sync' to distribute skills to all targets
+→ Run 'skillshare update _team-skills' to update this repo later
+```
 
 ## Private Repository {#private-repositories}
 

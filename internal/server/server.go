@@ -429,14 +429,20 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("PUT /api/targets/{name}/instructions/setup", s.handlePutTargetInstructionsSetup)
 	s.mux.HandleFunc("DELETE /api/targets/{name}/instructions/setup", s.handleDeleteTargetInstructionsSetup)
 
-	// Instruction files: shared files (global) and the project AGENTS.md
-	s.mux.HandleFunc("GET /api/instructions", s.requireGlobalInstructions(s.handleListSharedInstructions))
-	s.mux.HandleFunc("POST /api/instructions", s.requireGlobalInstructions(s.handleCreateSharedInstructions))
+	// Instruction files: shared files (tool targets are global only) and the project AGENTS.md
+	s.mux.HandleFunc("GET /api/instructions", s.handleListSharedInstructions)
+	s.mux.HandleFunc("POST /api/instructions", s.handleCreateSharedInstructions)
 	s.mux.HandleFunc("POST /api/instructions/assign", s.requireGlobalInstructions(s.handleAssignSharedInstructions))
-	s.mux.HandleFunc("GET /api/instructions/{name}/content", s.requireGlobalInstructions(s.handleGetSharedInstructionsContent))
-	s.mux.HandleFunc("PUT /api/instructions/{name}/content", s.requireGlobalInstructions(s.handlePutSharedInstructionsContent))
+	s.mux.HandleFunc("GET /api/instructions/{name}/content", s.handleGetSharedInstructionsContent)
+	s.mux.HandleFunc("PUT /api/instructions/{name}/content", s.handlePutSharedInstructionsContent)
 	s.mux.HandleFunc("POST /api/instructions/{name}/restore", s.requireGlobalInstructions(s.handleRestoreSharedInstructions))
-	s.mux.HandleFunc("POST /api/instructions/{name}/resolve", s.requireGlobalInstructions(s.handleResolveSharedInstructions))
+	s.mux.HandleFunc("POST /api/instructions/{name}/resolve", s.handleResolveSharedInstructions)
+	s.mux.HandleFunc("GET /api/instructions/{name}/restore-preview", s.requireGlobalInstructions(s.handleSharedInstructionsRestorePreview))
+	s.mux.HandleFunc("PUT /api/instructions/{name}/targets/{target}/mode", s.requireGlobalInstructions(s.handlePutSharedInstructionsMode))
+	s.mux.HandleFunc("POST /api/instructions/{name}/locations", s.handleAddSharedInstructionsLocation)
+	s.mux.HandleFunc("DELETE /api/instructions/{name}/locations", s.handleDeleteSharedInstructionsLocation)
+	s.mux.HandleFunc("PUT /api/instructions/{name}/locations/mode", s.handlePutSharedInstructionsLocationMode)
+	s.mux.HandleFunc("GET /api/instructions/{name}/locations/restore-preview", s.handleSharedInstructionsLocationRestorePreview)
 	s.mux.HandleFunc("GET /api/instructions/project", s.requireProjectInstructions(s.handleGetProjectInstructions))
 	s.mux.HandleFunc("PUT /api/instructions/project", s.requireProjectInstructions(s.handlePutProjectInstructions))
 	s.mux.HandleFunc("POST /api/instructions/project/shim", s.requireProjectInstructions(s.handleProjectInstructionsShim))
@@ -504,10 +510,17 @@ func (s *Server) registerRoutes() {
 
 	// Backups
 	s.mux.HandleFunc("GET /api/backups", s.handleListBackups)
+	s.mux.HandleFunc("DELETE /api/backups/{timestamp}", s.handleDeleteBackup)
 	s.mux.HandleFunc("POST /api/backup", s.handleCreateBackup)
 	s.mux.HandleFunc("POST /api/backup/cleanup", s.handleCleanupBackups)
 	s.mux.HandleFunc("POST /api/restore", s.handleRestore)
 	s.mux.HandleFunc("POST /api/restore/validate", s.handleValidateRestore)
+
+	// File history (backups of single files skillshare rewrote)
+	s.mux.HandleFunc("GET /api/file-backups", s.handleListFileBackups)
+	s.mux.HandleFunc("GET /api/file-backups/versions", s.handleFileBackupVersions)
+	s.mux.HandleFunc("GET /api/file-backups/version", s.handleFileBackupVersion)
+	s.mux.HandleFunc("POST /api/file-backups/restore", s.handleRestoreFileBackup)
 
 	// Trash
 	s.mux.HandleFunc("GET /api/trash", s.handleListTrash)

@@ -1051,7 +1051,7 @@ func describeTargetState(path string) string {
 		}
 		return theme.Danger().Render("error")
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
+	if utils.IsLinkMode(path, info.Mode()) {
 		dest, _ := os.Readlink(path)
 		return theme.Accent().Render("symlink → " + dest)
 	}

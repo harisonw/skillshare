@@ -123,7 +123,7 @@ Agent sync는 skill과 동일하게 세 가지 mode를 모두 지원합니다:
 
 | Mode | 동작 |
 |------|--------|
-| **merge** (기본값) | 파일별 symlink. target의 로컬 agent 파일이 보존됨. |
+| **merge** (기본값) | 파일별 symlink. target의 로컬 agent 파일이 보존됨. Developer Mode가 없는 Windows에서는 agents를 대신 복사하며, 링크처럼 업데이트되고 정리됨 ([자세히](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)). |
 | **symlink** | 전체 agents 디렉터리가 symlink됨. |
 | **copy** | agent 파일이 실제 파일로 복사됨. |
 

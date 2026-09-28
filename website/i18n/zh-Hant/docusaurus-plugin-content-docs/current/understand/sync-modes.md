@@ -315,6 +315,12 @@ extras:
 
 行為與 skill sync modes 相同 — merge 建立逐檔 symlink，copy 建立真實檔案複製。
 
+:::note 沒有開啟開發人員模式的 Windows
+Merge 模式會連結單一檔案，而 Windows 只有在開啟開發人員模式時才允許這麼做。沒有開啟時，merge 模式的 agents 與 extras 會改為複製，這些副本會像連結一樣被更新與清理。Skills 是資料夾，所以無論如何都會（以 junction）連結。請參閱 [Windows 疑難排解](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)。
+
+skillshare 不擁有、但內容相同的本機檔案會被保留。在 copy fallback 中，agent 計數會以 `local preserved` 分開顯示，例如 `0/1 linked, 1 local preserved`。
+:::
+
 ---
 
 ## 另請參閱

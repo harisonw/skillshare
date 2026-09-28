@@ -70,6 +70,9 @@ func cmdSyncExtrasGlobal(dryRun, force, jsonOutput bool, start time.Time) error 
 		return err
 	}
 
+	if _, err := config.ValidateConfig(cfg); err != nil {
+		return err
+	}
 	if len(cfg.Extras) == 0 {
 		// Clean up empty extras directory
 		removeEmptyDir(config.ExtrasParentDir(cfg.EffectiveSkillsSource()))
@@ -189,10 +192,11 @@ func cmdSyncExtrasGlobal(dryRun, force, jsonOutput bool, start time.Time) error 
 
 			result, syncErr := syncExtraTarget(extra, target, extraSource, targetPath, mode, dryRun, force, "", spec)
 			shortTarget := shortenPath(targetPath)
+			shownMode := sync.ExtraTargetMode(mode, extra.File != "")
 
 			jsonTarget := syncExtrasJSONTarget{
 				Path: target.Path,
-				Mode: mode,
+				Mode: shownMode,
 			}
 
 			if syncErr != nil {
@@ -221,17 +225,20 @@ func cmdSyncExtrasGlobal(dryRun, force, jsonOutput bool, start time.Time) error 
 
 			if !jsonOutput {
 				// Report result
-				verb := syncVerb(mode)
+				verb := syncVerb(shownMode)
 				if result.Synced > 0 {
 					parts := []string{fmt.Sprintf("%d files %s", result.Synced, verb)}
 					if result.Pruned > 0 {
 						parts = append(parts, fmt.Sprintf("%d pruned", result.Pruned))
 					}
-					ui.Success("%s  %s (%s)", shortTarget, strings.Join(parts, ", "), mode)
-				} else if result.Skipped > 0 {
-					ui.Warning("%s  %d files skipped (use --force to override)", shortTarget, result.Skipped)
-				} else {
-					ui.Success("%s  up to date (%s)", shortTarget, mode)
+					ui.Success("%s  %s (%s)", shortTarget, strings.Join(parts, ", "), shownMode)
+				} else if result.Skipped > result.Preserved {
+					ui.Warning("%s  %d files skipped (use --force to override)", shortTarget, result.Skipped-result.Preserved)
+				} else if result.Preserved == 0 {
+					ui.Success("%s  up to date (%s)", shortTarget, shownMode)
+				}
+				if result.Preserved > 0 {
+					ui.Success("%s  %d local preserved", shortTarget, result.Preserved)
 				}
 
 				for _, e := range result.Errors {
@@ -268,7 +275,13 @@ func cmdSyncExtrasGlobal(dryRun, force, jsonOutput bool, start time.Time) error 
 			Extras:   jsonEntries,
 			Duration: formatDuration(start),
 		}
-		return writeJSON(&output)
+		if err := writeJSON(&output); err != nil {
+			return err
+		}
+		if totalErrors > 0 {
+			return &jsonSilentError{cause: fmt.Errorf("%d extras sync error(s)", totalErrors)}
+		}
+		return nil
 	}
 
 	ui.ExtrasSyncSummary(ui.ExtrasSyncStats{
@@ -291,6 +304,9 @@ func cmdSyncExtrasProject(cwd string, dryRun, force, jsonOutput bool, start time
 		return err
 	}
 
+	if _, err := config.ValidateProjectConfig(projCfg, cwd); err != nil {
+		return err
+	}
 	if len(projCfg.Extras) == 0 {
 		// Clean up empty extras directory
 		removeEmptyDir(config.ExtrasParentDirProject(projCfg.EffectiveExtrasSource(cwd)))
@@ -390,10 +406,11 @@ func cmdSyncExtrasProject(cwd string, dryRun, force, jsonOutput bool, start time
 
 			result, syncErr := syncExtraTarget(extra, target, extraSource, targetPath, mode, dryRun, force, cwd, spec)
 			shortTarget := shortenPath(targetPath)
+			shownMode := sync.ExtraTargetMode(mode, extra.File != "")
 
 			jsonTarget := syncExtrasJSONTarget{
 				Path: targetPath,
-				Mode: mode,
+				Mode: shownMode,
 			}
 
 			if syncErr != nil {
@@ -421,17 +438,20 @@ func cmdSyncExtrasProject(cwd string, dryRun, force, jsonOutput bool, start time
 			jsonEntry.Targets = append(jsonEntry.Targets, jsonTarget)
 
 			if !jsonOutput {
-				verb := syncVerb(mode)
+				verb := syncVerb(shownMode)
 				if result.Synced > 0 {
 					parts := []string{fmt.Sprintf("%d files %s", result.Synced, verb)}
 					if result.Pruned > 0 {
 						parts = append(parts, fmt.Sprintf("%d pruned", result.Pruned))
 					}
-					ui.Success("%s  %s (%s)", shortTarget, strings.Join(parts, ", "), mode)
-				} else if result.Skipped > 0 {
-					ui.Warning("%s  %d files skipped (use --force to override)", shortTarget, result.Skipped)
-				} else {
-					ui.Success("%s  up to date (%s)", shortTarget, mode)
+					ui.Success("%s  %s (%s)", shortTarget, strings.Join(parts, ", "), shownMode)
+				} else if result.Skipped > result.Preserved {
+					ui.Warning("%s  %d files skipped (use --force to override)", shortTarget, result.Skipped-result.Preserved)
+				} else if result.Preserved == 0 {
+					ui.Success("%s  up to date (%s)", shortTarget, shownMode)
+				}
+				if result.Preserved > 0 {
+					ui.Success("%s  %d local preserved", shortTarget, result.Preserved)
 				}
 
 				for _, e := range result.Errors {
@@ -468,7 +488,13 @@ func cmdSyncExtrasProject(cwd string, dryRun, force, jsonOutput bool, start time
 			Extras:   jsonEntries,
 			Duration: formatDuration(start),
 		}
-		return writeJSON(&output)
+		if err := writeJSON(&output); err != nil {
+			return err
+		}
+		if totalErrors > 0 {
+			return &jsonSilentError{cause: fmt.Errorf("%d extras sync error(s)", totalErrors)}
+		}
+		return nil
 	}
 
 	ui.ExtrasSyncSummary(ui.ExtrasSyncStats{
@@ -570,7 +596,7 @@ func runExtrasSyncEntries(extras []config.ExtraConfig, sourceFunc func(config.Ex
 			}
 
 			result, syncErr := syncExtraTarget(extra, target, extraSource, targetPath, mode, dryRun, force, projectRoot, spec)
-			jt := syncExtrasJSONTarget{Path: targetPath, Mode: mode}
+			jt := syncExtrasJSONTarget{Path: targetPath, Mode: sync.ExtraTargetMode(mode, extra.File != "")}
 			if syncErr != nil {
 				jt.Error = syncErr.Error()
 			} else {

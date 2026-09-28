@@ -123,7 +123,7 @@ export default function DashboardPage() {
 
   const subtitle = [
     isProjectMode ? t('dashboard.projectSummary') : '',
-    t('dashboard.summary', { synced, total: targets.length }),
+    t(targets.length === 1 ? 'dashboard.summary.one' : 'dashboard.summary.other', { synced, total: targets.length }),
     lastSyncTs ? t('dashboard.lastSync', { time: formatRelativeTime(lastSyncTs, locale) }) : '',
   ].filter(Boolean).join(' ');
 
@@ -479,7 +479,7 @@ function TrackedRepos({ repos }: { repos: Overview['trackedRepos'] }) {
             <Github size={15} />
             <span className="flex flex-col min-w-0 flex-1 gap-px">
               <span className="font-mono text-[13px] font-semibold truncate">{repo.name.replace(/^_/, '')}</span>
-              <span className="text-[13px] text-ink-2">{t('dashboard.trackedRepos.skillCount', { count: repo.skillCount })}</span>
+              <span className="text-[13px] text-ink-2">{t(repo.skillCount === 1 ? 'dashboard.trackedRepos.skillCount.one' : 'dashboard.trackedRepos.skillCount.other', { count: repo.skillCount })}</span>
             </span>
             <span className={`ss-st ${repo.dirty ? 'warn' : 'ok'}`}>
               {repo.dirty ? t('dashboard.trackedRepos.modified') : t('dashboard.trackedRepos.clean')}

@@ -2,6 +2,12 @@ import { BASE_PATH } from '../lib/basePath';
 
 const BASE = BASE_PATH + '/api';
 
+export interface InstructionsWarning {
+  code: string;
+  params: Record<string, string>;
+  message: string;
+}
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -200,6 +206,7 @@ export interface InstructionsAssignment {
   name: string; // shared instruction file (a single-file extra)
   mode: string; // import | symlink | copy
   status: string; // synced | drift | modified | not synced | no source
+  reason?: 'folder_link' | 'directory'; // why it is not synced: a folder link (Windows junction) the tool cannot read, or a real folder in the way
 }
 
 export interface InstructionsEntry {
@@ -229,6 +236,17 @@ export interface TargetInstructions {
   shared: InstructionsAssignment[];
   convert: ConvertMethod[];
   convert_blocked?: Partial<Record<ConvertMethod, string>>;
+  rider_of?: string; // not a target: reads this target's skills
+  riders: InstructionsRider[]; // tools reading this target's skills from their own file
+  read_by: string[]; // other tools that read this very file
+  default_path?: string; // the built-in file, used when no location is set
+}
+
+/** A tool that reads a target's skills but keeps its own instruction file. */
+export interface InstructionsRider {
+  name: string;
+  path: string;
+  exists: boolean;
 }
 
 /** The instruction file a user set for a target skillshare does not know. */
@@ -254,6 +272,17 @@ export interface SharedInstructionsFile {
   size: number;
   chars: number;
   targets: number;
+  locations?: InstructionLocation[]; // other folders the file is put in; an older server leaves it out
+}
+
+/** A folder, not a tool's instruction file, that a shared file is put in. */
+export interface InstructionLocation {
+  path: string; // the folder as stored in config; names the location in the calls below
+  file: string; // the file written
+  as?: string; // custom file name
+  mode: 'import' | 'symlink' | 'copy';
+  status: string; // same values as InstructionsAssignment.status
+  reason?: 'folder_link' | 'directory';
 }
 
 export interface SharedInstructionsTarget {
@@ -262,8 +291,28 @@ export interface SharedInstructionsTarget {
   import: boolean;
   exists: boolean;
   same_as?: string;
+  rider_of?: string; // not a target: reads this target's skills
+  linked_shared?: string; // the shared file whose source the target's path is (a link or a tracked copy)
   max_chars?: number;
   assigned: InstructionsAssignment[];
+}
+
+/** A copy target rewritten when its shared file was saved. */
+export interface SharedCopyResult {
+  target: string;
+  warnings?: string[];
+  error?: string;
+}
+
+/** What restoring one target puts back, from the record made when it was attached. */
+export interface SharedRestorePreview {
+  kind: 'content' | 'delete' | 'link';
+  path: string;
+  content: string; // the file after restore (kind content)
+  current: string; // the file now
+  link_to?: string; // kind link
+  recorded_at?: string;
+  drift: boolean; // edits made after attaching are backed up, not restored
 }
 
 export interface ProjectInstructionsReach {
@@ -618,6 +667,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(opts),
     }),
+  deleteBackup: (timestamp: string) =>
+    apiFetch<{ success: boolean }>(`/backups/${encodeURIComponent(timestamp)}`, { method: 'DELETE' }),
+
+  // File history: earlier versions of single files skillshare rewrote
+  listFileBackups: () => apiFetch<{ files: FileBackup[] }>('/file-backups'),
+  getFileBackupVersions: (path: string) =>
+    apiFetch<FileBackupVersions>(`/file-backups/versions?path=${encodeURIComponent(path)}`),
+  getFileBackupVersion: (path: string, id: string) =>
+    apiFetch<{ content: string; current: string }>(`/file-backups/version?path=${encodeURIComponent(path)}&id=${encodeURIComponent(id)}`),
+  restoreFileBackup: (body: { path: string; id: string; unlink?: boolean }) =>
+    apiFetch<{ success: boolean; backup_id?: string }>('/file-backups/restore', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   // Trash
   listTrash: () => apiFetch<TrashListResponse>('/trash'),
@@ -714,7 +777,7 @@ export const api = {
   removeTargetInstructionsSetup: (name: string) =>
     apiFetch<{ success: boolean }>(`/targets/${encodeURIComponent(name)}/instructions/setup`, { method: 'DELETE' }),
   listSharedInstructions: () =>
-    apiFetch<{ files: SharedInstructionsFile[]; targets: SharedInstructionsTarget[] }>('/instructions'),
+    apiFetch<{ files: SharedInstructionsFile[]; targets: SharedInstructionsTarget[]; file_links: boolean }>('/instructions'),
   createSharedInstructions: (body: { name: string; content?: string; from_target?: string }) =>
     apiFetch<{ success: boolean; path: string }>('/instructions', {
       method: 'POST',
@@ -722,14 +785,15 @@ export const api = {
     }),
   getSharedInstructionsContent: (name: string) =>
     apiFetch<{ name: string; path: string; exists: boolean; content: string }>(`/instructions/${encodeURIComponent(name)}/content`),
+  /** Saves the shared file; its copy targets are rewritten too (copies). */
   putSharedInstructionsContent: (name: string, content: string) =>
-    apiFetch<{ success: boolean }>(`/instructions/${encodeURIComponent(name)}/content`, {
+    apiFetch<{ success: boolean; copies?: SharedCopyResult[] }>(`/instructions/${encodeURIComponent(name)}/content`, {
       method: 'PUT',
       body: JSON.stringify({ content }),
     }),
   /** Sets exactly which shared files each target uses; [] restores their own files. */
   assignSharedInstructions: (targets: string[], extras: string[]) =>
-    apiFetch<{ success: boolean; errors: string[] }>('/instructions/assign', {
+    apiFetch<{ success: boolean; errors: string[]; warnings?: InstructionsWarning[] }>('/instructions/assign', {
       method: 'POST',
       body: JSON.stringify({ targets, extras }),
     }),
@@ -738,10 +802,32 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ target }),
     }),
-  resolveSharedInstructions: (name: string, target: string, action: 'collect' | 'reapply') =>
+  setSharedInstructionsMode: (name: string, target: string, mode: string) =>
+    apiFetch<{ success: boolean; warnings?: InstructionsWarning[] }>(`/instructions/${encodeURIComponent(name)}/targets/${encodeURIComponent(target)}/mode`, {
+      method: 'PUT',
+      body: JSON.stringify({ mode }),
+    }),
+  getSharedRestorePreview: (name: string, target: string) =>
+    apiFetch<SharedRestorePreview>(`/instructions/${encodeURIComponent(name)}/restore-preview?target=${encodeURIComponent(target)}`),
+  addInstructionLocation: (name: string, body: { path: string; as?: string; mode?: string }) =>
+    apiFetch<{ success: boolean; warnings?: InstructionsWarning[] }>(`/instructions/${encodeURIComponent(name)}/locations`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  setInstructionLocationMode: (name: string, path: string, mode: string) =>
+    apiFetch<{ success: boolean; warnings?: InstructionsWarning[] }>(`/instructions/${encodeURIComponent(name)}/locations/mode`, {
+      method: 'PUT',
+      body: JSON.stringify({ path, mode }),
+    }),
+  removeInstructionLocation: (name: string, path: string) =>
+    apiFetch<{ success: boolean; warnings?: InstructionsWarning[] }>(`/instructions/${encodeURIComponent(name)}/locations?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  getLocationRestorePreview: (name: string, path: string) =>
+    apiFetch<SharedRestorePreview>(`/instructions/${encodeURIComponent(name)}/locations/restore-preview?path=${encodeURIComponent(path)}`),
+  /** Settles a modified target, or a location when `on` has its `path`. */
+  resolveSharedInstructions: (name: string, on: { target: string } | { path: string }, action: 'collect' | 'reapply') =>
     apiFetch<{ success: boolean }>(`/instructions/${encodeURIComponent(name)}/resolve`, {
       method: 'POST',
-      body: JSON.stringify({ target, action }),
+      body: JSON.stringify({ ...on, action }),
     }),
   getProjectInstructions: () => apiFetch<ProjectInstructions>('/instructions/project'),
   putProjectInstructions: (content: string) =>
@@ -1305,6 +1391,37 @@ export interface BackupInfo {
 export interface BackupListResponse {
   backups: BackupInfo[];
   totalSizeBytes: number;
+}
+
+/** A file with earlier versions kept. `target`/`extra` name who uses the path, when known. */
+export interface FileBackup {
+  path: string;
+  versions: number;
+  latest: string;
+  target?: string;
+  extra?: string;
+  /** The shared file itself, not a place it is put. */
+  source?: boolean;
+}
+
+/** `history`: saved before a write; `drift`: edits a write replaced; `origin`: the file before it was first attached. */
+export interface FileBackupVersion {
+  id: string;
+  kind: 'history' | 'drift' | 'origin';
+  reason: string;
+  time: string;
+  size: number;
+  preview: string;
+  /** The path was a link to this destination. */
+  link_to?: string;
+  /** There was no file. */
+  none?: boolean;
+}
+
+export interface FileBackupVersions {
+  path: string;
+  current: { exists: boolean; link_to?: string };
+  versions: FileBackupVersion[];
 }
 
 export interface RestoreValidateResponse {

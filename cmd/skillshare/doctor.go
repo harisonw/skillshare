@@ -539,7 +539,7 @@ func checkTargetIssues(target config.TargetConfig, source, mode string) []string
 
 	// Check if it's a symlink. Relative links must resolve against the link's
 	// parent directory, not the current working directory.
-	if mode == "symlink" && info.Mode()&os.ModeSymlink != 0 {
+	if mode == "symlink" && utils.IsLinkMode(sc.Path, info.Mode()) {
 		link, _ := os.Readlink(sc.Path)
 		absLink, err := utils.ResolveLinkTarget(sc.Path)
 		absSource, _ := filepath.Abs(source)
@@ -977,7 +977,7 @@ func findBrokenSymlinks(dir string) []string {
 			continue
 		}
 
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(path, info.Mode()) {
 			// It's a symlink, check if target exists
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				broken = append(broken, entry.Name())
@@ -1058,7 +1058,7 @@ func checkDuplicateSkills(cfg *config.Config, result *doctorResult, discovered [
 				continue
 			}
 
-			if info.Mode()&os.ModeSymlink == 0 {
+			if !utils.IsLinkMode(path, info.Mode()) {
 				// It's a real directory, not a symlink
 				if sourceNames[entry.Name()] {
 					if !slices.Contains(skillLocations[entry.Name()], "source") {

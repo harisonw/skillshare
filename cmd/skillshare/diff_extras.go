@@ -8,6 +8,7 @@ import (
 	"skillshare/internal/config"
 	"skillshare/internal/sync"
 	"skillshare/internal/ui"
+	"skillshare/internal/utils"
 )
 
 // extraDiffResult holds diff for one extra → one target.
@@ -60,7 +61,7 @@ func collectExtrasDiff(extras []config.ExtraConfig, sourceResolver func(config.E
 				results = append(results, extraDiffResult{
 					extraName:  extra.Name,
 					targetPath: t.Path,
-					mode:       sync.EffectiveMode(t.Mode),
+					mode:       sync.ExtraTargetMode(t.Mode, extra.File != ""),
 					errMsg:     "source directory not found",
 				})
 			}
@@ -68,7 +69,7 @@ func collectExtrasDiff(extras []config.ExtraConfig, sourceResolver func(config.E
 		}
 
 		for _, t := range extra.Targets {
-			mode := sync.EffectiveMode(t.Mode)
+			mode := sync.ExtraTargetMode(t.Mode, extra.File != "")
 			r := extraDiffResult{
 				extraName:  extra.Name,
 				targetPath: t.Path,
@@ -107,7 +108,7 @@ func collectExtrasDiff(extras []config.ExtraConfig, sourceResolver func(config.E
 
 				switch mode {
 				case "merge", "symlink":
-					if tInfo.Mode()&os.ModeSymlink != 0 {
+					if utils.IsLinkMode(targetFile, tInfo.Mode()) {
 						link, _ := os.Readlink(targetFile)
 						if link != sourceFile {
 							r.items = append(r.items, extraDiffItem{

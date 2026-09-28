@@ -517,9 +517,9 @@ export default function ResourcesPage({ kind }: { kind: Kind }) {
     onSuccess: (res, { enable }) => {
       const { updated, unchanged, failed } = res.summary;
       if (failed > 0 && updated > 0) toast(t('resources.batchToggle.toast.partial', { updated, failed }), 'warning');
-      else if (failed > 0) toast(t('resources.batchToggle.toast.failed', { count: failed }), 'error');
+      else if (failed > 0) toast(t(failed === 1 ? 'resources.batchToggle.toast.failed.one' : 'resources.batchToggle.toast.failed.other', { count: failed }), 'error');
       else if (updated === 0 && unchanged > 0) toast(t('resources.batchToggle.toast.noChange'), 'info', { key: TOGGLE_TOAST });
-      else toast(t(enable ? 'resources.batchToggle.toast.enabled' : 'resources.batchToggle.toast.disabled', { count: updated }), 'success', { key: TOGGLE_TOAST });
+      else toast(t(`resources.batchToggle.toast.${enable ? 'enabled' : 'disabled'}.${updated === 1 ? 'one' : 'other'}`, { count: updated }), 'success', { key: TOGGLE_TOAST });
       setSelected(new Set());
     },
     onError: rollback,
@@ -551,7 +551,7 @@ export default function ResourcesPage({ kind }: { kind: Kind }) {
   const setManyTargets = async (names: string[], target: string | null) => {
     const results = await Promise.allSettled(names.map((n) => api.setSkillTargets(n, target)));
     const failed = results.filter((r) => r.status === 'rejected').length;
-    if (failed === 0) toast(t('resources.bulk.targetsSet', { count: names.length, target: target ?? t('resources.targets.all') }), 'success');
+    if (failed === 0) toast(t(names.length === 1 ? 'resources.bulk.targetsSet.one' : 'resources.bulk.targetsSet.other', { count: names.length, target: target ?? t('resources.targets.all') }), 'success');
     else toast(t('resources.batchToggle.toast.partial', { updated: names.length - failed, failed }), failed === names.length ? 'error' : 'warning');
     refreshAfterTargets();
   };
@@ -899,7 +899,7 @@ export default function ResourcesPage({ kind }: { kind: Kind }) {
             <div className="ss-note inf">
               <Info size={16} />
               <div className="flex-1">
-                <b>{t('resources.agents.supportTitle', { count: agentSupport.supported.length, total: agentSupport.total })}</b>{' '}
+                <b>{t(agentSupport.supported.length === 1 ? 'resources.agents.supportTitle.one' : 'resources.agents.supportTitle.other', { count: agentSupport.supported.length, total: agentSupport.total })}</b>{' '}
                 {agentSupport.supported.join(', ')}. {t('resources.agents.supportRest')}
               </div>
             </div>
@@ -1126,7 +1126,7 @@ export default function ResourcesPage({ kind }: { kind: Kind }) {
 
           <ConfirmDialog
             open={!!confirmDisable}
-            title={t('resources.batchToggle.confirmTitle', { count: confirmDisable?.length ?? 0 })}
+            title={t(confirmDisable?.length === 1 ? 'resources.batchToggle.confirmTitle.one' : 'resources.batchToggle.confirmTitle.other', { count: confirmDisable?.length ?? 0 })}
             confirmText={t('resources.batchToggle.confirmButton', { count: confirmDisable?.length ?? 0 })}
             variant="danger"
             loading={toggleMany.isPending}

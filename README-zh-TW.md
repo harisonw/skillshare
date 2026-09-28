@@ -89,7 +89,7 @@ skillshare 解決這個問題：
 | 平台 | Skills 來源 | Agents 來源 | Extras 來源 | 連結方式 |
 |----------|---------------|---------------|---------------|-----------|
 | macOS/Linux | `~/.config/skillshare/skills/` | `~/.config/skillshare/agents/` | `~/.config/skillshare/extras/` | Symlinks |
-| Windows | `%AppData%\skillshare\skills\` | `%AppData%\skillshare\agents\` | `%AppData%\skillshare\extras\` | NTFS Junction（不需要管理員權限） |
+| Windows | `%AppData%\skillshare\skills\` | `%AppData%\skillshare\agents\` | `%AppData%\skillshare\extras\` | 資料夾用 NTFS Junction（不需要管理員權限）；檔案 symlink 需要開發人員模式，否則改為複製 |
 
 | | 命令式（每次個別安裝） | 宣告式（skillshare） |
 |---|---|---|

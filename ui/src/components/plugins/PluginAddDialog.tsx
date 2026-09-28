@@ -3,6 +3,8 @@ import { pluginsApi, targetMap, type PluginBinding, type PluginDiscovery, type P
 import { Check, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 import AgentIcon from '../AgentIcon';
 import { agentReasons } from './agentReasons';
+import SourceHint from './SourceHint';
+import { pluginErrorMessage } from './pluginError';
 import PluginDocsLink from './PluginDocsLink';
 import Button from '../Button';
 import DialogShell from '../DialogShell';
@@ -55,7 +57,7 @@ export default function PluginAddDialog({ onClose, onPreview, initialSource = ''
       // A blocked row cannot be chosen, so it is never chosen for the user either.
       const open = d.candidates.filter((c) => !c.problem);
       if (!keep) { setName(open.find((c) => c.name === plugin)?.name ?? (open.length === 1 ? open[0].name : '')); setTargets([]); }
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError(pluginErrorMessage(e, t)); }
     finally { setBusy(false); }
   };
   // Asking for a click on a source that is already filled in would be a step with nothing to decide.
@@ -79,7 +81,10 @@ export default function PluginAddDialog({ onClose, onPreview, initialSource = ''
       </div>
       <div className="db overflow-y-auto">
         {!discovery && extending && busy ? (
-          <p className="flex items-center gap-2 text-[13px] text-ink-2"><Spinner size="sm" />{t('plugins.discovering')}</p>
+          <div className="flex flex-col gap-1.5">
+            <p className="flex items-center gap-2 text-[13px] text-ink-2"><Spinner size="sm" />{t('plugins.discovering')}</p>
+            <SourceHint active />
+          </div>
         ) : !discovery ? (
           <form id="plugin-source" className="flex flex-col gap-3.5" onSubmit={(e) => { e.preventDefault(); if (source.trim()) void discover(); }}>
             <Input label={t('plugins.source')} placeholder="owner/repo" value={source} disabled={busy} autoFocus onChange={(e) => setSource(e.target.value)} />
@@ -88,6 +93,7 @@ export default function PluginAddDialog({ onClose, onPreview, initialSource = ''
               {t('plugins.advanced')}
             </button>
             {advanced && <div className="ml-[22px]"><Input label={t('plugins.sourceRef')} placeholder="main" value={sourceRef} disabled={busy} onChange={(e) => setSourceRef(e.target.value)} /></div>}
+            {(busy || error) && <SourceHint active={busy} />}
           </form>
         ) : (
           <>
@@ -113,7 +119,7 @@ export default function PluginAddDialog({ onClose, onPreview, initialSource = ''
               <div className="ss-fld">
                 <span className="flex items-baseline gap-2">
                   <span className="text-[13px] font-semibold">{t('plugins.targets')}</span>
-                  <span className="text-xs text-ink-3">{t('plugins.targetsUsable', { count: usable.length, total: reasons.length })}</span>
+                  <span className="text-xs text-ink-3">{t(reasons.length === 1 ? 'plugins.targetsUsable.one' : 'plugins.targetsUsable.other', { count: usable.length, total: reasons.length })}</span>
                 </span>
                 {/* A grid, not a wrap: every cell is the same height, so one long reason can no
                     longer set the height of a whole row and leave holes beside it. */}

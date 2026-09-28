@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"skillshare/internal/config"
 	syncpkg "skillshare/internal/sync"
+	"skillshare/internal/utils"
 )
 
 // resolveExtensionSpec resolves a target's extension value into a transform
@@ -132,7 +134,7 @@ func (s *Server) handleExtras(w http.ResponseWriter, r *http.Request) {
 
 		entry.Targets = make([]extrasTargetInfo, 0, len(extra.Targets))
 		for _, t := range extra.Targets {
-			m := syncpkg.EffectiveMode(t.Mode)
+			m := syncpkg.ExtraTargetMode(t.Mode, extra.File != "")
 			targetPath := resolveExtrasTargetPath(projectRoot, t.Path)
 			ti := extrasTargetInfo{
 				Path:      t.Path,
@@ -280,7 +282,7 @@ func (s *Server) handleExtrasDiff(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, t := range extra.Targets {
-			m := syncpkg.EffectiveMode(t.Mode)
+			m := syncpkg.ExtraTargetMode(t.Mode, extra.File != "")
 			// Transform extensions use copy semantics; resolve through the shared
 			// resolver so the diff isn't computed against the merge default. On an
 			// invalid (non-copy) mode, leave m as-is — sync surfaces that error.
@@ -366,7 +368,7 @@ func buildExtrasDiffItems(sourceFiles []string, sourceDir, targetDir, mode strin
 
 		switch mode {
 		case "symlink", "merge":
-			if info.Mode()&os.ModeSymlink != 0 {
+			if utils.IsLinkMode(targetFile, info.Mode()) {
 				link, readErr := os.Readlink(targetFile)
 				if readErr != nil || filepath.Clean(resolveExtrasTargetPath(filepath.Dir(targetFile), link)) != filepath.Clean(sourceFile) {
 					items = append(items, extrasDiffItem{
@@ -550,6 +552,19 @@ func (s *Server) handleExtrasSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.mu.RLock()
+	var validationErr error
+	if s.IsProjectMode() {
+		validationErr = s.projectCfg.ValidateExtras(s.projectRoot)
+	} else {
+		validationErr = s.cfg.ValidateExtras()
+	}
+	if validationErr != nil {
+		s.mu.RUnlock()
+		if !writeExtraTargetConflict(w, validationErr, body.Name) {
+			writeError(w, http.StatusBadRequest, validationErr.Error())
+		}
+		return
+	}
 	results := s.syncExtras(body.Name, body.DryRun, body.Force)
 	s.mu.RUnlock()
 
@@ -608,7 +623,7 @@ func (s *Server) syncExtras(name string, dryRun, force bool) []extraSyncResult {
 
 			tr := extraTargetSyncResult{
 				Target: t.Path,
-				Mode:   m,
+				Mode:   syncpkg.ExtraTargetMode(t.Mode, extra.File != ""),
 				Errors: []string{},
 			}
 
@@ -801,30 +816,33 @@ func (s *Server) handleExtrasDelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if idx == -1 {
-		writeError(w, http.StatusNotFound, "extra not found: "+name)
+		writeCodedError(w, http.StatusNotFound, "instructions_shared_not_found", "extra not found: "+name, map[string]string{"name": name})
 		return
 	}
 
 	removed := extras[idx]
 	sourceDir := s.extrasSourceDir(removed)
 
-	// Remove from config
-	if s.IsProjectMode() {
-		s.projectCfg.Extras = append(s.projectCfg.Extras[:idx], s.projectCfg.Extras[idx+1:]...)
-	} else {
-		s.cfg.Extras = append(s.cfg.Extras[:idx], s.cfg.Extras[idx+1:]...)
-	}
-
-	if err := s.saveAndReloadConfig(); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	// A single-file extra's targets go back to how they were (as the CLI does).
 	projectRoot := s.projectRoot
 	restored, restoreErr := syncpkg.RestoreExtraFileTargets(removed, sourceDir, func(p string) string {
 		return resolveExtrasTargetPath(projectRoot, p)
 	})
+	if restoreErr == nil {
+		// Remove from config
+		if s.IsProjectMode() {
+			s.projectCfg.Extras = append(s.projectCfg.Extras[:idx], s.projectCfg.Extras[idx+1:]...)
+		} else {
+			s.cfg.Extras = append(s.cfg.Extras[:idx], s.cfg.Extras[idx+1:]...)
+		}
+
+		if err := s.saveAndReloadConfig(); err != nil {
+			writeCodedError(w, http.StatusInternalServerError, "instructions_save_failed", err.Error(), map[string]string{"name": name, "detail": err.Error()})
+			return
+		}
+
+	}
+
 	status, msg := "ok", ""
 	if restoreErr != nil {
 		status, msg = "partial", restoreErr.Error()
@@ -836,7 +854,7 @@ func (s *Server) handleExtrasDelete(w http.ResponseWriter, r *http.Request) {
 	}, msg)
 
 	if restoreErr != nil {
-		writeError(w, http.StatusInternalServerError, restoreErr.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_restore_failed", restoreErr.Error(), map[string]string{"name": name, "detail": restoreErr.Error()})
 		return
 	}
 	writeJSON(w, map[string]any{"success": true, "name": name, "restored": restored})
@@ -852,6 +870,7 @@ func (s *Server) handleExtrasAddTarget(w http.ResponseWriter, r *http.Request) {
 		Path    string `json:"path"`
 		Mode    string `json:"mode"`
 		Flatten bool   `json:"flatten"`
+		As      string `json:"as"` // single-file extra: target filename
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -897,7 +916,7 @@ func (s *Server) handleExtrasAddTarget(w http.ResponseWriter, r *http.Request) {
 	if !s.IsProjectMode() {
 		storedPath = newPath
 	}
-	et := config.ExtraTargetConfig{Path: storedPath, Flatten: body.Flatten}
+	et := config.ExtraTargetConfig{Path: storedPath, Flatten: body.Flatten, As: body.As}
 	if body.Mode != "" {
 		et.Mode = body.Mode
 	}
@@ -905,7 +924,23 @@ func (s *Server) handleExtrasAddTarget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	extras[idx].Targets = append(extras[idx].Targets, et)
+	prev := extras[idx].Targets
+	extras[idx].Targets = append(slices.Clone(prev), et)
+
+	// The same ownership and import checks the CLI runs after --add-target.
+	var validateErr error
+	if s.IsProjectMode() {
+		validateErr = s.projectCfg.ValidateExtras(s.projectRoot, name)
+	} else {
+		validateErr = s.cfg.ValidateExtras(name)
+	}
+	if validateErr != nil {
+		extras[idx].Targets = prev
+		if !writeExtraTargetConflict(w, validateErr, body.Path) {
+			writeError(w, http.StatusBadRequest, validateErr.Error())
+		}
+		return
+	}
 
 	if err := s.saveAndReloadConfig(); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

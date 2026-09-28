@@ -42,7 +42,8 @@ export const pluginsApi = {
       // A failed inventory could arrive as null; one Agent must not break the whole page.
       hosts: inv.hosts.map((h) => ({ ...h, installed: (h.installed as NativePlugin[] | null) ?? [] })),
     })),
-  discover: (source: string, sourceRef?: string, entry?: string) => post<PluginDiscovery>('/plugins/discover', { source, sourceRef, entry }),
+  /** `name` is a plugin already managed here: its reviewed copy answers instead of downloading the source again. */
+  discover: (source: string, sourceRef?: string, entry?: string, name?: string) => post<PluginDiscovery>('/plugins/discover', { source, sourceRef, entry, name }),
   /** The reviewed local copy of the plugin's source; empty for an imported plugin, which has none. */
   files: (name: string) => apiFetch<{ files: string[] }>(`/plugins/${encodeURIComponent(name)}/files`),
   file: (name: string, path: string) => apiFetch<{ content: string }>(`/plugins/${encodeURIComponent(name)}/files/${path.split('/').map(encodeURIComponent).join('/')}`),

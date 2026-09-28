@@ -53,3 +53,16 @@ func TestPluginListIncludesAnAccountOfAnAgent(t *testing.T) {
 		t.Fatalf("the account is missing: %+v", inventory.TargetDefinitions)
 	}
 }
+
+// A source that cannot be reached answers with a key the dashboard translates, not git's output.
+func TestPluginDiscoverNamesANetworkFailure(t *testing.T) {
+	s, _ := newTestServerWithExtras(t, nil, "")
+	w := httptest.NewRecorder()
+	s.handlePluginDiscover(w, httptest.NewRequest(http.MethodPost, "/api/plugins/discover", strings.NewReader(`{"name":"demo","source":"https://127.0.0.1:1/demo.git"}`)))
+	var body struct {
+		Code string `json:"error_code"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || w.Code != 400 || body.Code != "plugins.error.network" {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+}

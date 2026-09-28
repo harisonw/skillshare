@@ -4,18 +4,22 @@ package utils
 
 import "syscall"
 
-const fileAttributeReparsePoint = 0x0400
+// ioReparseTagMountPoint is the reparse tag of a junction (IO_REPARSE_TAG_MOUNT_POINT).
+const ioReparseTagMountPoint = 0xA0000003
 
-func isWindowsReparsePoint(path string) bool {
+// platformIsJunction reports whether path is a junction. Other reparse points,
+// such as OneDrive placeholders or deduplicated files, are not links.
+func platformIsJunction(path string) bool {
 	ptr, err := syscall.UTF16PtrFromString(path)
 	if err != nil {
 		return false
 	}
-
-	attrs, err := syscall.GetFileAttributes(ptr)
+	var data syscall.Win32finddata
+	h, err := syscall.FindFirstFile(ptr, &data)
 	if err != nil {
 		return false
 	}
-
-	return attrs&fileAttributeReparsePoint != 0
+	syscall.FindClose(h)
+	// For a reparse point, FindFirstFile reports its tag in Reserved0.
+	return data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0 && data.Reserved0 == ioReparseTagMountPoint
 }

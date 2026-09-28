@@ -208,10 +208,12 @@ skillshare ui -p
 または、`.skillshare/config.yaml` が存在すれば（自動検出されるので）単に `skillshare ui` で構いません。
 
 Project mode では、ダッシュボードは:
-- サイドバーに**「Project」バッジ**を表示する
+- サイドバーの名前の下に `Project · <project path>` を表示する
 - **Git Sync** を非表示にする（自分のプロジェクトの git を使ってください）
-- Config ページで **`.skillshare/config.yaml`** を編集する
+- **Settings → Files** で **`.skillshare/config.yaml`** を編集する
 - リモートの Skill をインストールした後、自動的に `skills:` のエントリを**調整する**
+
+![プロジェクトモードのダッシュボード：サイドバーにプロジェクトのパスが表示され、Git Sync は表示されない](/img/project-mode-dashboard.png)
 
 ---
 

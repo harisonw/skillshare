@@ -3,6 +3,8 @@
 package integration
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -63,5 +65,49 @@ targets: {}
 
 	if strings.Contains(result.Stdout, "\x1b[") {
 		t.Errorf("NO_COLOR must strip all ANSI escapes, got: %q", result.Stdout)
+	}
+}
+
+// TestTargetOutput_NO_COLOR verifies that per-target lines in status, doctor,
+// and extras list honor NO_COLOR. These paths build output from the raw ui
+// color variables rather than theme.ANSI().
+func TestTargetOutput_NO_COLOR(t *testing.T) {
+	sb := testutil.NewSandbox(t)
+	defer sb.Cleanup()
+
+	sb.CreateSkill("hello", map[string]string{
+		"SKILL.md": "---\nname: hello\ndescription: A test skill\n---\n# H",
+	})
+	rulesSource := filepath.Join(filepath.Dir(sb.SourcePath), "extras", "rules")
+	if err := os.MkdirAll(rulesSource, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sb.WriteConfig(`source: ` + sb.SourcePath + `
+targets:
+  claude:
+    path: ` + sb.CreateTarget("claude") + `
+extras:
+  - name: rules
+    targets:
+      - path: ` + filepath.Join(sb.Home, "rules-target") + `
+`)
+
+	for _, tc := range []struct {
+		args []string
+		want string // a target line that must be rendered
+	}{
+		{[]string{"status"}, "claude"},
+		{[]string{"doctor"}, "claude"},
+		{[]string{"extras", "list", "--no-tui"}, "rules-target"},
+	} {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
+			result := sb.RunCLIEnv(map[string]string{"NO_COLOR": "1"}, tc.args...)
+			if !strings.Contains(result.Output(), tc.want) {
+				t.Fatalf("expected output to mention %q, got: %s", tc.want, result.Output())
+			}
+			if strings.Contains(result.Output(), "\x1b[") {
+				t.Errorf("NO_COLOR must strip all ANSI escapes, got: %q", result.Output())
+			}
+		})
 	}
 }

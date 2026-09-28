@@ -11,7 +11,7 @@ flowchart LR
     SRC["~/.config/skillshare/skills/<br/>(내 Git 리포지터리)"]
     SRC --> CLAUDE["~/.claude/skills/"]
     SRC --> CURSOR["~/.cursor/skills/"]
-    SRC --> CODEX["~/.codex/skills/"]
+    SRC --> CODEX["~/.agents/skills/"]
 ```
 
 Source는 여러분이 소유한 평범한 Git 리포지터리입니다. 한 머신에서 push하고 다른 머신에서 pull하고 동료와 공유하면, 그 아래의 symlink 계층은 skillshare가 알아서 처리합니다.

@@ -26,9 +26,9 @@ irm https://raw.githubusercontent.com/runkids/skillshare/main/install.ps1 | iex
 
 ### Does skillshare need admin privileges?
 
-**아니요.** skillshare는 symlink 대신 NTFS junction을 사용하며, 이는 관리자 권한이 필요하지 않습니다.
+**아니요.** 폴더(skills, 그리고 `symlink` 모드의 agents 또는 extras)는 NTFS junction으로 링크됩니다. junction은 디렉터리에 대해 symlink처럼 동작하며 관리자 권한이 필요하지 않습니다.
 
-NTFS junction은 디렉터리에 대해 symlink처럼 동작하지만 모든 사용자가 사용할 수 있습니다.
+단일 파일은 junction으로 링크할 수 없습니다. 파일을 링크하는 모드 — `merge` 모드의 agents, `merge` 모드 디렉터리 extra의 파일, 그리고 공유 `AGENTS.md` 같은 single-file extra — 는 실제 symlink를 사용하며, 이를 만들려면 [Developer Mode](#file-links-need-windows-developer-mode-copying-instead)(또는 관리자 셸)가 필요합니다. 없으면 skillshare가 해당 파일을 복사합니다.
 
 ---
 
@@ -117,11 +117,29 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 2. 백신 프로그램이 차단하고 있지 않은지 확인
 3. PowerShell을 관리자 권한으로 실행 (거의 필요 없음)
 
+### `file links need Windows Developer Mode; copying instead`
+
+**Cause:** Windows에서는 Developer Mode가 켜져 있을 때(또는 관리자 셸에서)만 파일 symlink를 만들 수 있습니다. `merge` 모드의 agents, `merge` 모드의 디렉터리 extras, 그리고 single-file extras(공유 `AGENTS.md` 등)는 단일 파일을 링크하므로, Developer Mode가 없으면 `sync`가 대신 복사하고 이 줄을 표시합니다. `status`, `doctor`, `extras list`는 이런 target을 `copy`로 표시합니다.
+
+복사본은 추적되므로 sync 입장에서는 여전히 링크처럼 동작합니다:
+
+- 소스가 바뀌면 업데이트되고, 소스가 제거되면 함께 제거됩니다.
+- target에 직접 만든 파일은 `merge` 모드와 마찬가지로 건드리지 않습니다.
+- 파일 링크를 쓸 수 있게 되면 다음 sync에서 복사본을 링크로 교체합니다.
+
+**Solution:** 따로 할 일은 없으며 복사본은 계속 정상적으로 동작합니다. 링크를 쓰려면 Developer Mode를 켜고(Windows 11: **Settings → System → For developers → Developer Mode**, Windows 10: **Settings → Update & Security → For developers**) `skillshare sync --all`을 다시 실행하세요. `skillshare ui`가 실행 중이면 재시작하세요.
+
+내용이 같은 로컬 파일은 `local preserved`로 표시되며, `sync extras`는 해당 파일에 `--force`를 권하지 않습니다. 관리되는 링크가 아닌 로컬 파일로 유지됩니다.
+
+### Agent files or AGENTS.md show a folder icon and can't be read
+
+**Cause:** 이전 버전은 단일 파일을 디렉터리 junction으로 링크했습니다. 그래서 탐색기에는 파일이 폴더로 보이고, 도구가 읽을 수 없습니다.
+
+**Solution:** `skillshare sync --all`(또는 `skillshare sync agents` / `skillshare sync extras`)을 실행하세요. sync가 이 깨진 링크를 파일 symlink로, Developer Mode가 꺼져 있으면 복사본으로 교체합니다. 대시보드의 **AGENTS.md** 탭에서는 해당 target에 경고가 표시되며, `copy`로 전환해도 해결됩니다.
+
 ### `symlinks not working`
 
-**Cause:** symlink 대신 junction이 보이는 상황입니다.
-
-**Note:** skillshare는 Windows에서 symlink가 아닌 NTFS junction을 사용합니다. symlink 오류가 보인다면, Windows 버전의 skillshare를 사용하고 있는지 확인하세요.
+**Note:** Windows에서 skillshare는 폴더를 NTFS junction으로, 단일 파일을 symlink로 링크합니다. symlink 오류가 보인다면, Windows 버전의 skillshare를 사용하고 있는지 확인하세요.
 
 ### `Incorrect function` in Antigravity
 

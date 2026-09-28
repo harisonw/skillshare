@@ -165,3 +165,23 @@ func TestUpgradeBinaryWithSudo_ChildFailureIsReturned(t *testing.T) {
 		t.Error("expected the sudo child's failure to stop the upgrade")
 	}
 }
+
+// A skill left owned by root by an older sudo upgrade cannot be replaced; the error should
+// say how to take the files back instead of only "permission denied".
+func TestSkillPermissionHint_NamesTheChownCommand(t *testing.T) {
+	err := &os.PathError{Op: "unlinkat", Path: "/home/me/skills/skillshare/references/trash.md", Err: os.ErrPermission}
+	got := skillPermissionHint(errors.Join(errors.New("failed to remove existing skill"), err), "/home/me/it's skills").Error()
+	if !strings.Contains(got, `sudo chown -R "$(id -un)" '/home/me/it'\''s skills'`) {
+		t.Errorf("hint = %q", got)
+	}
+	if !strings.Contains(got, "permission denied") {
+		t.Errorf("hint dropped the original error: %q", got)
+	}
+}
+
+func TestSkillPermissionHint_LeavesOtherErrorsAlone(t *testing.T) {
+	err := errors.New("network is unreachable")
+	if got := skillPermissionHint(err, "/x"); got != err {
+		t.Errorf("got %v, want the error unchanged", got)
+	}
+}

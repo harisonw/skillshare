@@ -97,7 +97,9 @@ skillshare ui start --clear-cache
 | **Targets** | 带状态的 Target 列表。**添加目标** 还提供 **另一个账号**：你已在使用的某个 Agent 的第二个配置文件夹，并会预览它的写入位置。每个 Target 的页面可编辑 include/exclude filter，并把本地专属的 skills 收集回 Source。列表也会显示每个 Agent 拿到的 MCP server 数量。有 MCP 配置文件的 Target 会多一个 **MCP** 标签页，每个 server 一行；点一下就会保存，**Sync all targets** 会写入所有 Target 的 MCP 配置文件。每个 Target 还有一个以其指示文件命名的标签页（**CLAUDE.md**、**GEMINI.md**、**AGENTS.md** 等），显示读取顺序、编辑该文件，并可将其转换为 `AGENTS.md` |
 | **Projects** | 仅限 global mode。global 配置会 sync 进的项目文件夹，来自 [`projects`](/docs/reference/targets/configuration#projects) 和 [`mcp.projects`](./mcp.md#projects-in-the-dashboard)。**添加项目** 需要填写文件夹、它的 Target 和要 sync 的内容。每个项目都有带 filter 的 **Skills** 和 **Agents** 标签页，可以预览并查看会写入的文件夹，还有一个 **MCP** 标签页，用于在该文件夹中关闭 global server 或为它添加自己的 server。**Sync project** 会先预览，然后只 sync 该项目的 skills、agents 和 MCP。已经指向某个项目文件夹的 Target 可以被转换 |
 | **Audit** | 对 skills 和 agents 的安全扫描，按严重程度列出 findings。**Rules** 标签页按类别浏览每一条规则：可以关闭某一条、更改其严重程度、把某个严重程度应用到整个类别、选择扫描 profile（`default`、`strict`、`permissive`），或打开自定义 `audit-rules.yaml` 的编辑器 |
-| **Settings** | 带标签页：**General**（source 路径、sync 模式、外观）、**Backup**（快照与恢复）、**Log**（操作历史）、**Health**（与 [`doctor`](/docs/reference/commands/doctor) 相同的检查）、**Extensions**（同步时的文件转换）、**Files**（`config.yaml`、`.skillignore` 和 `.agentignore` 的直接编辑器） |
+| **Settings** | 带标签页：**General**（source 路径、sync 模式、外观）、**Backup**（target 文件夹快照、`AGENTS.md` 等文件的早期版本，以及 MCP 配置备份；参见 [`backup`](./backup.md#dashboard)）、**Log**（操作历史）、**Health**（与 [`doctor`](/docs/reference/commands/doctor) 相同的检查）、**Extensions**（同步时的文件转换）、**Files**（`config.yaml`、`.skillignore` 和 `.agentignore` 的直接编辑器） |
+
+在 **Updates** 标签页中，进度条会显示更新进度，正在更新的行也会标记出来。被阻止或失败的更新会显示在单独的区域。
 
 旧链接如 `/collect`、`/install`、`/search`、`/trash`、`/analyze`、`/backup`、`/log` 和 `/doctor` 会重定向到新位置。
 
@@ -138,6 +140,7 @@ Dashboard 支持两种视觉风格和三种颜色模式，可通过侧边栏的 
   <img src="/img/web-skill-detail-demo.png" alt="Skill detail view" />
   <img src="/img/web-sync-demo.png" alt="Sync controls" />
   <img src="/img/web-search-skills-demo.png" alt="GitHub search view" />
+  <img src="/img/web-projects-demo.png" alt="列出项目文件夹的 Projects 页面" />
 </div>
 
 ## REST API

@@ -44,6 +44,20 @@ const NAV_MAP: Record<string, string> = {
 
 const CHORD_TIMEOUT = 500;
 
+// Editors that save with Cmd/Ctrl+S claim it while mounted, so it saves there
+// instead of going to Sync, and holding the modifier shows no Sync hint.
+let saveClaims = 0;
+
+/** Claims Cmd/Ctrl+S for a mounted editor; returns the release. */
+export function claimSaveShortcut(): () => void {
+  saveClaims++;
+  let released = false;
+  return () => {
+    if (!released) saveClaims--;
+    released = true;
+  };
+}
+
 interface UseGlobalShortcutsOptions {
   onToggleHelp: () => void;
   onRefresh?: () => void;
@@ -73,6 +87,8 @@ export function useGlobalShortcuts({ onToggleHelp, onRefresh, onSync }: UseGloba
         if (key === 's') {
           // Let CodeMirror handle Cmd+S when focus is inside the editor (e.g., Config page save)
           if ((e.target as HTMLElement)?.closest('.cm-editor')) return;
+          // An editor on the page saves with it (claimSaveShortcut).
+          if (saveClaims > 0) return;
           e.preventDefault();
           // Reset modifier state immediately — macOS often swallows the
           // Meta keyup after a Cmd+key shortcut, leaving the HUD stuck.
@@ -148,7 +164,7 @@ export function useGlobalShortcuts({ onToggleHelp, onRefresh, onSync }: UseGloba
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Meta' || e.key === 'Control') {
+      if ((e.key === 'Meta' || e.key === 'Control') && saveClaims === 0) {
         setModifierHeld(true);
         // Auto-dismiss after 2s in case keyup is never received
         clearModifierTimer();

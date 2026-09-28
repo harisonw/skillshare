@@ -400,6 +400,18 @@ Target은 AI CLI Skill 디렉터리입니다. Sync 후에는 Source에 대한 �
 ~/.claude/skills -> ~/.config/skillshare/skills/
 ```
 
+### 파일 링크 대신 복사본 (Windows) {#copies-in-place-of-file-links-windows}
+
+Developer Mode가 없는 Windows에서는 `merge` 모드의 agent target과 디렉터리 extras가 파일 링크 대신 복사본을 받습니다. 이때 target 디렉터리에는 각 복사본의 checksum을 기록하는 `.skillshare-manifest.json`이 생기며, 이후 sync는 이를 이용해 복사본을 업데이트하거나 정리하고 사용자 파일은 그대로 둡니다:
+```
+~/.claude/agents/
+├── reviewer.md                # Copy of the source agent
+├── local-agent.md             # User-created, preserved
+└── .skillshare-manifest.json  # Tracks copied agents + checksums
+```
+
+single-file extra(공유 `AGENTS.md` 등)는 복사본을 target 디렉터리가 아니라 skillshare의 [extras 백업 폴더](../commands/extras.md#single-file-extras)에 기록합니다.
+
 ---
 
 ## Tracked 저장소
@@ -470,7 +482,7 @@ skillshare는 XDG Base Directory Specification을 따릅니다. `XDG_CONFIG_HOME
 | 로그 | `%AppData%\skillshare\logs\` |
 | 버전 캐시 | `%AppData%\skillshare\version-check.json` |
 | UI 캐시 | `%AppData%\skillshare\ui\{version}\` |
-| 링크 유형 | NTFS Junction |
+| 링크 유형 | 폴더는 NTFS Junction, 단일 파일은 symlink (Developer Mode 필요, 없으면 복사) |
 
 ## XDG Base Directory 레이아웃
 

@@ -402,7 +402,7 @@ func copyDirectoryWithState(src, dst string, active map[string]bool, opts *copyD
 
 		// In copy mode we need real files/dirs, so directory symlinks are
 		// dereferenced and copied as concrete directories.
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(path, info.Mode()) {
 			targetInfo, statErr := os.Stat(path)
 			if statErr != nil {
 				return fmt.Errorf("failed to stat symlink target %s: %w", path, statErr)

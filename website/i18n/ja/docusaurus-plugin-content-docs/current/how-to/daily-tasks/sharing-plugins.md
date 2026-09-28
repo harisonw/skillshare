@@ -16,6 +16,8 @@ sidebar_position: 9
 2. Source に複数含まれている場合はプラグインを選択し、対応するツールを選びます。
 3. 変更内容をレビューして適用します。
 
+![Add plugin ダイアログ: 見つかった plugin と、対応・非対応の Target](/img/plugins-add-dialog.png)
+
 ほとんどのユーザーは、リポジトリと Target のチェックボックスだけで十分です。**Advanced options** では
 リリースを選ぶための Git ref を追加できます。Discovery は各 Target のコンポーネントと互換性を別々に
 表示します。OpenCode のエントリが検出できず非対応と表示された場合、その行の **Set entry path** を

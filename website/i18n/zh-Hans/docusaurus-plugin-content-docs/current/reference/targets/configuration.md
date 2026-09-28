@@ -1029,7 +1029,7 @@ targets:
     path: %USERPROFILE%\.claude\skills
 ```
 
-使用 NTFS junction（无需管理员权限）。
+文件夹通过 NTFS junction 链接（无需管理员权限）。单个文件——`merge` mode 下的 agents 和目录类 extras，以及单文件 extras——需要文件 symlink，而这需要 Developer Mode；没有开启时会改为复制。参见 [Windows 疑难解答](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)。
 
 ---
 

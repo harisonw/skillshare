@@ -52,15 +52,40 @@ Interactive selector → Install selected skill
 
 ## 预览
 
-<p align="center">
-  <img src="/img/search-demo.png" alt="search demo" width="720" />
-</p>
+```text
+$ skillshare search runkids
+
+▸  Searching  runkids
+│
+├─ Found 20 skill(s)  (12.0s)
+
+  Select skills to install (0/20 selected)
+
+▌ [ ] skillshare ★ 2.7k
+▌ runkids/skillshare/skills/skillshare
+▌ [ ] skill-sharing ★ 654
+▌ majiayu000/claude-skill-registry/skills/skills/skill-sharing
+▌ [ ] skillshare-changelog ★ 2.7k
+▌ runkids/skillshare/.skillshare/skills/skillshare-changelog
+  …
+
+  20 skills · Page 1 of 2
+  ─────────────────────────────────────────
+  Description:  Manage skills, agents, extras, plugins, and MCP connection settings with the Skillshare CLI.
+                Use when the user asks to configure or run Skillshare, install or sync resources across AI
+                tools, import MCP settings, manage targets, audit skills, recover backups, or troubleshoot...
+
+  Source:       runkids/skillshare/skills/skillshare
+  Stars:        2.7k
+  ↑↓ navigate  ←→ page  space toggle  a all  enter install  s search again  / filter  esc cancel
+```
 
 **操作方式：**
-- `↑` `↓` — 浏览结果
-- `Enter` — 安装选中的 skill
-- `Ctrl+C` — 取消并退出
-- 输入内容以筛选结果
+- `↑` `↓` — 浏览结果；`←` `→` — 翻页
+- `Space` — 选中或取消某个 skill；`a` — 选中所有显示的项目
+- `Enter` — 安装选中的 skills（没有选中时则取消）
+- `/` — 筛选结果；`s` — 重新搜索
+- `Esc` 或 `Ctrl+C` — 取消并退出
 
 安装完成后，你可以继续搜索，或按 `Enter` 退出。
 

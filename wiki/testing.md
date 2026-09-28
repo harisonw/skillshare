@@ -101,6 +101,19 @@ Do not abort the whole runbook after the first failed step. Preserve every step 
 - Clean exact `/tmp` targets at the beginning of a step.
 - Never assume a repository name equals an installed skill name; verify with `ss list --json`.
 
+## Windows Verification
+
+Linux tests cannot show Windows link behavior (junctions, file symlinks, Developer Mode). For changes to links, sync modes, or paths on Windows, run `ai_docs/tests/windows_file_links_runbook.md` on a real Windows machine; its script is `scripts/windows/e2e-file-links.ps1`. With a local UTM guest, `scripts/windows/utm.sh` handles probe, pinned builds, push, and running scripts as the desktop user (full or basic token); the `skillshare-windows-utm` skill walks through automated and hands-on runs.
+
+- Cross-compile in the devcontainer (`GOOS=windows`, `GOARCH` matching the guest). The host drives a UTM guest with `utmctl` (`file push`, `exec`, `file pull`); this is the one allowed host-side execution path, and it never runs the product on macOS.
+- `utmctl exec` is asynchronous and runs as SYSTEM. Scripts write a report ending in `DONE`, and the host polls it with `file pull`, which exits 0 even when the file is missing.
+- SYSTEM and administrators can create file symlinks. Run as the desktop user through a scheduled task, and use `runas /trustlevel:0x20000` to test without symlink rights.
+- Isolate under `C:\Users\Public\sstest\` by overriding `USERPROFILE`, `HOME`, `APPDATA`, `LOCALAPPDATA`, and `TEMP`; confirm the config path before any mutating command.
+- Inspect results with `fsutil reparsepoint query` (`0xa0000003` junction, `0xa000000c` symlink) and by reading the file.
+- Clean up with `rmdir /s /q`, which does not follow junctions, and unregister the scheduled tasks.
+
+Report which token (full or basic-user) and architecture each result came from.
+
 ## Frontend and Website Verification
 
 Start the dashboard through the devcontainer `ui` command. Run website package commands according to `website/AGENTS.md`. Visual changes require inspected screenshots in addition to builds and tests. Load `frontend` for design-specific checks.

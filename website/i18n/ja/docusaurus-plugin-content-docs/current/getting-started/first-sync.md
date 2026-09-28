@@ -85,7 +85,32 @@ skillshare sync
 skillshare status
 ```
 
-出力には Source のパス、`synced` と表示されたすべての Target、そしていまインストールした Skill が並ぶはずです。
+```text
+$ skillshare status
+
+Source
+─────────────────────────────────────────
+✓ ~/.config/skillshare/skills (43 skills, 2026-09-28 12:39)
+✓ ~/.config/skillshare/agents (2 agents, 2026-09-28 12:39)
+
+Targets
+─────────────────────────────────────────
+claude
+  skills   merged       [merge] ~/.claude/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
+cursor
+  skills   merged       [merge] ~/.cursor/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
+gemini
+  skills   merged       [merge] ~/.gemini/skills (43 shared, 0 local)
+…
+```
+
+出力には Source のパスとすべての Target が並びます。`merge` モードで同期済みの Target は `merged` と表示され、shared の数にはいまインストールした Skill も含まれます。
+
+ダッシュボード（`skillshare ui`）でも同じ状態をひと目で確認できます。
+
+![初回同期後の Dashboard：1 つの Source がすべての Target につながり、すべて同期済み](/img/web-dashboard-demo.png)
 
 ---
 

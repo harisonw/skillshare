@@ -21,7 +21,27 @@ skillshare update agents --all       # Update all tracked/updatable agents
 - An installed skill has a newer version available
 - You want to re-download a skill from its original source
 
-![update demo](/img/update-skilk-demo.png)
+```text
+$ skillshare update pdf
+
+Updating
+─────────────────────────────────────────
+▸  Source  ~/.config/skillshare/skills
+│
+└─ Items  0 tracked repo(s), 1 skill(s)
+│
+├─ Skill  pdf
+│
+├─ Source  github.com/anthropics/skills/skills/pdf
+│
+└─ ✓ SUCCESS  Updated successfully (1.9s)
+
+- Audit Findings
+→ risk: CLEAN
+
+- Next Steps
+→ Run 'skillshare sync' to distribute changes
+```
 
 ## What Happens
 

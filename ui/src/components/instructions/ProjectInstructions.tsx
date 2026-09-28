@@ -10,10 +10,11 @@ import { useToast } from '../Toast';
 import { useT } from '../../i18n';
 import { queryKeys } from '../../lib/queryKeys';
 import InstructionsEditorDialog from './InstructionsEditorDialog';
-import { formatSize, refreshInstructions } from './instructionsView';
+import ProjectSharedFiles from './ProjectSharedFiles';
+import { instructionsErrorMessage, formatSize, refreshInstructions } from './instructionsView';
 
-/** ⑤ Extras › Instructions (project): one ./AGENTS.md, and whether each target reads it. */
-export default function ProjectInstructions() {
+/** ⑤ Extras › Instructions (project): one ./AGENTS.md, whether each target reads it, and the project's shared files. */
+export default function ProjectInstructions({ creating, setCreating }: { creating: boolean; setCreating: (open: boolean) => void }) {
   const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -22,7 +23,7 @@ export default function ProjectInstructions() {
   const [busy, setBusy] = useState<string | null>(null);
 
   if (isPending) return <PageSkeleton />;
-  if (error) return <div className="ss-note bad"><span className="flex-1">{error.message}</span></div>;
+  if (error) return <div className="ss-note bad"><span className="flex-1">{instructionsErrorMessage(error, t)}</span></div>;
 
   const shim = async (r: ProjectInstructionsReach) => {
     setBusy(r.target);
@@ -31,7 +32,7 @@ export default function ProjectInstructions() {
       toast(t('instructions.project.shimDone', { name: r.target, file: r.file }), 'success');
       refreshInstructions(queryClient);
     } catch (err) {
-      toast((err as Error).message, 'error');
+      toast(instructionsErrorMessage(err, t), 'error');
     } finally {
       setBusy(null);
     }
@@ -86,6 +87,8 @@ export default function ProjectInstructions() {
           ))}
         </div>
       </section>
+
+      <ProjectSharedFiles creating={creating} setCreating={setCreating} />
 
       <div className="ss-note inf">
         <Info size={16} />

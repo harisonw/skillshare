@@ -290,6 +290,9 @@ func (s *Server) syncResources(start time.Time, dryRun, force bool, kind, projec
 					outputExt = spec.OutputExt
 				} else {
 					agentResult, err = ssync.SyncAgents(filteredAgents, agentsSource, agentPath, agentMode, dryRun, force, s.projectRoot)
+					if ssync.EffectiveAgentMode(agentMode) != agentMode {
+						warnings = append(warnings, name+": agents "+ssync.FileLinkFallbackWarning)
+					}
 				}
 				if err != nil {
 					warnings = append(warnings, "agent sync failed for "+name+": "+err.Error())

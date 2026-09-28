@@ -52,15 +52,40 @@ Interactive selector → Install selected skill
 
 ## プレビュー
 
-<p align="center">
-  <img src="/img/search-demo.png" alt="search demo" width="720" />
-</p>
+```text
+$ skillshare search runkids
+
+▸  Searching  runkids
+│
+├─ Found 20 skill(s)  (12.0s)
+
+  Select skills to install (0/20 selected)
+
+▌ [ ] skillshare ★ 2.7k
+▌ runkids/skillshare/skills/skillshare
+▌ [ ] skill-sharing ★ 654
+▌ majiayu000/claude-skill-registry/skills/skills/skill-sharing
+▌ [ ] skillshare-changelog ★ 2.7k
+▌ runkids/skillshare/.skillshare/skills/skillshare-changelog
+  …
+
+  20 skills · Page 1 of 2
+  ─────────────────────────────────────────
+  Description:  Manage skills, agents, extras, plugins, and MCP connection settings with the Skillshare CLI.
+                Use when the user asks to configure or run Skillshare, install or sync resources across AI
+                tools, import MCP settings, manage targets, audit skills, recover backups, or troubleshoot...
+
+  Source:       runkids/skillshare/skills/skillshare
+  Stars:        2.7k
+  ↑↓ navigate  ←→ page  space toggle  a all  enter install  s search again  / filter  esc cancel
+```
 
 **操作方法:**
-- `↑` `↓` — 検索結果を移動
-- `Enter` — 選択した Skill をインストール
-- `Ctrl+C` — キャンセルして終了
-- 入力すると結果をフィルタ
+- `↑` `↓` — 検索結果を移動、`←` `→` — ページを切り替え
+- `Space` — Skill を選択または解除、`a` — 表示中の項目をすべて選択
+- `Enter` — 選択した Skill をインストール（何も選択していない場合はキャンセル）
+- `/` — 結果をフィルタ、`s` — 再検索
+- `Esc` または `Ctrl+C` — キャンセルして終了
 
 インストール後、再度検索するか、`Enter` を押して終了できます。
 

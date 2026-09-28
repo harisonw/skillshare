@@ -123,7 +123,7 @@ Agent の sync は、skill と同じく 3 つのモードすべてに対応し�
 
 | モード | 挙動 |
 |------|------|
-| **merge**（デフォルト） | ファイル単位の symlink。Target 内のローカルの agent ファイルは保持されます。 |
+| **merge**（デフォルト） | ファイル単位の symlink。Target 内のローカルの agent ファイルは保持されます。Developer Mode がオフの Windows では agents が代わりにコピーされ、リンクと同じように更新・削除されます（[詳細](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)）。 |
 | **symlink** | agents ディレクトリ全体を symlink します。 |
 | **copy** | Agent ファイルを実ファイルとしてコピーします。 |
 

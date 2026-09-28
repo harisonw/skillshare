@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"skillshare/internal/config"
 	"skillshare/internal/sync"
@@ -31,7 +32,7 @@ type extrasTargetInfo struct {
 
 // buildExtrasListEntries builds list entries for all configured extras.
 // extensionsDir resolves transform extensions (for output_ext-aware status).
-func buildExtrasListEntries(extras []config.ExtraConfig, extrasSource, extensionsDir string, sourceFunc func(extra config.ExtraConfig) string) []extrasListEntry {
+func buildExtrasListEntries(extras []config.ExtraConfig, extrasSource, extensionsDir string, sourceFunc func(extra config.ExtraConfig) string, projectRoot string) []extrasListEntry {
 	entries := make([]extrasListEntry, 0, len(extras))
 
 	for _, extra := range extras {
@@ -53,8 +54,11 @@ func buildExtrasListEntries(extras []config.ExtraConfig, extrasSource, extension
 		}
 
 		for _, t := range extra.Targets {
-			m := sync.EffectiveMode(t.Mode)
+			m := sync.ExtraTargetMode(t.Mode, extra.File != "")
 			resolvedPath := config.ExpandPath(t.Path)
+			if projectRoot != "" && !filepath.IsAbs(resolvedPath) {
+				resolvedPath = filepath.Join(projectRoot, resolvedPath)
+			}
 			ti := extrasTargetInfo{
 				Path:      t.Path,
 				Mode:      m,
@@ -169,12 +173,17 @@ func cmdExtrasList(args []string) error {
 		configPath = config.ConfigPath()
 	}
 
+	root := ""
+	if mode == modeProject {
+		root = cwd
+	}
+
 	if jsonOutput {
 		if len(extras) == 0 {
 			fmt.Println("[]")
 			return nil
 		}
-		entries := buildExtrasListEntries(extras, extrasSource, extensionsDir, sourceFunc)
+		entries := buildExtrasListEntries(extras, extrasSource, extensionsDir, sourceFunc, root)
 		data, _ := json.MarshalIndent(entries, "", "  ")
 		fmt.Println(string(data))
 		return nil
@@ -206,7 +215,7 @@ func cmdExtrasList(args []string) error {
 					es = c.Sources.Extras
 				}
 			}
-			return buildExtrasListEntries(ex, es, extensionsDir, sourceFunc), nil
+			return buildExtrasListEntries(ex, es, extensionsDir, sourceFunc, root), nil
 		}
 		return runExtrasListTUI(loadFn, modeLabel, cfg, projCfg, cwd, configPath, sourceFunc)
 	}
@@ -218,7 +227,7 @@ func cmdExtrasList(args []string) error {
 	}
 
 	// Plain text output
-	entries := buildExtrasListEntries(extras, extrasSource, extensionsDir, sourceFunc)
+	entries := buildExtrasListEntries(extras, extrasSource, extensionsDir, sourceFunc, root)
 	ui.Header(ui.WithModeLabel("Extras"))
 
 	for i, entry := range entries {
@@ -239,7 +248,7 @@ func cmdExtrasList(args []string) error {
 			switch t.Status {
 			case "synced":
 				icon, color = "✓", ui.Green
-			case "drift":
+			case "drift", "invalid mode":
 				icon, color = "!", ui.Yellow
 			case "not synced":
 				icon, color = "✗", ui.Yellow

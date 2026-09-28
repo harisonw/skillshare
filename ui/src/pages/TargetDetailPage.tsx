@@ -19,7 +19,7 @@ import TargetInstructions from '../components/instructions/TargetInstructions';
 import { mcpClient, serverCount } from '../components/mcp/mcpView';
 import { refreshTargets } from '../components/targets/targetView';
 import { queryKeys, staleTimes } from '../lib/queryKeys';
-import { shortenHome } from '../lib/paths';
+import { fileName, shortenHome } from '../lib/paths';
 import { useT } from '../i18n';
 
 type Kind = 'skill' | 'agent';
@@ -127,14 +127,15 @@ function TargetEditor({ target }: { target: Target }) {
       : k === 'instructions' ? instructions.data?.read_order.filter((e) => e.read).length
         : entriesOf(k).length) || null;
   // Name the tab after the file this target actually reads (CLAUDE.md, GEMINI.md, …).
-  const instructionsTab = instructions.data?.supported && instructions.data.path ? instructions.data.path.split('/').pop() : 'AGENTS.md';
-  const subtitle = tab === 'mcp' ? mcpPath ?? '' : tab === 'instructions' ? instructions.data?.path ?? '' : agent ? target.agentPath ?? '' : target.path;
+  const instructionsTab = instructions.data?.supported && instructions.data.path ? fileName(instructions.data.path) : 'AGENTS.md';
+  // The instructions tab shows its file path in the panel, for whichever tool is picked.
+  const subtitle = tab === 'mcp' ? mcpPath ?? '' : tab === 'instructions' ? '' : agent ? target.agentPath ?? '' : target.path;
   return (
     <div className="animate-fade-in">
       <PageHeader
         crumbs={[{ label: t('targets.title'), to: '/targets' }, { label: target.name }]}
         title={target.name}
-        subtitle={<span className="font-mono">{shortenHome(subtitle)}</span>}
+        subtitle={subtitle && <span className="font-mono">{shortenHome(subtitle)}</span>}
         actions={
           <>
             {tab === 'skill' && <Link to={`/skills?tab=analyze&target=${encodeURIComponent(target.name)}`} className="ss-btn ghost">{t('analyze.open')}</Link>}

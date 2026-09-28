@@ -2,6 +2,5 @@
 
 package utils
 
-func isWindowsReparsePoint(path string) bool {
-	return false
-}
+// platformIsJunction returns false: junctions exist only on Windows.
+func platformIsJunction(string) bool { return false }

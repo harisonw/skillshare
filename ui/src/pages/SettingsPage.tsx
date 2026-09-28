@@ -33,12 +33,9 @@ export const SETTINGS_TABS = [
 
 export function SettingsTabs({ current }: { current: string }) {
   const t = useT();
-  const { isProjectMode } = useAppContext();
-  // A project keeps its skills in its own version control, so there is nothing to back up here.
-  const tabs = isProjectMode ? SETTINGS_TABS.filter((tab) => tab.key !== 'backup') : SETTINGS_TABS;
   return (
     <nav className="ss-tabs" aria-label={t('layout.nav.settings')}>
-      {tabs.map((tab) => (
+      {SETTINGS_TABS.map((tab) => (
         <Link key={tab.key} to={tab.to} className={current === tab.key ? 'on' : ''} aria-current={current === tab.key ? 'page' : undefined}>
           {t(tab.labelKey)}
         </Link>

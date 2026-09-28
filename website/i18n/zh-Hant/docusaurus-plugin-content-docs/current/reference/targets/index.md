@@ -50,6 +50,10 @@ flowchart LR
 skillshare target list
 ```
 
+dashboard 的 **Targets** 頁面會列出同樣的清單與每個 target 的狀態：
+
+![Targets 頁面列出每個 Agent 的狀態與 MCP server 數量](/img/targets-list.png)
+
 ### 顯示 Target 詳細資訊
 
 ```bash

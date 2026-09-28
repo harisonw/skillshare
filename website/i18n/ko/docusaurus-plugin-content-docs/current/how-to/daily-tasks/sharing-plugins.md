@@ -16,6 +16,8 @@ Skillshare는 그 패키지를 온전히 유지하면서 어떤 도구가 그것
 2. Source에 여러 개가 있으면 플러그인을 선택한 다음 호환되는 도구를 선택합니다.
 3. 변경 사항을 검토하고 적용합니다.
 
+![Add plugin 대화 상자: 발견된 plugin과 호환·미지원 target](/img/plugins-add-dialog.png)
+
 대부분의 사용자는 저장소와 Target 체크박스만 있으면 됩니다. **Advanced options**에서는
 릴리스를 선택할 수 있는 Git ref를 추가합니다. Discovery는 각 Target의 구성 요소와
 호환성을 개별적으로 보여줍니다. OpenCode의 항목을 감지하지 못해 지원되지 않는다고

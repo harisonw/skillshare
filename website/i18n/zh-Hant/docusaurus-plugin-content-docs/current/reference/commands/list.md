@@ -19,7 +19,38 @@ skillshare list --json       # 供 CI/腳本使用的 JSON 輸出
 - 檢查哪些 skills 是 tracked repos、哪些是 local
 - 在清理前稽核你的 skill 收藏
 
-![list demo](/img/list-demo.png)
+```text
+skillshare list --no-tui
+
+Installed skills
+─────────────────────────────────────────
+  _superpowers/skills/
+    → brainstorming                   tracked: _superpowers
+    → dispatching-parallel-agents     tracked: _superpowers
+    → systematic-debugging            tracked: _superpowers
+    …
+
+  frontend/
+    → react-components  local
+
+  web/
+    → accessibility      github.com/addyosmani/web-quality-skills/skills...
+    → core-web-vitals    github.com/addyosmani/web-quality-skills/skills...
+    …
+
+  → docx                   github.com/anthropics/skills/skills/docx
+  → frontend-design        github.com/anthropics/skills/skills/frontend-de...
+  → pdf                    github.com/anthropics/skills/skills/pdf
+  → skill-creator          github.com/anthropics/skills/skills/skill-creator
+  → skillshare             github.com/runkids/skillshare/skills/skillshare
+  …
+
+Tracked repositories
+─────────────────────────────────────────
+  ✓ _superpowers         15 skills, up-to-date
+
+→ Use --verbose for more details
+```
 
 ## 互動式 TUI
 

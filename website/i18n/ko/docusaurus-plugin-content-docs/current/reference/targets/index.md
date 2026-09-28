@@ -50,6 +50,10 @@ flowchart LR
 skillshare target list
 ```
 
+대시보드의 **Targets** 페이지는 같은 목록을 각 Target의 상태와 함께 보여 줍니다.
+
+![각 Agent의 상태와 MCP 서버 수를 보여 주는 Targets 페이지](/img/targets-list.png)
+
 ### Show target details
 
 ```bash

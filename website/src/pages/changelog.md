@@ -9,6 +9,112 @@ All notable changes to skillshare are documented here. For the full commit histo
 
 ---
 
+## [0.21.13] - 2026-09-28
+
+### New Features
+
+#### Dashboard
+
+- **Choose how each tool gets a shared AGENTS.md** — on **Extras → AGENTS.md**, every connected tool now has a mode dropdown: `import` adds one `@import` line and keeps your own lines, `symlink` links the file, and `copy` writes a copy. Saving the shared file in the dashboard updates the copies right away. Switching back to `import` brings back your own content, including edits you made while in `import` mode. Refs: #299.
+  ```bash
+  skillshare ui
+  ```
+- **See what a restore puts back before it happens** — turning a tool off, or **Restore all**, first shows the file the tool will have afterwards, with a diff against what it has now.
+- **Move a tool's instruction file** — **Change location** on a target's AGENTS.md tab sets a custom path and file name for any supported tool, not only custom targets. A folder is refused, and the option is off while a shared file is connected.
+- **Put a shared AGENTS.md in any folder** — under **Other locations**, **Add location** writes the shared file into a folder that is not in the targets list, under its own name or another one such as `instructions.md`, as `symlink`, `copy` or `import`. Each location has its own mode, and **Remove** shows the restore preview first. In a project, shared files move from the **Folders** tab to the **AGENTS.md** tab, with the same locations relative to the project root. Refs: #299.
+- **Preview everywhere, and Cmd/Ctrl+S on the target page** — every box that shows an AGENTS.md has **Preview** and **Source** (or **Edit**) tabs, long lines wrap, and the shared file's card opens in **Preview**. The target page editor saves with Cmd/Ctrl+S and asks before you leave with unsaved edits.
+- **Update progress** — the **Updates** tab on **Skills** and **Agents** shows a progress bar, marks the row being updated, and moves blocked or failed updates into their own section with a one-line reason.
+
+#### Backups
+
+- **Manage every backup from Settings → Backup** — the tab now has three sections. **Target folders** lists snapshots with a filter by target or agents, and can delete one. **Files** lists each AGENTS.md, CLAUDE.md or shared-file location skillshare backed up before rewriting it, with each version's reason (converted, `@AGENTS.md` added, edited, collected, overwritten…), a diff preview, and restore. **MCP** lists MCP config backups by agent and what each changed. The tab now appears in project mode too, scoped to the project. Refs: #299.
+  ```bash
+  skillshare backup files                      # files with backups
+  skillshare backup files show ~/.claude/CLAUDE.md
+  skillshare backup files restore ~/.claude/CLAUDE.md <id>
+  skillshare backup --delete 2026-09-28_10-52-00
+  ```
+  `skillshare backup files` is now a subcommand; to back up a target named `files`, use `skillshare backup -t files`. In a project, `backup --list -p` and `backup --cleanup -p` work on the project's agent snapshots.
+
+#### Extras
+
+- **Attach a single-file extra under another name** — `--add-target` takes `--as` to pick the file name in the target folder, such as `instructions.md` in a notes folder. `skillshare extras <name> --help` now prints that extra's options.
+  ```bash
+  skillshare extras personal --add-target ~/work/notes --as instructions.md --mode symlink
+  ```
+
+### Bug Fixes
+
+#### Windows
+
+- **AGENTS.md no longer shows up as a folder** — single files were linked with directory junctions, which tools read as a folder. Files are now linked with file symlinks, and when Windows can't create them (Developer Mode off and not an administrator), skillshare writes copies and keeps them up to date instead. The dashboard marks `symlink` as unavailable and explains why. Refs: #299.
+- **Junctions are recognized as links again** — since Go 1.23, a junction is no longer reported as a symlink, so skills synced as junctions could be reported as local folders by `status`, `doctor`, `sync` and the dashboard.
+- **The AGENTS.md tab shows the file name on Windows** — a target's instructions tab was labeled with the whole Windows path instead of its file name, such as `CLAUDE.md`.
+
+#### Extras
+
+- **One shared file per linked or copied tool** — a tool whose file is a link to, or a copy of, one shared file could also be connected to another shared file. The import line was then written through the link into the other shared file, and every tool reading it picked it up. The dashboard, **Connect all**, `--add-target`, `--mode` and `sync extras` now refuse this and name the file that holds the tool.
+- **Your files are kept in more cases** — an instruction file that is a link into your dotfiles is left as it was after restore; a missing end marker no longer duplicates the managed block; replacing a link you pointed elsewhere is reported and recorded; and the managed block follows the file's CRLF line endings.
+- **Project imports use relative paths** — in project mode the `@import` line written into a committed `CLAUDE.md` pointed at an absolute path in your home folder. It is now relative to the file, so it works for everyone and after the project moves.
+- **Clearer status for single-file extras** — `extras list -p` no longer reports correctly synced relative links as drift; an edited copy shows `modified` and can be collected from the dashboard; an invalid `mode` in `config.yaml` is no longer shown as healthy; and `sync extras --dry-run` says when an edit would be backed up and replaced.
+- **`sync extras --json` exits with an error when a target fails** — it used to exit 0 while the plain output exited 1.
+
+#### Dashboard
+
+- **Agents backups can be restored from the dashboard** — restoring a `<target>-agents` snapshot failed with "target not found".
+- **Messages about shared AGENTS.md files are translated** — warnings and errors from mode changes, connecting, moving and restoring used to appear in English in every language.
+- **Empty rules folders are left out of the read order** — a target's AGENTS.md tab listed `~/.claude/rules/` even when it held no rule files.
+
+#### CLI
+
+- **`NO_COLOR` is honored everywhere** — `status`, `doctor`, `extras list` and about twenty other commands still printed colors with `NO_COLOR` set.
+
+## [0.21.12] - 2026-09-28
+
+### New Features
+
+#### Dashboard
+
+- **Edit the instruction files of tools that get skills through universal** — Codex, Gemini CLI, Pi and other tools read skills from `~/.agents/skills`, but none of them reads `~/.agents/AGENTS.md`, so with only `universal` as a target their own files, such as `~/.codex/AGENTS.md`, had no page. Universal's **AGENTS.md** tab now has a dropdown with each of these tools that is installed and isn't a target of its own; pick one to see and edit its file. They also appear in the shared AGENTS.md list under **Extras**, so a shared file can be connected to them. Cline and the Warp Agent CLI read `~/.agents/AGENTS.md` itself, and are now shown as sharing universal's file.
+  ```bash
+  skillshare ui
+  ```
+
+### Bug Fixes
+
+#### Targets
+
+- **Removing a target no longer takes skills away from another target in the same folder** — `codex` and `universal` both write to `~/.agents/skills`. Removing one of them turned the other's synced skills into local copies that skillshare no longer managed. The folder is now left alone while another target still uses it, and `target remove` says so, including with `--dry-run`.
+  ```bash
+  skillshare target remove codex --dry-run
+  ```
+
+#### Upgrade
+
+- **A skill left owned by root now says how to fix it** — an upgrade run with sudo before v0.21.10 wrote the built-in skill as root, and every later upgrade failed with only `permission denied`. The error now includes the `chown` command that gives the skills folder back to you.
+
+## [0.21.11] - 2026-09-27
+
+### New Features
+
+#### Dashboard
+
+- **More tools' instruction files are filled in** — the instruction file tab on a target page now knows the file 22 more targets read, instead of asking you for its path. For example, `universal` reads `~/.agents/AGENTS.md`, `pi` reads `~/.pi/agent/AGENTS.md`, `copilot` reads `~/.copilot/copilot-instructions.md` and `qwen` reads `~/.qwen/QWEN.md`. A file you already have at that path shows up with no setup. The full list is in [Share one AGENTS.md across your tools](https://skillshare.runkids.cc/docs/how-to/daily-tasks/sharing-instructions/).
+  ```bash
+  skillshare ui
+  ```
+
+### Bug Fixes
+
+#### Dashboard
+
+- **Reloading a page other than the first one no longer hangs** — opening or refreshing an address such as `/targets/claude` asked for the page's scripts in the wrong folder, so it stayed on its loading placeholder and the browser console showed `Failed to load module script` errors.
+
+#### Plugins
+
+- **Opening a plugin no longer downloads its source again** — expanding a plugin to see which other Agents can take it cloned its whole repository every time, which could take tens of seconds. Skillshare now reads the copy it reviewed when the plugin was added, and downloads the source only if that copy was changed.
+- **Clearer messages while a plugin source is read** — when a source can't be reached over the network, or the repository or branch doesn't exist, the dashboard now says which, instead of a general git failure. It also says when you are offline, and when reading a source or asking an Agent's CLI is taking a while. For example, `codex plugin list` can wait on Codex's remote marketplace; Skillshare waits up to 90 seconds for each Agent.
+
 ## [0.21.10] - 2026-09-27
 
 ### New Features

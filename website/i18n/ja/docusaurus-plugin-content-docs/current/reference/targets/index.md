@@ -50,6 +50,10 @@ flowchart LR
 skillshare target list
 ```
 
+ダッシュボードの **Targets** ページには、同じ一覧が各 Target の状態とともに表示されます。
+
+![各 Agent の状態と MCP サーバー数を一覧表示する Targets ページ](/img/targets-list.png)
+
 ### Target の詳細を表示する
 
 ```bash

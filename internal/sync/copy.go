@@ -387,7 +387,7 @@ func DirMaxMtimeWithIgnore(dir string, ignorePatterns []string) (int64, error) {
 		}
 		// Symlink targets can change without updating the link mtime.
 		// Disable mtime fast-path for symlink-containing skills.
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(path, info.Mode()) {
 			hasSymlink = true
 			return nil
 		}
@@ -490,7 +490,7 @@ func collectChecksumEntries(root, relPrefix string, entries *[]checksumEntry, ac
 
 		// A symlink can point to a directory. In copy mode we dereference
 		// directory symlinks, so checksum should include effective contents.
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(path, info.Mode()) {
 			targetInfo, statErr := os.Stat(path)
 			if statErr != nil {
 				return fmt.Errorf("failed to stat symlink target %s: %w", path, statErr)

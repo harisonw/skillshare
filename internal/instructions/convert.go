@@ -207,7 +207,7 @@ func Apply(changes []Change) error {
 	// Back up everything before touching anything.
 	for _, c := range changes {
 		if c.Status != ChangeNew {
-			if err := syncpkg.BackupFile(c.Path); err != nil {
+			if err := syncpkg.BackupFile(c.Path, syncpkg.BackupReasonConvert); err != nil {
 				return err
 			}
 		}

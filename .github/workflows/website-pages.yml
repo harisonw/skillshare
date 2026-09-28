@@ -6,16 +6,16 @@ on:
     paths:
       - "website/**"
       - ".github/workflows/website-pages.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "website/**"
-      - ".github/workflows/website-pages.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
   deployments: write
+
+# Only the newest push matters: an older run still building would deploy stale docs over it.
+concurrency:
+  group: website-pages
+  cancel-in-progress: true
 
 env:
   CLOUDFLARE_PROJECT_NAME: skillshare
@@ -46,7 +46,6 @@ jobs:
         run: npm run build
 
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: website-build
@@ -54,7 +53,6 @@ jobs:
           retention-days: 1
 
   deploy:
-    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     steps:

@@ -18,7 +18,20 @@ skillshare upgrade --skill      # skill만
 - 내장된 skillshare skill 업데이트가 필요할 때
 - `doctor`가 업데이트 가능 여부를 보고한 후
 
-![upgrade demo](/img/upgrade-demo.png)
+```text
+skillshare upgrade --skill --dry-run
+
+! Dry run mode - no changes will be made
+
+▸  Skill  skillshare
+│
+├─ Current  v0.21.12
+│
+├─ Checking latest version...
+├─ Latest: v0.21.13 (1.0s)
+│
+└─ Action  Would upgrade to v0.21.13
+```
 
 ## 동작 방식
 
@@ -97,6 +110,12 @@ Downloading v0.21.4...  3.2 MB / 9.1 MB
 ```
 
 binary가 보호된 디렉터리(예: `/usr/local/bin`)에 있으면, skillshare는 별도의 접두사 없이 `sudo`로 binary 교체만 수행합니다. 내장 skill, UI 에셋, 로그는 여전히 사용자 권한으로 기록되므로 업그레이드 전체를 `sudo`로 실행하지 마세요. skill 소스에 root 소유 파일이 남아 이후 `git pull`이 `Permission denied`로 실패합니다.
+
+이전 업그레이드가 이미 그런 파일을 남겼다면 내장 skill 업데이트가 `permission denied`로 실패하며, 오류 메시지에 skill 소스를 다시 사용자 소유로 돌리는 명령이 표시됩니다. 예:
+
+```bash
+sudo chown -R "$(id -un)" ~/.config/skillshare/skills
+```
 
 비밀번호를 입력할 터미널이 없는 경우(대시보드의 **지금 업데이트** 버튼, CI)에는 입력을 기다리지 않고 업그레이드가 즉시 중단되며, 터미널에서 `skillshare upgrade`를 실행하라고 안내합니다. 캐시된 `sudo` 자격 증명이나 `NOPASSWD` 설정이 있으면 프롬프트 없이 업그레이드됩니다.
 

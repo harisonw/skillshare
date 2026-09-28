@@ -85,7 +85,32 @@ Every configured target now points at your source.
 skillshare status
 ```
 
-The output should show the source path, every target marked `synced`, and the skill you just installed.
+```text
+$ skillshare status
+
+Source
+─────────────────────────────────────────
+✓ ~/.config/skillshare/skills (43 skills, 2026-09-28 12:39)
+✓ ~/.config/skillshare/agents (2 agents, 2026-09-28 12:39)
+
+Targets
+─────────────────────────────────────────
+claude
+  skills   merged       [merge] ~/.claude/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
+cursor
+  skills   merged       [merge] ~/.cursor/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
+gemini
+  skills   merged       [merge] ~/.gemini/skills (43 shared, 0 local)
+…
+```
+
+The output shows the source path and every target. A synced target in `merge` mode reads `merged`, and its shared count includes the skill you just installed.
+
+The dashboard (`skillshare ui`) shows the same state at a glance:
+
+![Dashboard after the first sync: one source connected to every target, all in sync](/img/web-dashboard-demo.png)
 
 ---
 

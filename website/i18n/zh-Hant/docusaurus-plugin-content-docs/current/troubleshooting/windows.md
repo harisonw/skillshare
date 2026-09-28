@@ -26,9 +26,9 @@ irm https://raw.githubusercontent.com/runkids/skillshare/main/install.ps1 | iex
 
 ### skillshare 需要系統管理員權限嗎？
 
-**不需要。** skillshare 使用 NTFS junction 取代 symlink，不需要系統管理員權限。
+**不需要。** 資料夾（skills，以及 `symlink` 模式的 agents 或 extras）以 NTFS junction 連結。NTFS junction 對目錄的作用類似 symlink，不需要系統管理員權限。
 
-NTFS junction 對目錄的作用類似 symlink，但所有使用者都能使用。
+單一檔案無法用 junction 連結。會連結檔案的模式——`merge` 模式的 agents、`merge` 模式下目錄型 extra 的檔案，以及單一檔案 extras（例如共用 `AGENTS.md`）——使用的是真正的 symlink，這需要[開發人員模式](#file-links-need-windows-developer-mode-copying-instead)（或系統管理員身分的 shell）。沒有開啟時，skillshare 會改為複製這些檔案。
 
 ---
 
@@ -117,11 +117,29 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 2. 檢查防毒軟體是否封鎖
 3. 以系統管理員身分執行 PowerShell（很少需要）
 
+### `file links need Windows Developer Mode; copying instead` {#file-links-need-windows-developer-mode-copying-instead}
+
+**原因：** Windows 只有在開啟開發人員模式時（或從系統管理員身分的 shell）才允許建立檔案 symlink。`merge` 模式的 agents、`merge` 模式的目錄型 extras，以及單一檔案 extras（例如共用 `AGENTS.md`）都會連結單一檔案，所以沒有開發人員模式時，`sync` 會改為複製它們，並顯示這一行。`status`、`doctor` 與 `extras list` 會把這些 target 顯示為 `copy`。
+
+這些副本會被追蹤，所以對 sync 來說，它們的行為仍然和連結一樣：
+
+- Source 變更時會更新它們，source 被移除時也會移除它們。
+- 你自己在 target 中建立的檔案不會被動到，與 `merge` 模式相同。
+- 檔案連結可用後，下一次 sync 會把副本換成連結。
+
+**解決方法：** 不需要做任何事；副本會繼續正常運作。若想改用連結，請開啟開發人員模式（Windows 11：**設定 → 系統 → 開發人員專用 → 開發人員模式**；Windows 10：**設定 → 更新與安全性 → 開發人員專用**），然後再執行一次 `skillshare sync --all`。如果 `skillshare ui` 正在執行，請重新啟動它。
+
+內容相同的本機檔案會顯示為 `local preserved`；`sync extras` 不會為它們建議使用 `--force`。它們仍是本機檔案，不是受管理的連結。
+
+### Agent 檔案或 AGENTS.md 顯示為資料夾圖示且無法讀取 {#agent-files-or-agentsmd-show-a-folder-icon-and-cant-be-read}
+
+**原因：** 舊版本用目錄 junction 連結單一檔案。檔案總管會把該檔案顯示成資料夾，工具也讀不到它。
+
+**解決方法：** 執行 `skillshare sync --all`（或 `skillshare sync agents` / `skillshare sync extras`）。Sync 會把這些損壞的連結換成檔案 symlink；關閉開發人員模式時則換成副本。在 dashboard 的 **AGENTS.md** 分頁上，受影響的 target 會顯示警告；把它切換成 `copy` 也能修正。
+
 ### `symlinks not working`
 
-**原因：** 你看到的是 symlink 而非 junction。
-
-**注意：** skillshare 在 Windows 上使用 NTFS junction，而非 symlink。如果你看到 symlink 相關的錯誤，請確認你使用的是 Windows 版本的 skillshare。
+**注意：** 在 Windows 上，skillshare 以 NTFS junction 連結資料夾，以 symlink 連結單一檔案。如果你看到 symlink 相關的錯誤，請確認你使用的是 Windows 版本的 skillshare。
 
 ### Antigravity 出現 `Incorrect function`
 

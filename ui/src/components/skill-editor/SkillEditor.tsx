@@ -237,7 +237,7 @@ export default function SkillEditor({ resource, docName, initialContent, onBack,
           <div className="flex h-8 items-center gap-3">
             <h2 className="ss-h2">{t('skillEditor.body')}</h2>
             <span className={`ss-st ${tokens > TOKEN_BUDGET ? 'warn' : 'ok'}`}>
-              {t(tokens > TOKEN_BUDGET ? 'skillEditor.overBudget' : 'skillEditor.underBudget', { tokens: compact.format(tokens), budget: compact.format(TOKEN_BUDGET) })}
+              {t(tokens > TOKEN_BUDGET ? 'skillEditor.overBudget' : tokens === 1 ? 'skillEditor.underBudget.one' : 'skillEditor.underBudget.other', { tokens: compact.format(tokens), budget: compact.format(TOKEN_BUDGET) })}
             </span>
             <span className="flex-1" />
             <SegmentedControl

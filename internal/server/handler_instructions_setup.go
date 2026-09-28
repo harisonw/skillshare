@@ -2,7 +2,9 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -59,12 +61,21 @@ func (s *Server) handlePutTargetInstructionsSetup(w http.ResponseWriter, r *http
 		Import bool   `json:"import"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_json", "invalid JSON body", map[string]string{})
 		return
 	}
 	ic := &config.TargetInstructionsConfig{Path: strings.TrimSpace(body.Path), Import: body.Import}
 	if err := config.ValidateTargetInstructions(ic, s.IsProjectMode()); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		code := "instructions_path_absolute"
+		switch {
+		case ic.Path == "":
+			code = "instructions_path_empty"
+		case strings.HasSuffix(ic.Path, "/") || strings.HasSuffix(ic.Path, `\`):
+			code = "instructions_path_directory"
+		case s.IsProjectMode():
+			code = "instructions_path_relative"
+		}
+		writeCodedError(w, http.StatusBadRequest, code, err.Error(), map[string]string{"path": ic.Path})
 		return
 	}
 
@@ -72,11 +83,11 @@ func (s *Server) handlePutTargetInstructionsSetup(w http.ResponseWriter, r *http
 	defer s.mu.Unlock()
 	tc, found := s.cfg.Targets[name]
 	if !found {
-		writeError(w, http.StatusNotFound, "target not found: "+name)
+		writeCodedError(w, http.StatusNotFound, "instructions_target_not_found", "target not found: "+name, map[string]string{"target": name})
 		return
 	}
 	if tc.ProjectRoot() != "" {
-		writeError(w, http.StatusBadRequest, name+" belongs to a project; edit the project instead")
+		writeCodedError(w, http.StatusBadRequest, "instructions_project_target", name+" belongs to a project; edit the project instead", map[string]string{"target": name})
 		return
 	}
 	// Shared files are attached to the current path; moving it would strand them.
@@ -84,6 +95,10 @@ func (s *Server) handlePutTargetInstructionsSetup(w http.ResponseWriter, r *http
 	shared := s.attachedShared(name)
 	tc.Instructions = ic
 	next, _ := config.TargetInstructions(name, tc, s.IsProjectMode())
+	if info, err := os.Stat(instructions.Resolve(next, s.projectRoot).Path); err == nil && info.IsDir() {
+		writeCodedError(w, http.StatusBadRequest, "instructions_path_directory", fmt.Sprintf("instructions.path %q must name a file, not a directory", ic.Path), map[string]string{"path": ic.Path})
+		return
+	}
 	if hadFile && len(shared) > 0 && filepath.Clean(old.Path) != filepath.Clean(instructions.Resolve(next, s.projectRoot).Path) {
 		writeInstructionsInUse(w, name)
 		return
@@ -93,7 +108,7 @@ func (s *Server) handlePutTargetInstructionsSetup(w http.ResponseWriter, r *http
 	args := map[string]any{"target": name, "path": ic.Path, "import": ic.Import, "scope": "ui"}
 	if err := s.saveAndReloadConfig(); err != nil {
 		s.writeOpsLog("instructions-setup", "error", start, args, err.Error())
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_save_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	s.writeOpsLog("instructions-setup", "ok", start, args, "")
@@ -109,7 +124,7 @@ func (s *Server) handleDeleteTargetInstructionsSetup(w http.ResponseWriter, r *h
 	defer s.mu.Unlock()
 	tc, found := s.cfg.Targets[name]
 	if !found {
-		writeError(w, http.StatusNotFound, "target not found: "+name)
+		writeCodedError(w, http.StatusNotFound, "instructions_target_not_found", "target not found: "+name, map[string]string{"target": name})
 		return
 	}
 	if tc.Instructions == nil {
@@ -125,7 +140,7 @@ func (s *Server) handleDeleteTargetInstructionsSetup(w http.ResponseWriter, r *h
 	args := map[string]any{"target": name, "scope": "ui"}
 	if err := s.saveAndReloadConfig(); err != nil {
 		s.writeOpsLog("instructions-setup-remove", "error", start, args, err.Error())
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_save_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	s.writeOpsLog("instructions-setup-remove", "ok", start, args, "")

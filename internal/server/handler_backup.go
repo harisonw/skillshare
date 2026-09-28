@@ -2,12 +2,16 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"skillshare/internal/backup"
+	"skillshare/internal/config"
+	"skillshare/internal/utils"
 )
 
 type backupInfoJSON struct {
@@ -28,9 +32,38 @@ func toBackupJSON(b backup.BackupInfo) backupInfoJSON {
 	}
 }
 
+// backupDir returns the snapshot directory for the current mode: the global
+// one, or <project>/.skillshare/backups (agents only) in project mode.
+func (s *Server) backupDir() string {
+	if s.IsProjectMode() {
+		return backup.ProjectBackupDir(s.projectRoot)
+	}
+	return backup.BackupDir()
+}
+
+// backupRestoreDest maps a snapshot entry to the directory it restores into:
+// "<target>-agents" is that target's agents directory, a bare target name its
+// skills directory (global mode only; project snapshots hold agents only).
+func (s *Server) backupRestoreDest(entry string, targets map[string]config.TargetConfig) (string, bool) {
+	if name, ok := backup.AgentsEntryTarget(entry); ok {
+		if t, found := targets[name]; found {
+			if p := resolveAgentPath(t, s.builtinAgentTargets(), name, s.IsProjectMode()); p != "" {
+				return p, true
+			}
+		}
+	}
+	if s.IsProjectMode() {
+		return "", false
+	}
+	if t, ok := targets[entry]; ok {
+		return t.SkillsConfig().Path, true
+	}
+	return "", false
+}
+
 // handleListBackups returns all backups
 func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
-	backups, err := backup.List()
+	backups, err := backup.ListInDir(s.backupDir())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -41,7 +74,7 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
 		items = append(items, toBackupJSON(b))
 	}
 
-	total, _ := backup.TotalSize()
+	total, _ := backup.TotalSizeInDir(s.backupDir())
 	writeJSON(w, map[string]any{
 		"backups":        items,
 		"totalSizeBytes": total,
@@ -60,7 +93,23 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&body)
 
 	targets := make(map[string]string)
-	if body.Target != "" {
+	if s.IsProjectMode() {
+		// Project snapshots hold agents only, as with `skillshare backup agents -p`.
+		builtin := s.builtinAgentTargets()
+		for name, t := range s.cfg.Targets {
+			entry := name + backup.AgentsEntrySuffix
+			if body.Target != "" && body.Target != name && body.Target != entry {
+				continue
+			}
+			if p := resolveAgentPath(t, builtin, name, true); p != "" {
+				targets[entry] = p
+			}
+		}
+		if body.Target != "" && len(targets) == 0 {
+			writeError(w, http.StatusBadRequest, "target not found: "+body.Target)
+			return
+		}
+	} else if body.Target != "" {
 		t, ok := s.cfg.Targets[body.Target]
 		if !ok {
 			writeError(w, http.StatusBadRequest, "target not found: "+body.Target)
@@ -73,9 +122,14 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	names := make([]string, 0, len(targets))
+	for name := range targets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 	var created []string
-	for name, path := range targets {
-		bp, err := backup.Create(name, path)
+	for _, name := range names {
+		bp, err := backup.CreateInDir(s.backupDir(), name, targets[name])
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "backup failed for "+name+": "+err.Error())
 			return
@@ -105,7 +159,7 @@ func (s *Server) handleCleanupBackups(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 
 	cfg := backup.DefaultCleanupConfig()
-	removed, err := backup.Cleanup(cfg)
+	removed, err := backup.CleanupInDir(s.backupDir(), cfg)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -144,15 +198,15 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify target exists in config
-	t, ok := s.cfg.Targets[body.Target]
+	// Resolve where the snapshot entry restores to
+	targetPath, ok := s.backupRestoreDest(body.Target, s.cfg.Targets)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "target not found: "+body.Target)
 		return
 	}
 
 	// Find backup
-	bk, err := backup.GetBackupByTimestamp(body.Timestamp)
+	bk, err := backup.GetBackupByTimestampInDir(s.backupDir(), body.Timestamp)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "backup not found: "+err.Error())
 		return
@@ -161,7 +215,6 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	opts := backup.RestoreOptions{Force: body.Force}
 
 	// Validate first
-	targetPath := t.SkillsConfig().Path
 	if err := backup.ValidateRestore(bk.Path, body.Target, targetPath, opts); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
@@ -208,27 +261,26 @@ func (s *Server) handleValidateRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, ok := targets[body.Target]
+	tPath, ok := s.backupRestoreDest(body.Target, targets)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "target not found: "+body.Target)
 		return
 	}
 
-	bk, err := backup.GetBackupByTimestamp(body.Timestamp)
+	bk, err := backup.GetBackupByTimestampInDir(s.backupDir(), body.Timestamp)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "backup not found: "+err.Error())
 		return
 	}
 
 	backupSize := backup.Size(filepath.Join(bk.Path, body.Target))
-	tPath := t.SkillsConfig().Path
 
 	// Check destination state with Lstat to detect symlinks
 	isSymlink := false
 	var conflicts []string
 	info, err := os.Lstat(tPath)
 	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(tPath, info.Mode()) {
 			isSymlink = true
 		} else if info.IsDir() {
 			entries, _ := os.ReadDir(tPath)
@@ -254,4 +306,33 @@ func (s *Server) handleValidateRestore(w http.ResponseWriter, r *http.Request) {
 		"backupSizeBytes":  backupSize,
 		"currentIsSymlink": isSymlink,
 	})
+}
+
+// handleDeleteBackup removes one snapshot folder — DELETE /api/backups/{timestamp}
+func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ts := r.PathValue("timestamp")
+	if !backup.ValidTimestamp(ts) {
+		writeError(w, http.StatusBadRequest, "invalid backup timestamp: "+ts)
+		return
+	}
+	if err := backup.DeleteInDir(s.backupDir(), ts); err != nil {
+		if errors.Is(err, backup.ErrNotFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		s.writeOpsLog("backup", "error", start, map[string]any{"action": "delete", "timestamp": ts, "scope": "ui"}, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	s.writeOpsLog("backup", "ok", start, map[string]any{
+		"action":    "delete",
+		"timestamp": ts,
+		"scope":     "ui",
+	}, "")
+	writeJSON(w, map[string]any{"success": true})
 }

@@ -139,7 +139,7 @@ func buildProjectAgentStatusJSON(rt *projectRuntime) *statusJSONAgents {
 			continue
 		}
 
-		linked := countLinkedAgents(agentPath)
+		linked := countLinkedAgents(agentPath, agents)
 		result.Targets = append(result.Targets, statusJSONAgentTarget{
 			Name:     entry.Name,
 			Path:     agentPath,
@@ -221,8 +221,9 @@ func printProjectTargetsStatus(runtime *projectRuntime, discovered []sync.Discov
 	builtinAgents := config.ProjectAgentTargets()
 	agentsExist := dirExists(runtime.agentsSourcePath)
 	var agentCount int
+	var agents []resource.DiscoveredResource
 	if agentsExist {
-		agents, _ := (resource.AgentKind{}).Discover(runtime.agentsSourcePath)
+		agents, _ = (resource.AgentKind{}).Discover(runtime.agentsSourcePath)
 		agentCount = len(agents)
 	}
 
@@ -269,14 +270,15 @@ func printProjectTargetsStatus(runtime *projectRuntime, discovered []sync.Discov
 		if agentsExist {
 			agentPath := resolveProjectAgentTargetPath(entry, builtinAgents, runtime.root)
 			if agentPath != "" {
-				linked := countLinkedAgents(agentPath)
-				agentStatus := "merged"
+				preserved := 0
+				linked := countLinkedAgents(agentPath, agents, &preserved)
+				agentMode, agentStatus := agentStatusLabel(entry.AgentsConfig())
 				driftLabel := ""
 				if linked != agentCount && agentCount > 0 {
 					agentStatus = "drift"
 					driftLabel = ui.Yellow + " (drift)" + ui.Reset
 				}
-				printTargetSubItem("agents", agentStatus, fmt.Sprintf("[merge] %d/%d linked%s", linked, agentCount, driftLabel))
+				printTargetSubItem("agents", agentStatus, fmt.Sprintf("[%s] %s%s", agentMode, agentCountLabel(linked, agentCount, preserved), driftLabel))
 			}
 		}
 	}

@@ -17,3 +17,8 @@ export function shortenPath(path: string): string {
   if (!/^[~/]/.test(short) || parts.length <= 5) return short;
   return [...parts.slice(0, 2), '…', ...parts.slice(-2)].join('/');
 }
+
+/** Last segment of a local path, splitting on / and on Windows \ alike. */
+export function fileName(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
+}

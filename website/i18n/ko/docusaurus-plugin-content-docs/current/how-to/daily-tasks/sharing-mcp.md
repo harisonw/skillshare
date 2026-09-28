@@ -54,6 +54,8 @@ MCP 제공자로부터 받은 URL이나 JSON을 붙여넣고, 이름을 지정�
 사용합니다. MCP 페이지의 Sync 박스에 있는 **Sync MCP**는 MCP 설정 파일만 작성합니다.
 Sync 페이지에는 Skill, Agent, 추가 항목, MCP를 위한 **Sync all resources**도 있습니다.
 
+![MCP 페이지: server마다 한 행과 해당 Agent, 그리고 Sync 상자](/img/mcp-servers.png)
+
 Config 편집기는 저장 시 두 칸 들여쓰기를 사용해 YAML을 포맷하며 주석을 보존합니다. 필드를
 클릭하면 `mcp`, `sources.mcp`, 연결 필드, 환경 변수 참조를 포함한 설명이 오른쪽 패널에
 표시됩니다.
@@ -68,6 +70,21 @@ Skillshare는 연결을 테스트하거나, 서버 프로그램을 설치하거�
 |---|---|---|
 | 명령과 인자 | `stdio`: Agent가 로컬 프로세스를 시작 | `command: npx`와 `args` |
 | MCP 엔드포인트 URL | Streamable HTTP: Agent가 실행 중인 서비스에 연결 | `url: https://example.com/mcp` |
+
+어느 쪽이든 정의는 한 번만 저장되고, 각 Agent의 자체 파일에 기록됩니다.
+
+```mermaid
+flowchart LR
+    CFG["config.yaml<br/>mcp.servers"]
+    SYNC["skillshare sync mcp"]
+    A["Claude Code<br/>~/.claude.json"]
+    B["Codex<br/>~/.codex/config.toml"]
+    C["Cursor<br/>~/.cursor/mcp.json"]
+    CFG --> SYNC
+    SYNC --> A
+    SYNC --> B
+    SYNC --> C
+```
 
 일반적으로 `transport`를 직접 설정할 필요는 없습니다. Skillshare가 `command`나 `url`로부터
 자동으로 추론합니다. URL은 여러분의 컴퓨터에서 실행 중인 서비스를 가리킬 수도, 원격 서비스를
@@ -221,6 +238,8 @@ skillshare sync mcp
 추가하세요. 각 Agent에 무엇이 기록되는지, 그리고 나머지가 왜 지원되지 않는지는
 [명령어 레퍼런스](/docs/reference/commands/mcp#turn-off-a-global-server-in-one-project)를
 참고하세요.
+
+![프로젝트 MCP 탭: 프로젝트별로 켜고 끄는 전역 server와 프로젝트 전용 server](/img/projects-mcp-tab.png)
 
 ## 제거 및 복원
 

@@ -16,6 +16,8 @@ In the dashboard, open **Plugins → Add plugin**:
 2. Choose a plugin if the source contains several, then select compatible tools.
 3. Review the changes and apply them.
 
+![Add plugin dialog: discovered plugin with compatible and unsupported targets](/img/plugins-add-dialog.png)
+
 Most users only need a repository and target checkboxes. **Advanced options** adds
 a Git ref, to choose a release. Discovery shows each target's components and
 compatibility separately. When OpenCode is listed as unsupported because its entry

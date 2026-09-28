@@ -50,6 +50,10 @@ flowchart LR
 skillshare target list
 ```
 
+The dashboard's **Targets** page shows the same list with each target's status:
+
+![Targets page listing each Agent with status and MCP server count](/img/targets-list.png)
+
 ### Show target details
 
 ```bash

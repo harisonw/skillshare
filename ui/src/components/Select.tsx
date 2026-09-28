@@ -9,6 +9,10 @@ export interface SelectOption {
   icon?: ReactNode;
   /** Heading shown above the first of consecutive options that share it. */
   group?: string;
+  /** Muted text after the label, e.g. "· default". */
+  note?: string;
+  /** Shown but cannot be picked; the description says why. */
+  disabled?: boolean;
 }
 
 interface SelectProps {
@@ -33,6 +37,8 @@ interface SelectProps {
    * otherwise it fills in, shows the value and gets a clear button labelled `clearLabel`.
    */
   chip?: { clearValue: string; clearLabel: string };
+  /** Which trigger edge the menu lines up with; end opens it leftward, for a trigger at the right of a row. */
+  align?: 'start' | 'end';
 }
 
 const selectTriggerSizes = {
@@ -42,13 +48,15 @@ const selectTriggerSizes = {
 
 // Position the dropdown in viewport (fixed) coordinates relative to the trigger.
 interface DropdownPos {
-  left: number;
+  left?: number;
+  /** Set instead of left when the menu lines up with the trigger's right edge. */
+  right?: number;
   minWidth: number;
   top?: number;
   bottom?: number;
 }
 
-export function Select({ label, ariaLabel, value = '', onChange, values, onChangeValues, placeholder, options, className = '', size = 'md', disabled = false, prefix, chip }: SelectProps) {
+export function Select({ label, ariaLabel, value = '', onChange, values, onChangeValues, placeholder, options, className = '', size = 'md', disabled = false, prefix, chip, align = 'start' }: SelectProps) {
   const labelId = useId();
   const [open, setOpen] = useState(false);
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -77,7 +85,8 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
     const spaceBelow = window.innerHeight - rect.bottom;
     const dropUp = spaceBelow < dropdownHeight + 8 && rect.top > dropdownHeight;
 
-    // Horizontal: left-align to the trigger; clamp so the popup never overflows
+    // Horizontal: left-align to the trigger (or right-align with align="end",
+    // so a wide menu grows leftward); clamp so the popup never overflows
     // the right viewport edge.
     let left = rect.left;
     if (left + minWidth > window.innerWidth - 8) {
@@ -85,12 +94,12 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
     }
 
     setPos({
-      left,
+      ...(align === 'end' ? { right: document.documentElement.clientWidth - rect.right } : { left }),
       minWidth,
       top: dropUp ? undefined : rect.bottom + 4,
       bottom: dropUp ? window.innerHeight - rect.top + 4 : undefined,
     });
-  }, [options.length, hasDescriptions]);
+  }, [options.length, hasDescriptions, align]);
 
   // Open the menu, computing position from the live trigger rect first so the
   // portal renders already positioned (no mispositioned flash, no setState in
@@ -140,6 +149,7 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
   }, [open, focusIdx]);
 
   const select = useCallback((val: string) => {
+    if (options.find((o) => o.value === val)?.disabled) return;
     if (values) {
       // Option order, so the saved list does not depend on the click order.
       onChangeValues?.(options.map((o) => o.value).filter((v) => (v === val ? !values.includes(v) : values.includes(v))));
@@ -258,6 +268,7 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
           className={`ss-menu fixed z-[9999] !w-auto overflow-auto animate-dropdown-in ${size === 'sm' ? 'text-xs' : 'text-[13px]'}`}
           style={{
             left: pos.left,
+            right: pos.right,
             top: pos.top,
             bottom: pos.bottom,
             maxHeight: '16rem',
@@ -278,7 +289,8 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
               <li
                 role="option"
                 aria-selected={isSelected}
-                className={`min-h-8 shrink-0 px-2 py-1.5 rounded-[7px] cursor-pointer flex items-center gap-2 ${isFocused ? 'bg-sel text-sel-ink' : isSelected ? 'text-ink' : 'text-ink-2'}`}
+                aria-disabled={opt.disabled || undefined}
+                className={`min-h-8 shrink-0 px-2 py-1.5 rounded-[7px] flex items-center gap-2 ${opt.disabled ? 'cursor-not-allowed text-ink-3' : isFocused ? 'cursor-pointer bg-sel text-sel-ink' : isSelected ? 'cursor-pointer text-ink' : 'cursor-pointer text-ink-2'}`}
                 onMouseEnter={() => setFocusIdx(i)}
                 onMouseDown={(e) => { e.preventDefault(); select(opt.value); }}
               >
@@ -289,9 +301,10 @@ export function Select({ label, ariaLabel, value = '', onChange, values, onChang
                 <span className="flex-1 min-w-0">
                   <span className={`block truncate ${isSelected ? 'font-medium' : ''}`}>
                     {opt.label}
+                    {opt.note && <span className="font-normal opacity-70"> {opt.note}</span>}
                   </span>
                   {opt.description && (
-                    <span className="block text-xs text-ink-3 mt-0.5">
+                    <span className={`block text-xs mt-0.5 ${isFocused && !opt.disabled ? 'opacity-70' : 'text-ink-3'}`}>
                       {opt.description}
                     </span>
                   )}

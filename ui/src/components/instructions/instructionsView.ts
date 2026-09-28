@@ -1,5 +1,10 @@
+import { ApiError } from '../../api/client';
+import type { InstructionsWarning } from '../../api/client';
+import type { useT } from '../../i18n';
 import type { QueryClient } from '@tanstack/react-query';
-import type { InstructionsAssignment, SharedInstructionsFile, SharedInstructionsTarget } from '../../api/client';
+import type { InstructionLocation, InstructionsAssignment, InstructionsEntry, SharedCopyResult, SharedInstructionsFile, SharedInstructionsTarget } from '../../api/client';
+import { fileName, shortenHome } from '../../lib/paths';
+import type { LineDecor } from '../CodeEditor';
 import { queryKeys } from '../../lib/queryKeys';
 
 /** Why a new shared file name would be refused, checked as the user types. Same rule as the server. */
@@ -17,6 +22,18 @@ export function takenName(name: string, taken: string[]): string | undefined {
   return taken.find((x) => x.toLowerCase() === n);
 }
 
+/** Whether name is a folder extra (not a shared instruction file), so a name clash should say so. */
+export const isFolderExtra = (name: string, extras: { name: string; file?: string }[]) =>
+  extras.some((e) => e.name === name && !e.file);
+
+/** A free name for a new shared file made from a target: the target's name, else <name>-2, <name>-3, … */
+export function defaultShareName(target: string, taken: string[]): string {
+  const base = sharedNameProblem(target, []) === 'invalid' ? target.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[^A-Za-z0-9]+/, '') || 'shared' : target;
+  let name = base;
+  for (let n = 2; takenName(name, taken); n++) name = `${base}-${n}`;
+  return name;
+}
+
 /** Why a target's instruction file path would be refused, checked as the user types. Same rule as the server. */
 export function setupPathProblem(path: string, project: boolean): 'directory' | 'absolute' | 'relative' | null {
   const p = path.trim();
@@ -26,6 +43,30 @@ export function setupPathProblem(path: string, project: boolean): 'directory' | 
   if (project) return rooted || p.startsWith('~') ? 'absolute' : null;
   return rooted || p.startsWith('~/') ? null : 'relative';
 }
+
+/** A target's current file written as the location form takes it: ~/… in global mode, relative to projectRoot in a project. */
+export function setupPathOf(path: string, project: boolean, projectRoot = ''): string {
+  if (project) {
+    const root = projectRoot.replace(/\\/g, '/');
+    const absolute = path.replace(/\\/g, '/');
+    return root && absolute.startsWith(`${root}/`) ? absolute.slice(root.length + 1) : path;
+  }
+  const short = shortenHome(path);
+  return short.startsWith('~\\') ? `~/${short.slice(2).replace(/\\/g, '/')}` : short;
+}
+
+/** What saving a shared file did to its copies: targets updated, and problems to show, each named by target. */
+export function saveCopiesSummary(copies: SharedCopyResult[]): { updated: string[]; warnings: string[]; errors: string[] } {
+  return {
+    updated: copies.filter((c) => !c.error).map((c) => c.target),
+    warnings: copies.flatMap((c) => (c.warnings ?? []).map((w) => `${c.target}: ${w}`)),
+    errors: copies.filter((c) => c.error).map((c) => `${c.target}: ${c.error}`),
+  };
+}
+
+/** The read-order entries shown as a chain: files the target reads in turn, without a rules folder that holds no files. */
+export const readChain = (entries: InstructionsEntry[]) =>
+  entries.filter((e) => e.kind !== 'unread' && !(e.kind === 'rules' && !e.count));
 
 /** Refetch everything a change to instruction files can touch. */
 export function refreshInstructions(queryClient: QueryClient) {
@@ -37,6 +78,48 @@ export function refreshInstructions(queryClient: QueryClient) {
 
 /** An @path line: tool-specific import syntax, as the server's ImportLines sees it. */
 export const isImportLine = (text: string) => /^\s*@\S+\s*$/.test(text);
+
+/** 1-based first and last lines of the managed import block (markers included), as the server's ManagedImportLines sees it. */
+export function managedBlock(lines: string[]): [number, number] | null {
+  const begin = lines.findIndex((l) => l.trim() === '<!-- skillshare:instructions:begin -->');
+  if (begin === -1) return null;
+  const end = lines.findIndex((l, i) => i > begin && l.trim() === '<!-- skillshare:instructions:end -->');
+  return end === -1 ? null : [begin + 1, end + 1];
+}
+
+/** The shared file an import line of the managed block points at: its folder under extras. */
+export function sharedOfImport(line: string, names: string[]): string | undefined {
+  const parts = line.trim().slice(1).split(/[\\/]/);
+  return names.find((n) => n === parts[parts.length - 2]);
+}
+
+/**
+ * An instruction file split for preview: the managed import block becomes the
+ * list of what it imports (shared file names where known), and HTML comments,
+ * which Markdown would show as text, are dropped.
+ */
+export function previewParts(content: string, names: string[]): { before: string; imports: string[]; after: string } {
+  const strip = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '');
+  const lines = content.split('\n');
+  const blk = managedBlock(lines);
+  if (!blk) return { before: strip(content), imports: [], after: '' };
+  const imports = lines.slice(blk[0], blk[1] - 1).filter(isImportLine).map((l) => sharedOfImport(l, names) ?? l.trim().slice(1));
+  return { before: strip(lines.slice(0, blk[0] - 1).join('\n')), imports, after: strip(lines.slice(blk[1]).join('\n')) };
+}
+
+/**
+ * Line styling for an instruction file: the managed import block and every
+ * @import line are tinted; each @import line gets note(line, inBlock) at its end.
+ */
+export function importDecor(lines: string[], note: (line: string, inBlock: boolean) => string): LineDecor[] {
+  const imports = new Set(importLines(lines.join('\n')));
+  const blk = managedBlock(lines);
+  return lines.map((line, i) => {
+    const inBlock = blk !== null && i + 1 >= blk[0] && i + 1 <= blk[1];
+    if (imports.has(i + 1)) return { block: true, note: note(line, inBlock) };
+    return inBlock ? { block: true } : null;
+  });
+}
 
 /** 1-based numbers of the @import lines outside code fences. */
 export function importLines(content: string): number[] {
@@ -130,13 +213,20 @@ export const connectExtras = (target: SharedInstructionsTarget, name: string) =>
 export const needsSync = (targets: SharedInstructionsTarget[], name: string) =>
   connectedTo(targets, name).filter((tg) => ['not synced', 'drift'].includes(tg.assigned.find((a) => a.name === name)!.status));
 
-export type ConnectStep = { target: string; extras: string[]; note: 'import' | 'link' | 'switch' | 'tooLong'; other?: string; max?: number };
+export type ConnectStep = { target: string; extras: string[]; note: 'import' | 'link' | 'tooLong' | 'held'; other?: string; max?: number };
 
-/** One step per target that would be connected to file, with what changes for it. */
+/**
+ * One step per target that would be connected to file, with what changes for it.
+ * A target another shared file holds (its file links to or copies that file,
+ * or it is assigned in link or copy mode) is skipped (held): connecting it
+ * would change that file or silently take the target away from it.
+ */
 export function connectPlan(targets: SharedInstructionsTarget[], file: SharedInstructionsFile): ConnectStep[] {
   return targets.filter((tg) => !tg.same_as && !usesOf(tg).includes(file.name)).map((tg) => {
     const step = { target: tg.name, extras: connectExtras(tg, file.name) };
-    if (!tg.import && tg.assigned.length > 0) return { ...step, note: 'switch', other: tg.assigned[0].name };
+    if (tg.linked_shared && tg.linked_shared !== file.name) return { ...step, note: 'held', other: tg.linked_shared };
+    const holder = tg.assigned.find((a) => a.mode !== 'import');
+    if (holder) return { ...step, note: 'held', other: holder.name };
     if (tg.max_chars && file.chars > tg.max_chars) return { ...step, note: 'tooLong', max: tg.max_chars };
     return { ...step, note: tg.import ? 'import' : 'link' };
   });
@@ -155,8 +245,30 @@ export function restorePlan(targets: SharedInstructionsTarget[], name: string): 
   });
 }
 
+export type SharedMode = 'import' | 'symlink' | 'copy';
+export type ModeOption = { mode: SharedMode; isDefault: boolean; blocked?: 'fileLinks' | 'several' };
+
+/** The mode a newly connected target gets: import where the tool reads @import lines, else a link, or a copy when file links are unavailable (Windows without Developer Mode). */
+export const defaultMode = (target: SharedInstructionsTarget, fileLinks: boolean): SharedMode =>
+  (target.import ? 'import' : fileLinks ? 'symlink' : 'copy');
+
+/** The picker's value for an assignment's mode: a single file written with merge is linked, as symlink does. */
+export const pickedMode = (mode: string) => (mode === 'merge' ? 'symlink' : mode);
+
+/** The modes a target can get a shared file with, and why one cannot be picked. A link or copy replaces the whole file, so it holds one shared file only. */
+export function modeOptions(target: SharedInstructionsTarget, fileLinks: boolean): ModeOption[] {
+  const modes: SharedMode[] = target.import ? ['import', 'symlink', 'copy'] : ['symlink', 'copy'];
+  const def = defaultMode(target, fileLinks);
+  return modes.map((mode) => {
+    const blocked = mode !== 'import' && target.assigned.length > 1 ? 'several' : mode === 'symlink' && !fileLinks ? 'fileLinks' : undefined;
+    return blocked ? { mode, isDefault: mode === def, blocked } : { mode, isDefault: mode === def };
+  });
+}
+
 export type RowHint =
   | { kind: 'sameAs'; name: string }
+  | { kind: 'folderLink' }
+  | { kind: 'directory' }
   | { kind: 'notSynced' | 'drift'; mode: string }
   | { kind: 'noSource' }
   | { kind: 'tooLong'; max: number }
@@ -167,6 +279,8 @@ export type RowHint =
 export function rowHint(target: SharedInstructionsTarget, file: SharedInstructionsFile): RowHint | null {
   if (target.same_as) return { kind: 'sameAs', name: target.same_as };
   const a = target.assigned.find((x) => x.name === file.name);
+  if (a?.reason === 'folder_link') return { kind: 'folderLink' };
+  if (a?.reason === 'directory') return { kind: 'directory' };
   if (a?.status === 'not synced' || a?.status === 'drift') return { kind: a.status === 'drift' ? 'drift' : 'notSynced', mode: a.mode };
   if (a?.status === 'no source') return { kind: 'noSource' };
   if (target.max_chars && file.chars > target.max_chars) return { kind: 'tooLong', max: target.max_chars };
@@ -175,5 +289,71 @@ export function rowHint(target: SharedInstructionsTarget, file: SharedInstructio
   return target.import ? { kind: 'alsoUses', names: others } : { kind: 'usesOther', name: others[0] };
 }
 
+/** Other locations a sync would fix: the file or its link is gone, or points elsewhere. */
+export const staleLocations = (locations: InstructionLocation[]) => locations.filter((l) => ['not synced', 'drift'].includes(l.status));
+
+/** The modes a location can get: a folder has no tool deciding for it, so symlink is the default where file links work. */
+export function locationModeOptions(fileLinks: boolean): ModeOption[] {
+  const def: SharedMode = fileLinks ? 'symlink' : 'copy';
+  return (['symlink', 'copy', 'import'] as const).map((mode) => (mode === 'symlink' && !fileLinks
+    ? { mode, isDefault: false, blocked: 'fileLinks' as const } : { mode, isDefault: mode === def }));
+}
+
+/** The file a location writes: the folder as typed, then the custom name or the shared file's own. */
+export function locationFile(folder: string, as: string, file: string): string {
+  const dir = folder.trim().replace(/[\\/]+$/, '');
+  const sep = dir.includes('\\') && !dir.includes('/') ? '\\' : '/';
+  return `${dir}${sep}${as.trim() || file}`;
+}
+
+/** The file a project location writes, relative to the project root: ./docs/ai/AGENTS.md, or ./AGENTS.md for the root. */
+export function projectLocationFile(folder: string, as: string, file: string): string {
+  const dir = folder.trim().replace(/\\/g, '/').replace(/^(\.\/)+/, '').replace(/\/+$/, '');
+  const name = as.trim() || file;
+  if (dir === '' || dir === '.') return `./${name}`;
+  // A path the server will refuse (../x, /x, ~/x) is shown as typed, not as ./../x.
+  return /^(\.\.|\/|~)/.test(dir) ? `${dir}/${name}` : `./${dir}/${name}`;
+}
+
+/** How a location row names its file: relative to the project root in a project, else by its full path. */
+export const locationLabel = (l: InstructionLocation, project: boolean) =>
+  (project ? projectLocationFile(l.path, '', fileName(l.file)) : shortenHome(l.file));
+
+/** A project's shared file named from the project root (.skillshare/extras/…), else by its full path. */
+export function projectSourcePath(path: string): string {
+  const i = path.search(/[\\/]\.skillshare[\\/]/);
+  return i >= 0 ? path.slice(i + 1).replace(/\\/g, '/') : shortenHome(path);
+}
+
+export type LocationHint = 'folderLink' | 'directory' | 'noSource' | 'notSynced' | 'drift' | 'driftImport' | 'import';
+
+/** The one line under a location row: a problem first, else what import leaves in the file. */
+export function locationHint(l: InstructionLocation): LocationHint | null {
+  if (l.reason === 'folder_link') return 'folderLink';
+  if (l.reason === 'directory') return 'directory';
+  if (l.status === 'no source') return 'noSource';
+  // modified: the row shows a note with collect and reapply instead.
+  if (l.status === 'modified') return null;
+  if (l.status === 'not synced') return 'notSynced';
+  if (l.status === 'drift') return l.mode === 'import' ? 'driftImport' : 'drift';
+  return l.mode === 'import' ? 'import' : null;
+}
+
 /** Line count of a file as an editor shows it: a trailing newline does not start a new line. */
 export const lineCount = (content: string) => (content ? content.replace(/\n$/, '').split('\n').length : 0);
+
+/** Translate backend messages while keeping unknown codes readable. */
+export function instructionsWarningMessage(warning: InstructionsWarning, t: ReturnType<typeof useT>): string {
+  const params = Object.fromEntries(Object.entries(warning.params).map(([key, value]) => [key, shortenHome(value)]));
+  return t(`instructions.warning.${warning.code}`, params, warning.message)
+    .replace(/\/(?:Users|home)\/[^/\s]+|[A-Z]:\\Users\\[^\\\s]+/gi, shortenHome);
+}
+
+export function instructionsErrorMessage(error: unknown, t: ReturnType<typeof useT>): string {
+  let message = (error as Error).message;
+  if (error instanceof ApiError && error.code?.startsWith('instructions_')) {
+    const params = Object.fromEntries(Object.entries(error.params ?? {}).map(([key, value]) => [key, typeof value === 'string' ? shortenHome(value) : String(value)]));
+    message = t(`instructions.error.${error.code}`, params, message);
+  }
+  return message.replace(/\/(?:Users|home)\/[^/\s]+|[A-Z]:\\Users\\[^\\\s]+/gi, shortenHome);
+}

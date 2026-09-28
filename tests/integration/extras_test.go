@@ -1453,3 +1453,40 @@ func TestExtrasInit_WithExtrasSource_AutoCreatesDir(t *testing.T) {
 		t.Errorf("default extras dir %s should not exist when extras_source is set", defaultDir)
 	}
 }
+
+// Identical local files are kept; only differing files need --force.
+func TestExtrasSyncPreservedLocalMessage(t *testing.T) {
+	for _, content := range []string{"same", "different"} {
+		t.Run(content, func(t *testing.T) {
+			sb := testutil.NewSandbox(t)
+			defer sb.Cleanup()
+			source := filepath.Join(sb.Home, ".config", "skillshare", "extras", "rules")
+			target := filepath.Join(sb.Home, ".claude", "rules")
+			for _, path := range []string{source, target} {
+				if err := os.MkdirAll(path, 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(source, "a.md"), []byte("same"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(target, "a.md"), []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+			sb.WriteConfig("source: " + sb.SourcePath + "\nextras:\n  - name: rules\n    targets:\n      - path: " + target + "\n        mode: merge\n")
+			result := sb.RunCLI("sync", "extras", "-g")
+			result.AssertSuccess(t)
+			if content == "same" {
+				result.AssertAnyOutputContains(t, "1 local preserved")
+				if strings.Contains(result.Stdout+result.Stderr, "use --force") {
+					t.Fatal(result.Stdout + result.Stderr)
+				}
+			} else {
+				result.AssertAnyOutputContains(t, "1 files skipped (use --force to override)")
+			}
+			if got := sb.ReadFile(filepath.Join(target, "a.md")); got != content {
+				t.Fatalf("local file changed: %q", got)
+			}
+		})
+	}
+}

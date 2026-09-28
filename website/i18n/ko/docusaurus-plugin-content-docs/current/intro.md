@@ -79,7 +79,7 @@ Source에서 편집하면 모든 Target이 갱신됩니다. Target에서 편집�
 | 플랫폼 | Source 경로 | 링크 방식 |
 |----------|-------------|-----------|
 | macOS/Linux | `~/.config/skillshare/skills/` | Symlink |
-| Windows | `%AppData%\skillshare\skills\` | NTFS Junction |
+| Windows | `%AppData%\skillshare\skills\` | 폴더는 NTFS Junction, 단일 파일은 symlink (Developer Mode 필요, 없으면 복사) |
 
 ## 다음 단계
 

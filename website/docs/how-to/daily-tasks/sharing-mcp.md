@@ -58,6 +58,8 @@ dashboard uses the same source, validation, preview and conflict rules as the
 CLI. **Sync MCP**, in the MCP page's Sync box, writes the MCP config files only. The
 Sync page also has **Sync all resources** for skills, agents, extras and MCP.
 
+![MCP page: one row per server with its Agents, and the Sync box](/img/mcp-servers.png)
+
 The Config editor formats YAML when you save, using two-space indentation and
 preserving comments. Click a field to see its explanation in the right panel,
 including `mcp`, `sources.mcp`, connection fields and environment references.
@@ -73,6 +75,21 @@ call has succeeded.
 |---|---|---|
 | A command and arguments | `stdio`: the Agent starts a local process | `command: npx` plus `args` |
 | An MCP endpoint URL | Streamable HTTP: the Agent connects to a running service | `url: https://example.com/mcp` |
+
+Either way, the definition is stored once and written into each Agent's own file:
+
+```mermaid
+flowchart LR
+    CFG["config.yaml<br/>mcp.servers"]
+    SYNC["skillshare sync mcp"]
+    A["Claude Code<br/>~/.claude.json"]
+    B["Codex<br/>~/.codex/config.toml"]
+    C["Cursor<br/>~/.cursor/mcp.json"]
+    CFG --> SYNC
+    SYNC --> A
+    SYNC --> B
+    SYNC --> C
+```
 
 You usually do not need to set `transport`; Skillshare infers it from `command`
 or `url`. A URL can point to a service on your own computer or a remote service.
@@ -229,6 +246,8 @@ This works with Claude Code, OpenCode, Kilo Code, and Pi with `pi-mcp-adapter`. 
 are refused. For Pi, add `--pi-extension pi-mcp-adapter`. The
 [command reference](/docs/reference/commands/mcp#turn-off-a-global-server-in-one-project)
 shows what is written for each Agent and why the others are not supported.
+
+![Project MCP tab: global servers switched per project, plus project-only servers](/img/projects-mcp-tab.png)
 
 ## Remove and restore
 

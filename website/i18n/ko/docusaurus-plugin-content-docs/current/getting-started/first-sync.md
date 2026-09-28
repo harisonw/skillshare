@@ -85,7 +85,32 @@ skillshare sync
 skillshare status
 ```
 
-출력에 Source 경로, 모든 Target의 `synced` 표시, 그리고 방금 설치한 Skill이 나타나야 합니다.
+```text
+$ skillshare status
+
+Source
+─────────────────────────────────────────
+✓ ~/.config/skillshare/skills (43 skills, 2026-09-28 12:39)
+✓ ~/.config/skillshare/agents (2 agents, 2026-09-28 12:39)
+
+Targets
+─────────────────────────────────────────
+claude
+  skills   merged       [merge] ~/.claude/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
+cursor
+  skills   merged       [merge] ~/.cursor/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
+gemini
+  skills   merged       [merge] ~/.gemini/skills (43 shared, 0 local)
+…
+```
+
+출력에 Source 경로와 모든 Target이 나타납니다. `merge` 모드에서 동기화된 Target은 `merged`로 표시되며, shared 개수에 방금 설치한 Skill도 포함됩니다.
+
+대시보드(`skillshare ui`)에서도 같은 상태를 한눈에 볼 수 있습니다.
+
+![첫 동기화 후의 Dashboard: 하나의 Source가 모든 Target에 연결되어 모두 동기화됨](/img/web-dashboard-demo.png)
 
 ---
 

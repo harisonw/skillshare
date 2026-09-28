@@ -182,6 +182,8 @@ func cmdExtrasRemoveTarget(args []string) error {
 
 	if prune {
 		ui.Info("Pruned %d file(s) from %s", pruned, shortenPath(rmPath))
+	} else if extras[idx].File != "" {
+		ui.Info("Target file left in place and no longer managed. Sync will not remove it.")
 	} else {
 		ui.Info("Synced files left in place. Run 'skillshare sync extras%s' to clean up orphaned links, or re-run with --prune.", projectSuffix(mode))
 	}

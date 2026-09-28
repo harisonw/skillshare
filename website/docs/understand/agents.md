@@ -123,7 +123,7 @@ Agent sync supports all three modes, same as skills:
 
 | Mode | Behavior |
 |------|----------|
-| **merge** (default) | Per-file symlinks. Local agent files in the target are preserved. |
+| **merge** (default) | Per-file symlinks. Local agent files in the target are preserved. On Windows without Developer Mode, agents are copied instead and kept updated and pruned like links ([details](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)). |
 | **symlink** | Entire agents directory symlinked. |
 | **copy** | Agent files copied as real files. |
 

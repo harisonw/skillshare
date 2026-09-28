@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/gofrs/flock"
+
+	"skillshare/internal/utils"
 )
 
 type cursorOwner struct {
@@ -47,7 +49,7 @@ func noSymlink(path string) error {
 		if err != nil && !os.IsNotExist(err) {
 			return err
 		}
-		if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		if err == nil && utils.IsLinkMode(p, info.Mode()) {
 			return fmt.Errorf("refusing to modify symlinked native path: %s", p)
 		}
 		parent := filepath.Dir(p)

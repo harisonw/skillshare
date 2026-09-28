@@ -29,14 +29,9 @@ type Resolver struct {
 // line removed, the replaced file put back); newly wanted ones are added to
 // the extra's targets and synced. A target without import takes at most one.
 // It returns the updated extras; on error the extras reflect the steps done.
-func Assign(extras []config.ExtraConfig, t Target, want []string, r Resolver) ([]config.ExtraConfig, error) {
-	if !t.Import && len(want) > 1 {
-		return extras, fmt.Errorf("%s can use only one shared instruction file", t.Name)
-	}
-	for _, name := range want {
-		if i := indexOf(extras, name); i == -1 || extras[i].File == "" {
-			return extras, fmt.Errorf("shared instruction file %q not found", name)
-		}
+func Assign(extras []config.ExtraConfig, t Target, want []string, r Resolver, warnings ...*[]syncpkg.FileWarning) ([]config.ExtraConfig, error) {
+	if _, err := PlanAssign(extras, t, want, r); err != nil {
+		return extras, err
 	}
 
 	var errs []string
@@ -76,12 +71,56 @@ func Assign(extras []config.ExtraConfig, t Target, want []string, r Resolver) ([
 			return extras, err
 		}
 		f := syncpkg.NewExtraFile(r.SourceDir(extras[i]), extras[i].File, r.TargetDir(tc.Path), tc.As, tc.Mode)
-		if _, err := syncpkg.SyncExtraFile(f, false, ""); err != nil {
+		result, err := syncpkg.SyncExtraFile(f, false, "")
+		if err != nil {
 			return extras, fmt.Errorf("attach %s to %s: %w", name, t.Name, err)
+		}
+		if len(warnings) > 0 {
+			*warnings[0] = append(*warnings[0], result.FileWarnings...)
+		}
+		if result.Skipped > 0 {
+			return extras, fmt.Errorf("%s", strings.Join(result.Warnings, "; "))
 		}
 		extras[i].Targets = append(extras[i].Targets, tc)
 	}
 	return extras, nil
+}
+
+// PlanAssign validates the complete desired ownership without changing files or
+// the caller's config. API batches use it before making their first mutation.
+func PlanAssign(extras []config.ExtraConfig, t Target, want []string, r Resolver) ([]config.ExtraConfig, error) {
+	if !t.Import && len(want) > 1 {
+		return nil, &config.ExtraTargetConflict{Name: want[0], Target: t.Name}
+	}
+	for _, name := range want {
+		if i := indexOf(extras, name); i == -1 || extras[i].File == "" {
+			return nil, fmt.Errorf("shared instruction file %q not found", name)
+		}
+	}
+	next := slices.Clone(extras)
+	for i := range next {
+		next[i].Targets = slices.Clone(next[i].Targets)
+		if next[i].File == "" {
+			continue
+		}
+		j := targetIndex(next[i], t.File, r)
+		if !slices.Contains(want, next[i].Name) {
+			if j != -1 {
+				next[i].Targets = slices.Delete(next[i].Targets, j, j+1)
+			}
+		} else if j == -1 {
+			mode := "symlink"
+			if t.Import {
+				mode = "import"
+			}
+			tc := config.ExtraTargetConfig{Path: filepath.Dir(t.File), As: filepath.Base(t.File), Mode: mode}
+			next[i].Targets = append(next[i].Targets, tc)
+		}
+	}
+	if err := config.ValidateExtraConnections(next, r.SourceDir, r.TargetDir); err != nil {
+		return nil, err
+	}
+	return next, nil
 }
 
 // Find returns the index of the named single-file extra's target that writes

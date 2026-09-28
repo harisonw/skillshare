@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"skillshare/internal/utils"
 )
 
 // Resolve each component ourselves so an internal link cannot hide an absolute
@@ -41,7 +43,7 @@ func resolveSourcePath(root, path string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("invalid plugin link %s: %w", path, err)
 		}
-		if info.Mode()&os.ModeSymlink == 0 {
+		if !utils.IsLinkMode(next, info.Mode()) {
 			if len(parts) > 0 && !info.IsDir() {
 				return "", fmt.Errorf("non-directory in plugin link: %s", path)
 			}
@@ -88,7 +90,7 @@ func validateSourceLinks(root string) (map[string]bool, error) {
 		}
 		// path always sits in a real directory, so only its last component can be a link.
 		skip := func(err error) error {
-			if info, e := os.Lstat(path); e == nil && info.Mode()&os.ModeSymlink != 0 {
+			if info, e := os.Lstat(path); e == nil && utils.IsLinkMode(path, info.Mode()) {
 				rel, _ := filepath.Rel(root, path)
 				skipped[rel] = true
 				return nil

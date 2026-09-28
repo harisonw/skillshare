@@ -199,7 +199,42 @@ describe('UpdatePage', () => {
     await user.click(row.getByRole('button', { name: /^update$/i }));
 
     await waitFor(() => expect(row.getByText('Updated')).toBeInTheDocument());
-    expect(row.getByText('Up to date')).toBeInTheDocument();
+    expect(row.queryByText('Update available')).not.toBeInTheDocument();
+  });
+
+  it('moves a blocked update to its own section with a one-line reason', async () => {
+    const blockedResult = {
+      name: 'tools/agent-browser',
+      action: 'blocked',
+      message:
+        'security audit failed — findings at/above CRITICAL detected:\n' +
+        '  CRITICAL: Prompt injection attempt detected (SKILL.md:28)\n\n' +
+        'Use --force to override or --skip-audit to bypass scanning: blocked by security audit',
+      isRepo: false,
+    };
+    vi.mocked(api.listSkills).mockResolvedValue({ resources: [nestedSkill] });
+    cacheStatus('agent-browser', 'update-available');
+    vi.mocked(api.updateAllStream).mockImplementation((onStart, onResult, onDone) => {
+      queueMicrotask(() => {
+        onStart(1);
+        onResult(blockedResult);
+        onDone({ results: [blockedResult], summary: { updated: 0, upToDate: 0, blocked: 1, errors: 0, skipped: 0 } });
+      });
+      return { close: vi.fn() } as unknown as EventSource;
+    });
+
+    const user = userEvent.setup();
+    renderUpdatePage();
+    const row = await findRow('agent-browser');
+    await user.click(row.getByRole('button', { name: /^update$/i }));
+
+    const section = within(await screen.findByRole('region', { name: 'Needs attention · 1' }));
+    expect(section.getByText('CRITICAL: Prompt injection attempt detected (SKILL.md:28)')).toBeInTheDocument();
+    expect(section.getByRole('button', { name: 'Force retry' })).toBeInTheDocument();
+    expect(section.queryByText(/blocked by security audit/)).not.toBeInTheDocument();
+
+    await user.click(section.getByRole('button', { name: 'Show details' }));
+    expect(section.getByText(/blocked by security audit/)).toBeInTheDocument();
   });
 
   it('syncs the updated kind in place after an update', async () => {

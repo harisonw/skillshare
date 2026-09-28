@@ -15,6 +15,10 @@ Extras は skillshare が管理する追加のリソースタイプです — �
 - **Source ディレクトリ** — `extras_source` または Extras ごとの `source` で設定可能。デフォルトは `~/.config/skillshare/extras/<name>/`（グローバル）または `.skillshare/extras/<name>/`（Project）
 - 同期先となる 1 つ以上の **Target**
 
+ダッシュボードの **Extras → Folders** には、各 Extras とその Target、モードが並びます。
+
+![Extras › Folders：rules と commands をそれぞれの Target に同期](/img/extras-folders.png)
+
 ## コマンド
 
 ### `extras init`
@@ -152,13 +156,14 @@ skillshare extras source ~/company-shared/extras
 
 ### 既存の Extras を操作する
 
-`extras <name>` へのフラグを通じて、Target の sync モードや flatten 設定の変更、Target の追加・削除を行います。これらは設定のみの変更のため、変更をディスクに適用するには後で `skillshare sync extras` を実行してください。
+`extras <name>` で Target の sync モードや flatten 設定を変更し、Target を追加・削除できます。モード、flatten、追加した Target の変更は `skillshare sync extras` で適用します。`--remove-target --prune` は管理対象ファイルの復元や削除もすぐに行います。
 
 ```bash
 skillshare extras <name> --mode <mode> [--target <path>] [-p|-g]
 skillshare extras <name> --flatten | --no-flatten [--target <path>]
-skillshare extras <name> --add-target <path> [--mode <mode>] [--flatten] [-p|-g]
+skillshare extras <name> --add-target <path> [--as <filename>] [--mode <mode>] [--flatten] [-p|-g]
 skillshare extras <name> --remove-target <path> [--prune] [-p|-g]
+skillshare extras <name> --help
 ```
 
 **オプション:**
@@ -169,6 +174,7 @@ skillshare extras <name> --remove-target <path> [--prune] [-p|-g]
 | `--flatten` | flatten を有効化（サブディレクトリのファイルを Target ルートに sync） |
 | `--no-flatten` | flatten を無効化 |
 | `--add-target <path>` | Extras に新しい Target を追加 |
+| `--as <filename>` | `--add-target` の Target ファイル名（単一ファイルの Extras のみ。既定値は `file`） |
 | `--remove-target <path>` | Extras から Target を削除（デフォルトでは設定のみ） |
 | `--prune` | `--remove-target` と併用: その Target 配下の skillshare 管理ファイルも削除。単一ファイルの Extras では、代わりに Target のファイルを元に戻す |
 | `--target <path>` | Target ディレクトリのパス（複数 Target を持つ Extras で `--mode` を使う場合は必須。省略時、`--flatten`/`--no-flatten` はすべての Target に適用される） |
@@ -191,6 +197,7 @@ skillshare extras agents --no-flatten
 # 既存の Extras に新しい Target を追加する（その後 sync）
 skillshare extras rules --add-target ~/.cursor/rules
 skillshare extras commands --add-target ~/.config/opencode/commands --mode copy
+skillshare extras personal --add-target ~/.claude --as CLAUDE.md --mode import
 
 # Target を削除する（sync 済みファイルはそのまま残す）
 skillshare extras rules --remove-target ~/.cursor/rules
@@ -209,7 +216,7 @@ TUI（`M` キー）と Web UI（各 Target のモードのドロップダウン�
 skillshare extras remove <name> [--force] [-p|-g]
 ```
 
-Source ファイルと sync 済みの Target は削除されません — 設定エントリのみが削除されます。[単一ファイルの Extras](#single-file-extras) では、各 Target のファイルが skillshare に置き換えられる前の状態に戻ります。
+Source ファイルは残ります。ディレクトリの Extras は sync 済みの Target を残します。[単一ファイルの Extras](#single-file-extras) は Target を復元してから設定エントリを削除します。復元に失敗した場合は、再試行できるよう設定を残します。
 
 ### `extras collect`
 
@@ -252,6 +259,10 @@ skillshare extras collect rules --force
 | `copy` | ファイルごとのコピー |
 | `symlink` | ディレクトリ全体のシンボリックリンク |
 | `import` | [単一ファイルの Extras](#single-file-extras) のみ: Target のファイル内の `@<source file>` 行 |
+
+Developer Mode がオフの Windows では、`merge` は各ファイルをリンクする代わりにコピーし、`sync` は `file links need Windows Developer Mode; copying instead` と表示します。その場合、`extras list` と `status` では Target が `copy` と表示されます。コピーは追跡されるため、後の sync で更新・削除され、自分のファイルは残り、ファイルのリンクが使えるようになるとリンクに置き換えられます。[Windows のトラブルシューティング](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead) を参照してください。
+
+内容が同じローカルファイルは `local preserved` と表示され、`sync extras` はそれらに `--force` を提案しません。管理対象のリンクにはならず、ローカルファイルのままです。
 
 モードを切り替える場合（例: `merge` から `copy` へ）、次の `sync` で既存のシンボリックリンクが自動的に新しいモードの形式に置き換えられます。`--force` は不要です — シンボリックリンクは常に安全に置き換えられます。ローカルで作成された通常のファイルを上書きするには `--force` が必要です。
 
@@ -429,7 +440,7 @@ extras:
 
 | モード | Target のファイル |
 |------|-------------|
-| `merge`（デフォルト）または `symlink` | Source ファイルへのシンボリックリンク |
+| `merge`（デフォルト）または `symlink` | Source ファイルへのシンボリックリンク（Developer Mode がオフの Windows ではコピー） |
 | `copy` | Source ファイルのコピー |
 | `import` | あなたのファイル。先頭の管理ブロック内に `@<source file>` 行が入る |
 
@@ -439,6 +450,7 @@ Claude Code のように `@` import に従うツールでのみ使ってくだ�
 
 ルール:
 
+- リンクまたは `copy` モードの Target ファイルが使える共有ファイルは 1 つだけで、別の共有ファイルを同時に import することはできません。
 - `file` と `as` は `/` や `\` を含まない単純なファイル名でなければなりません。
 - `as` と `import` には `file` が必要です。`flatten` と `extension` は単一ファイルの Extras
   では使えません。
@@ -446,20 +458,22 @@ Claude Code のように `@` import に従うツールでのみ使ってくだ�
   `--force` なしで置き換えます。ディレクトリがある場合はスキップされます。
 - リンク後に `modified` になった Target も置き換えられます。編集されたファイルは復元ポイントではなく、
   drift バックアップとして保存されます。
-- リンクされた Target が内容の異なる通常ファイルに置き換えられている場合、`extras list` は
-  `modified` と表示します。
+- リンクが内容の異なる通常ファイルに置き換えられた場合や、管理対象のコピーが編集された場合、`extras list` は `modified` と表示します。
+- Target を `merge`、`symlink`、`copy` から `import` に切り替えると、前回の `import` モードの
+  自分の内容（空の内容も含む）が戻ります。未使用なら接続前の内容を使います。import ブロックが追加され、
+  編集されたコピーは先に drift バックアップとして保存されます。
 - `extras remove` と `--remove-target --prune` は各 Target のファイルを元に戻します。リンク、
   コピー、または import 行が取り除かれ、最初の sync の前にあったファイルやシンボリックリンクが戻ります
   （元々なかった場合はファイルなし）。`modified` の Target は、先に drift バックアップとして保存されます。
-  `--prune` なしの `--remove-target` はファイルをそのまま残して復元ポイントを忘れるため、後の sync では
-  その時点にあるものがバックアップされます。
+  `--prune` なしの `--remove-target` は単一ファイルの Target を残し、管理対象から外して復元ポイントを破棄します。後の sync では削除されず、再接続時に新しい復元ポイントが記録されます。
 - `extras collect` はサポートされていません。Target で行った編集を残すには、ダッシュボードの
   **AGENTS.md** タブで共有ファイル**に取り込む**を使ってください。
 
 バックアップは skillshare の state ディレクトリ（macOS と Linux では
 `~/.local/state/skillshare/extras/backups/`）に、ファイルごとに最新 10 件まで保存されます。
 drift バックアップはその中の `extras/backups/<id>/drift/` に保存されます。`<id>` は Target の
-ファイルのパスから導出されます。復元でこれらが使われることはありません。
+ファイルのパスから導出されます。復元でこれらが使われることはありません。保存された任意のバージョンを
+一覧表示または復元するには、[`backup files`](./backup.md#file-history) を使います。
 
 ---
 

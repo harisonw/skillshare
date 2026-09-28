@@ -26,9 +26,9 @@ irm https://raw.githubusercontent.com/runkids/skillshare/main/install.ps1 | iex
 
 ### skillshare 需要管理员权限吗？
 
-**不需要。** skillshare 使用 NTFS junction 而不是 symlink，因此不需要管理员权限。
+**不需要。** 文件夹（skills，以及 `symlink` mode 下的 agents 或 extras）通过 NTFS junction 链接；junction 在目录层面上的行为类似 symlink，而且不需要管理员权限。
 
-NTFS junction 在目录层面上的行为类似 symlink，但所有用户都能使用。
+单个文件无法用 junction 链接。会链接文件的 mode——`merge` mode 下的 agents、`merge` mode 下目录类 extra 的文件，以及单文件 extras（例如共享 `AGENTS.md`）——使用真正的 symlink，需要开启 [Developer Mode](#file-links-need-windows-developer-mode-copying-instead)（或使用管理员 shell）。没有开启时，skillshare 会改为复制这些文件。
 
 ---
 
@@ -117,11 +117,29 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 2. 确认防病毒软件没有拦截
 3. 以管理员身份运行 PowerShell（很少需要）
 
+### `file links need Windows Developer Mode; copying instead` {#file-links-need-windows-developer-mode-copying-instead}
+
+**原因：** Windows 只有在开启 Developer Mode（或从管理员 shell）时才允许创建文件 symlink。`merge` mode 下的 agents、`merge` mode 下的目录类 extras，以及单文件 extras（例如共享 `AGENTS.md`）链接的是单个文件，因此在没有 Developer Mode 时，`sync` 会改为复制它们并显示这一行。`status`、`doctor` 和 `extras list` 会把这些 target 显示为 `copy`。
+
+这些副本会被追踪，因此在 sync 看来，它们的行为仍然和链接一样：
+
+- source 变更时会更新，source 移除时会删除。
+- 你自己在 target 中创建的文件不会被动到，和 `merge` mode 一样。
+- 一旦文件链接可用，下次 sync 会把副本替换为链接。
+
+**解决方式：** 不需要做任何事；副本会继续正常工作。如果想改用链接，请开启 Developer Mode（Windows 11：**Settings → System → For developers → Developer Mode**；Windows 10：**Settings → Update & Security → For developers**），然后再次运行 `skillshare sync --all`。如果 `skillshare ui` 正在运行，请重新启动它。
+
+内容相同的本地文件会显示为 `local preserved`；`sync extras` 不会为它们建议使用 `--force`。它们仍是本地文件，不是受管理的链接。
+
+### Agent 文件或 AGENTS.md 显示为文件夹图标且无法读取 {#agent-files-or-agentsmd-show-a-folder-icon-and-cant-be-read}
+
+**原因：** 旧版本用目录 junction 链接单个文件。资源管理器会把该文件显示为文件夹，工具也无法读取它。
+
+**解决方式：** 运行 `skillshare sync --all`（或 `skillshare sync agents` / `skillshare sync extras`）。sync 会把这些损坏的链接替换为文件 symlink；如果 Developer Mode 未开启，则替换为副本。在控制台的 **AGENTS.md** 标签页上，受影响的 target 会显示警告；把它切换为 `copy` 也能修复。
+
 ### `symlinks not working`
 
-**原因：** 你看到的是 symlink 而不是 junction。
-
-**说明：** skillshare 在 Windows 上使用的是 NTFS junction，而不是 symlink。如果你看到 symlink 相关的错误，请确认使用的是 Windows 版的 skillshare。
+**说明：** 在 Windows 上，skillshare 用 NTFS junction 链接文件夹，用 symlink 链接单个文件。如果你看到 symlink 相关的错误，请确认使用的是 Windows 版的 skillshare。
 
 ### Antigravity 中出现 `Incorrect function`
 

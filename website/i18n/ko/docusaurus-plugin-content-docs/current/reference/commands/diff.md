@@ -14,7 +14,38 @@ skillshare diff --stat       # file 단위 변경 사항
 skillshare diff --patch      # 전체 unified diff
 ```
 
-![diff demo](/img/diff-demo.png)
+```text
+skillshare diff --no-tui
+
+Summary: 6 targets — 6 need sync
+
+claude, claude-work, gemini, opencode, universal
+─────────────────────────────────────────
+  1 new
+  + New 1 skill:
+      remotion-captions
+
+cursor
+─────────────────────────────────────────
+  1 local only, 1 new
+  ← Local Only 1 skill:
+      cursor-shortcuts
+  + New 1 skill:
+      remotion-captions
+
+→ Run 'skillshare sync' to apply changes
+→ Run 'skillshare collect' to import local skills to source
+
+Extras
+─────────────────────────────────────────
+✓   rules → ~/.claude/rules: synced (merge)
+✓   rules → ~/.cursor/rules: synced (merge)
+✓   commands → ~/.claude/commands: synced (merge)
+✓   team → ~/.codex: synced (symlink)
+✓   team → ~/.claude: synced (import)
+✓   team → ~/.gemini: synced (copy)
+✓   team → ~/notes: synced (symlink)
+```
 
 ## 인터랙티브 TUI
 

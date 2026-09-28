@@ -89,7 +89,7 @@ skillshare fixes this:
 | Platform | Skills Source | Agents Source | Extras Source | Link Type |
 |----------|---------------|---------------|---------------|-----------|
 | macOS/Linux | `~/.config/skillshare/skills/` | `~/.config/skillshare/agents/` | `~/.config/skillshare/extras/` | Symlinks |
-| Windows | `%AppData%\skillshare\skills\` | `%AppData%\skillshare\agents\` | `%AppData%\skillshare\extras\` | NTFS Junctions (no admin required) |
+| Windows | `%AppData%\skillshare\skills\` | `%AppData%\skillshare\agents\` | `%AppData%\skillshare\extras\` | NTFS Junctions for folders (no admin required); file symlinks need Developer Mode, otherwise copied |
 
 | | Imperative (install-per-command) | Declarative (skillshare) |
 |---|---|---|

@@ -412,8 +412,8 @@ export default function ExtrasPage() {
       : []),
   ];
 
-  // Shared instruction files (single-file extras) have their own tab in global mode.
-  const extras = (data?.extras ?? []).filter((e) => isProjectMode || !e.file);
+  // Shared instruction files (single-file extras) have their own tab.
+  const extras = (data?.extras ?? []).filter((e) => !e.file);
   const sharedCount = (data?.extras ?? []).length - extras.length;
 
   return (
@@ -422,7 +422,7 @@ export default function ExtrasPage() {
         title={t('extras.title')}
         subtitle={t(isProjectMode ? 'extras.subtitle.project' : 'extras.subtitle.global')}
         actions={tab === 'folders' ? <span data-tour="extras-list"><Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={15} />{t('extras.addExtra')}</Button></span>
-          : !isProjectMode && <Button variant="primary" onClick={() => setCreatingShared(true)}><Plus size={15} />{t('instructions.shared.new')}</Button>}
+          : <Button variant="primary" onClick={() => setCreatingShared(true)}><Plus size={15} />{t(isProjectMode ? 'instructions.projectShared.new' : 'instructions.shared.new')}</Button>}
       />
 
       <nav className="ss-tabs mb-7" aria-label={t('extras.tabs')}>
@@ -431,7 +431,7 @@ export default function ExtrasPage() {
       </nav>
 
       {tab === 'instructions' ? (
-        isProjectMode ? <ProjectInstructions /> : <SharedInstructions creating={creatingShared} setCreating={setCreatingShared} />
+        isProjectMode ? <ProjectInstructions creating={creatingShared} setCreating={setCreatingShared} /> : <SharedInstructions creating={creatingShared} setCreating={setCreatingShared} />
       ) : isPending ? (
         <PageSkeleton />
       ) : error ? (
@@ -440,7 +440,7 @@ export default function ExtrasPage() {
         <EmptyState
           icon={FolderPlus}
           title={t(sharedCount > 0 ? 'extras.empty.foldersTitle' : 'extras.empty.title')}
-          description={sharedCount > 0 ? t('extras.empty.sharedElsewhere', { count: sharedCount }) : t('extras.empty.description')}
+          description={sharedCount > 0 ? t(isProjectMode ? 'extras.empty.sharedElsewhereProject' : 'extras.empty.sharedElsewhere', { count: sharedCount }) : t('extras.empty.description')}
           action={<Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={15} />{t('extras.addExtra')}</Button>}
         />
       ) : (

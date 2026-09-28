@@ -62,6 +62,10 @@ Sync 被有意设计为与 install/update/uninstall 解耦。这样你可以批�
 skillshare sync --dry-run
 ```
 
+仪表板的 **Sync** 页面会在写入前，逐个显示每个 target 的同样预览：
+
+![Sync 页面在写入前逐个预览每个 target 的变更](/img/web-sync-demo.png)
+
 ### 只 sync agents
 
 如果你只改动了 agents（或只想把 agents 推送到支持 agent 的 Target），可以缩小 sync 范围：

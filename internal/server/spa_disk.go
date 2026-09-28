@@ -35,8 +35,8 @@ pre{background:#f0f0f0;padding:12px 16px;border-radius:6px;overflow-x:auto}</sty
 
 // spaHandlerFromDisk serves a SPA from a directory on disk.
 // Unknown paths fall back to index.html for client-side routing.
-// When basePath is non-empty, a <script> tag injecting window.__BASE_PATH__
-// is inserted into index.html after <head>.
+// A <base> tag for basePath, plus a <script> injecting window.__BASE_PATH__ when
+// basePath is non-empty, is inserted into index.html after <head>.
 func spaHandlerFromDisk(dir, basePath string) http.Handler {
 	fileServer := http.FileServer(http.Dir(dir))
 
@@ -45,13 +45,15 @@ func spaHandlerFromDisk(dir, basePath string) http.Handler {
 	var cachedIndex []byte
 	indexPath := filepath.Join(dir, "index.html")
 	if raw, err := os.ReadFile(indexPath); err == nil {
+		// The build links its files as ./assets/...; without a base, a page opened at a
+		// nested route such as /targets/claude asks for /targets/assets/... instead.
+		encodedHref, _ := json.Marshal(basePath + "/")
+		injection := "<base href=" + string(encodedHref) + ">"
 		if basePath != "" {
 			encoded, _ := json.Marshal(basePath)
-			injection := "<script>window.__BASE_PATH__=" + string(encoded) + "</script>"
-			cachedIndex = []byte(strings.Replace(string(raw), "<head>", "<head>"+injection, 1))
-		} else {
-			cachedIndex = raw
+			injection += "<script>window.__BASE_PATH__=" + string(encoded) + "</script>"
 		}
+		cachedIndex = []byte(strings.Replace(string(raw), "<head>", "<head>"+injection, 1))
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

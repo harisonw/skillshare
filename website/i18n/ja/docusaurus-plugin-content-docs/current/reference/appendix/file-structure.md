@@ -428,6 +428,18 @@ Target は AI CLI の Skill ディレクトリです。Sync 後、それらに�
 ~/.claude/skills -> ~/.config/skillshare/skills/
 ```
 
+### ファイルリンクの代わりのコピー（Windows） {#copies-in-place-of-file-links-windows}
+
+Developer Mode がオフの Windows では、agent の Target と `merge` モードのディレクトリ Extras は、ファイルのリンクの代わりにコピーを受け取ります。その場合、Target ディレクトリには各コピーのチェックサムを記録する `.skillshare-manifest.json` が置かれ、後の Sync でコピーを更新・削除しつつ、自分のファイルはそのまま残せます。
+```
+~/.claude/agents/
+├── reviewer.md                # Copy of the source agent
+├── local-agent.md             # User-created, preserved
+└── .skillshare-manifest.json  # Tracks copied agents + checksums
+```
+
+単一ファイルの Extras（共有 `AGENTS.md` など）は、コピーを Target ディレクトリではなく skillshare の [extras バックアップフォルダー](../commands/extras.md#single-file-extras)に記録します。
+
 ---
 
 ## Tracked Repositories
@@ -499,7 +511,7 @@ skillshare は XDG Base Directory Specification に従います。`XDG_CONFIG_HO
 | Logs | `%AppData%\skillshare\logs\` |
 | Version cache | `%AppData%\skillshare\version-check.json` |
 | UI cache | `%AppData%\skillshare\ui\{version}\` |
-| リンクの種類 | NTFS Junctions |
+| リンクの種類 | フォルダーは NTFS Junctions、単一ファイルはシンボリックリンク（Developer Mode が必要、ない場合はコピー） |
 
 ## XDG Base Directory のレイアウト
 

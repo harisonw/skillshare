@@ -1,6 +1,8 @@
+import { ApiError } from '../../api/client';
+import { translate } from '../../i18n';
 import { describe, expect, it } from 'vitest';
 import type { SharedInstructionsFile, SharedInstructionsTarget } from '../../api/client';
-import { connectPlan, importLines, lineCount, lineDiff, lineRanges, needsSync, overLimit, restorePlan, rowHint, setupPathProblem, sharedNameProblem, worstStatus } from './instructionsView';
+import { instructionsErrorMessage, instructionsWarningMessage, connectPlan, defaultShareName, readChain, saveCopiesSummary, importDecor, importLines, previewParts, lineCount, lineDiff, lineRanges, modeOptions, needsSync, overLimit, restorePlan, rowHint, setupPathOf, setupPathProblem, sharedNameProblem, sharedOfImport, worstStatus } from './instructionsView';
 
 describe('importLines', () => {
   it('finds @path lines outside code fences', () => {
@@ -98,12 +100,23 @@ describe('connect and restore plans', () => {
     expect(connectPlan([claude], general)).toEqual([{ target: 'claude', extras: ['team', 'general'], note: 'import' }]);
   });
 
-  it('replaces a link target on another file and says which', () => {
-    expect(connectPlan([opencode], general)).toEqual([{ target: 'opencode', extras: ['general'], note: 'switch', other: 'team' }]);
+  it('skips a target another file holds by link, saying which', () => {
+    expect(connectPlan([opencode], general)).toEqual([{ target: 'opencode', extras: ['general'], note: 'held', other: 'team' }]);
+  });
+
+  it('skips a target another file holds by copy', () => {
+    const pi = tg('pi', { assigned: [{ name: 'team', mode: 'copy', status: 'synced' }] });
+    expect(connectPlan([pi], general)[0]).toMatchObject({ note: 'held', other: 'team' });
   });
 
   it('warns when a target reads less than the file holds', () => {
     expect(connectPlan([windsurf], general)[0]).toMatchObject({ note: 'tooLong', max: 6000 });
+  });
+
+  // Its file is another shared file's source: an import line written there would land in that file.
+  it('skips a target whose file is another shared file, saying which', () => {
+    const linked = tg('claude-unno', { import: true, linked_shared: 'team', assigned: [{ name: 'team', mode: 'symlink', status: 'synced' }] });
+    expect(connectPlan([linked], general)).toEqual([{ target: 'claude-unno', extras: ['team', 'general'], note: 'held', other: 'team' }]);
   });
 
   it('never includes targets that read another target\'s file', () => {
@@ -140,3 +153,127 @@ describe('lineCount', () => {
     expect(lineCount('# A\n\nb\n')).toBe(3);
   });
 });
+
+describe('modeOptions', () => {
+  const tg = (rest: Partial<SharedInstructionsTarget>): SharedInstructionsTarget => ({ name: 'codex', path: '/h/.codex/AGENTS.md', import: false, exists: true, assigned: [{ name: 'team', mode: 'symlink', status: 'synced' }], ...rest });
+
+  it('offers import first and as the default where the tool reads @import lines', () => {
+    expect(modeOptions(tg({ import: true }), true)).toEqual([
+      { mode: 'import', isDefault: true }, { mode: 'symlink', isDefault: false }, { mode: 'copy', isDefault: false },
+    ]);
+  });
+
+  it('offers only symlink and copy to other tools, with symlink as the default', () => {
+    expect(modeOptions(tg({}), true)).toEqual([{ mode: 'symlink', isDefault: true }, { mode: 'copy', isDefault: false }]);
+  });
+
+  it('blocks symlink and makes copy the default without file links', () => {
+    expect(modeOptions(tg({}), false)).toEqual([{ mode: 'symlink', isDefault: false, blocked: 'fileLinks' }, { mode: 'copy', isDefault: true }]);
+  });
+
+  it('keeps an import target on several shared files to import', () => {
+    const both = tg({ import: true, assigned: [{ name: 'team', mode: 'import', status: 'synced' }, { name: 'work', mode: 'import', status: 'synced' }] });
+    expect(modeOptions(both, true).filter((o) => o.blocked).map((o) => o.mode)).toEqual(['symlink', 'copy']);
+  });
+
+  it('warns about a folder link the tool cannot read', () => {
+    const file: SharedInstructionsFile = { name: 'team', file: 'AGENTS.md', path: '/x/team/AGENTS.md', exists: true, size: 1, chars: 1, targets: 1 };
+    expect(rowHint(tg({ assigned: [{ name: 'team', mode: 'symlink', status: 'drift', reason: 'folder_link' }] }), file)).toEqual({ kind: 'folderLink' });
+    expect(rowHint(tg({ assigned: [{ name: 'team', mode: 'symlink', status: 'drift', reason: 'directory' }] }), file)).toEqual({ kind: 'directory' });
+  });
+});
+
+describe('setupPathOf', () => {
+  it('writes a global file from the home folder with ~/', () => {
+    expect(setupPathOf('/home/me/.codex/AGENTS.md', false)).toBe('~/.codex/AGENTS.md');
+  });
+
+  it('writes a project file relative to the project root', () => {
+    expect(setupPathOf('/work/app/.codex/AGENTS.md', true, '/work/app')).toBe('.codex/AGENTS.md');
+    expect(setupPathOf(String.raw`C:\work\app\.codex\AGENTS.md`, true, String.raw`C:\work\app`)).toBe('.codex/AGENTS.md');
+  });
+});
+
+describe('importDecor', () => {
+  const lines = ['<!-- skillshare:instructions:begin -->', '@/h/.config/skillshare/extras/personal/AGENTS.md', '<!-- skillshare:instructions:end -->', '', '# Mine'];
+
+  it('tints the managed block and notes its import line', () => {
+    expect(importDecor(lines, (_, inBlock) => (inBlock ? 'managed' : 'own'))).toEqual([
+      { block: true }, { block: true, note: 'managed' }, { block: true }, null, null,
+    ]);
+  });
+
+  it('names the shared file an import line of the block points at', () => {
+    expect(sharedOfImport(lines[1], ['work', 'personal'])).toBe('personal');
+  });
+});
+
+describe('previewParts', () => {
+  it('shows the managed import block as the shared files it imports', () => {
+    const content = '<!-- skillshare:instructions:begin -->\n@/h/.config/skillshare/extras/personal/AGENTS.md\n<!-- skillshare:instructions:end -->\n\n# Mine\n';
+    expect(previewParts(content, ['personal'])).toEqual({ before: '', imports: ['personal'], after: '\n# Mine\n' });
+  });
+
+  it('drops HTML comments that Markdown would show as text', () => {
+    expect(previewParts('# A\n<!-- note -->\nB', []).before).toBe('# A\n\nB');
+  });
+});
+
+describe('defaultShareName', () => {
+  it('names the shared file after the target', () => {
+    expect(defaultShareName('claude', ['personal'])).toBe('claude');
+  });
+
+  it('adds a number when that name is taken, ignoring case', () => {
+    expect(defaultShareName('claude', ['Claude', 'claude-2'])).toBe('claude-3');
+  });
+
+  it('turns a target name the server would refuse into a valid one', () => {
+    expect(defaultShareName('.my tool', [])).toBe('my-tool');
+  });
+});
+
+describe('saveCopiesSummary', () => {
+  it('lists updated copies and names the target of each problem', () => {
+    expect(saveCopiesSummary([
+      { target: 'pi', warnings: ['backed up ~/.pi/agent/AGENTS.md before replacing it'] },
+      { target: 'grok', error: 'permission denied' },
+    ])).toEqual({
+      updated: ['pi'],
+      warnings: ['pi: backed up ~/.pi/agent/AGENTS.md before replacing it'],
+      errors: ['grok: permission denied'],
+    });
+  });
+});
+
+describe('readChain', () => {
+  it('leaves out an empty rules folder but keeps a main file that does not exist yet', () => {
+    expect(readChain([
+      { path: '/h/.claude/CLAUDE.md', kind: 'main', exists: false, read: false },
+      { path: '/h/.claude/rules', kind: 'rules', exists: false, read: false, count: 0 },
+      { path: '/h/AGENTS.md', kind: 'unread', exists: false, read: false },
+    ]).map((e) => e.kind)).toEqual(['main']);
+  });
+
+  it('keeps a rules folder that holds files', () => {
+    expect(readChain([{ path: '/h/.claude/rules', kind: 'rules', exists: true, read: true, count: 3 }])).toHaveLength(1);
+  });
+});
+
+ describe('instruction messages', () => {
+  const t = (key: string, params?: Parameters<typeof translate>[2], fallback?: string) => translate('zh-TW', key, params, fallback);
+  it('translates warnings and shortens interpolated paths', () => {
+   expect(instructionsWarningMessage({ code: 'backed_up', params: { path: '/home/sim/.codex/AGENTS.md' }, message: 'English backup' }, t)).toBe('已先備份 ~/.codex/AGENTS.md 再覆蓋。');
+  });
+  it('translates coded errors and preserves mode names', () => {
+   expect(instructionsErrorMessage(new ApiError(409, 'English directory', { code: 'instructions_target_directory', params: { path: '/Users/sim/.codex/AGENTS.md' } }), t)).toBe('~/.codex/AGENTS.md 是資料夾，沒有覆蓋。');
+   expect(instructionsErrorMessage(new ApiError(400, 'English mode', { code: 'instructions_invalid_mode', params: { mode: 'merge' } }), t)).toContain('import、symlink 或 copy');
+  });
+  it('falls back to English for unknown codes and uncoded errors', () => {
+   expect(instructionsWarningMessage({ code: 'future', params: {}, message: 'Future warning' }, t)).toBe('Future warning');
+   expect(instructionsErrorMessage(new ApiError(409, 'Future error', { code: 'instructions_future' }), t)).toBe('Future error');
+   expect(instructionsErrorMessage(new Error('Offline'), t)).toBe('Offline');
+   expect(instructionsErrorMessage(new ApiError(500, 'read /home/sim/AGENTS.md failed', { code: 'instructions_future' }), t)).toBe('read ~/AGENTS.md failed');
+   expect(instructionsErrorMessage(new ApiError(500, 'write failed', { code: 'instructions_write_failed', params: { detail: 'open /Users/sim/AGENTS.md: denied' } }), t)).toBe('無法寫入檔案：open ~/AGENTS.md: denied');
+  });
+ });

@@ -106,9 +106,30 @@ skillshare install git@ssh.dev.azure.com:v3/myorg/myproject/myrepo
 skillshare install anthropics/skills
 ```
 
-<p>
-  <img src="/img/install-demo.png" alt="install demo" width="720" />
-</p>
+```text
+$ skillshare install anthropics/skills
+
+▸  Source  github.com/anthropics/skills
+│
+├─ Cloned  (1.8s)
+│
+└─ Found  20 skill(s)
+
+  Select skills to install (0/20 selected)
+
+▌ [ ] academy-guide (Complete terms in LICENSE.txt)
+▌ [ ] algorithmic-art (Complete terms in LICENSE.txt)
+▌ [ ] brand-guidelines (Complete terms in LICENSE.txt)
+▌ [ ] canvas-design (Complete terms in LICENSE.txt)
+▌ [ ] claude-api (Complete terms in LICENSE.txt)
+▌ [ ] discernment-nudge (Complete terms in LICENSE.txt)
+▌ [ ] doc-coauthoring
+▌ [ ] docx (Proprietary. LICENSE.txt has complete terms)
+  …
+
+  20 skills
+  ↑↓ navigate  space toggle  a all  enter confirm  / filter  esc cancel
+```
 
 Discovery 會掃描所有目錄尋找 `SKILL.md` 檔案，只跳過 `.git`。這代表 `.curated/` 或 `.system/` 之類隱藏目錄中的 skills 也會被自動發現。當找到多個 skills 時，選擇提示會依目錄分組，方便瀏覽。
 
@@ -456,12 +477,34 @@ skillshare install github.com/team/skills --branch 8f14e45fceea167a5a36dedd4bea2
 
 **安裝團隊 repo（tracked）：**
 ```bash
-skillshare install anthropics/skills --track
+skillshare install addyosmani/web-quality-skills --track --name team-skills
 ```
 
-<p>
-  <img src="/img/team-reack-demo.png" alt="tracked repo install demo" width="720" />
-</p>
+```text
+$ skillshare install addyosmani/web-quality-skills --track --name team-skills
+
+▸  Source  github.com/addyosmani/web-quality-skills
+│
+├─ Name  _team-skills
+│
+├─ Cloned (1.9s)
+│
+├─ Found  6 skill(s)
+│
+├─ Tracked  _team-skills
+│
+├─ Skills  accessibility, best-practices, core-web-vitals, performance, seo, web-quality-audit
+│
+└─ Location  ~/.config/skillshare/skills/_team-skills
+
+- Audit Findings
+→ 63 finding(s): HIGH=1, MEDIUM=1, LOW=60, INFO=1 — findings detected, but none at/above block threshold (CRITICAL)
+→ risk: CRITICAL (100/100)
+
+- Next Steps
+→ Run 'skillshare sync' to distribute skills to all targets
+→ Run 'skillshare update _team-skills' to update this repo later
+```
 
 ## 私有 Repositories {#private-repositories}
 

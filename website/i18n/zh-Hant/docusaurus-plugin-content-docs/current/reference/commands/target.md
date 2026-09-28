@@ -72,6 +72,8 @@ skillshare target remove cursor --dry-run # 預覽
    - **Copy 模式：** 移除 `.skillshare-manifest.json`。受管理的複本與本機 skills 會保留為一般目錄。
 3. 從設定中移除該 target
 
+如果還有其他 target 寫入同一個 skills 資料夾（例如 `codex` 和 `universal` 都用 `~/.agents/skills`），會略過第 2 步：skills 仍為那個 target 保持連結，只有被移除的 target 從設定中拿掉。
+
 ### target list
 
 列出所有已設定的 targets。

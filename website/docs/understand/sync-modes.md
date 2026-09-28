@@ -315,6 +315,12 @@ extras:
 
 The behavior is the same as skill sync modes — merge creates per-file symlinks, copy creates real file copies.
 
+:::note Windows without Developer Mode
+Merge mode links single files, which Windows allows only with Developer Mode. Without it, agents and extras in merge mode are copied instead, and those copies are updated and pruned like links. Skills are folders, so they are linked (with junctions) either way. See [Windows troubleshooting](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead).
+
+Identical local files that skillshare does not own are preserved. In copy fallback, agent counts show them separately as `local preserved`, for example `0/1 linked, 1 local preserved`.
+:::
+
 ---
 
 ## See Also

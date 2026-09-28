@@ -13,6 +13,7 @@ import (
 
 	"skillshare/internal/config"
 	"skillshare/internal/projectdir"
+	"skillshare/internal/utils"
 )
 
 const defaultMaxAge = 7 * 24 * time.Hour // 7 days
@@ -508,7 +509,7 @@ func copyDir(src, dst string) error {
 		}
 
 		// Skip symlinks
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(srcPath, info.Mode()) {
 			continue
 		}
 

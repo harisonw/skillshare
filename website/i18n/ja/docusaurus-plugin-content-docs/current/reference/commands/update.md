@@ -21,7 +21,27 @@ skillshare update agents --all       # すべての tracked/updatable agent を�
 - インストール済みの skill に新しいバージョンが利用可能
 - 元の source から skill を再ダウンロードしたい
 
-![update demo](/img/update-skilk-demo.png)
+```text
+$ skillshare update pdf
+
+Updating
+─────────────────────────────────────────
+▸  Source  ~/.config/skillshare/skills
+│
+└─ Items  0 tracked repo(s), 1 skill(s)
+│
+├─ Skill  pdf
+│
+├─ Source  github.com/anthropics/skills/skills/pdf
+│
+└─ ✓ SUCCESS  Updated successfully (1.9s)
+
+- Audit Findings
+→ risk: CLEAN
+
+- Next Steps
+→ Run 'skillshare sync' to distribute changes
+```
 
 ## 実行内容
 

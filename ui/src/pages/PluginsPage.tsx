@@ -17,6 +17,7 @@ import PluginFilesDialog from '../components/plugins/PluginFilesDialog';
 import PluginAgents from '../components/plugins/PluginAgents';
 import PluginList, { VersionChange } from '../components/plugins/PluginList';
 import { useT } from '../i18n';
+import { useSlow } from '../hooks/useSlow';
 import { queryKeys } from '../lib/queryKeys';
 
 export default function PluginsPage() {
@@ -27,6 +28,7 @@ export default function PluginsPage() {
   const quick = useQuery({ queryKey: queryKeys.pluginPackages, queryFn: () => pluginsApi.list(false) });
   const full = useQuery({ queryKey: queryKeys.plugins, queryFn: () => pluginsApi.list() });
   const hostsReady = !!full.data;
+  const hostsSlow = useSlow(!hostsReady, 10000);
   const base = quick.data ?? full.data;
   const data = base && { ...base, hosts: full.data?.hosts ?? [] };
   const error = quick.error ?? full.error;
@@ -181,6 +183,7 @@ export default function PluginsPage() {
         <div className="db overflow-y-auto">
           <div className="ss-list">
             {!hostsReady && <div className="ss-r gap-2 text-[13px] text-ink-2"><Spinner size="sm" />{t('plugins.hostsAsking')}</div>}
+            {!hostsReady && hostsSlow && <div className="ss-r !min-h-0 text-xs text-ink-3">{t('plugins.hostsSlow')}</div>}
             {data?.hosts.map((h) => {
               const locked = !pluginTargets[h.target]?.operations.includes('import');
               return (

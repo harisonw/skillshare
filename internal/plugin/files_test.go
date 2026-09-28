@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -55,5 +56,30 @@ func TestSaveKeepsTwoSpaceIndent(t *testing.T) {
 	want := "ignore:\n  - '**/.git/**'\nplugins:\n  packages:\n    demo:\n      bindings:\n        claude:\n          components:\n            - skills\n"
 	if !strings.HasPrefix(string(data), want) {
 		t.Errorf("got:\n%s\nwant prefix:\n%s", data, want)
+	}
+}
+
+// Opening a managed plugin asks which other Agents can take it. Its reviewed snapshot answers,
+// so nothing is cloned: with no git on PATH, a clone would fail.
+func TestDiscoverManagedReadsTheSnapshotWithoutGit(t *testing.T) {
+	var calls []string
+	s := accountPluginService(t, &calls)
+	source := "https://example.invalid/demo.git"
+	digest, err := treeDigest(fixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := Binding{ID: "demo@skillshare-abc", Source: source, Plugin: "demo", Digest: digest, Commit: "abc123"}
+	if err := copyTree(fixture(t), filepath.Join(s.snapshotPath(b, "claude"), "content")); err != nil {
+		t.Fatal(err)
+	}
+	writePluginFile(t, filepath.Dir(s.ConfigPath), "config.yaml", "plugins:\n  packages:\n    demo:\n      bindings:\n        claude:\n          id: demo@skillshare-abc\n          source: "+source+"\n          plugin: demo\n          commit: abc123\n          digest: "+digest+"\n")
+	t.Setenv("PATH", t.TempDir())
+	d, err := s.DiscoverManaged(context.Background(), "demo", source, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Source != source || d.Commit != "abc123" || d.Digest != digest || len(d.Candidates) != 1 || !slices.Contains(d.Candidates[0].Targets, "claude-work") || len(calls) != 0 {
+		t.Fatalf("discovery = %+v, calls = %v", d, calls)
 	}
 }

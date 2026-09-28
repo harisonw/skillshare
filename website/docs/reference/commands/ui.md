@@ -97,7 +97,9 @@ Some pages show a count in the sidebar when they need attention. The counts refr
 | **Targets** | Target list with status. **Add target** also takes **Another account**: a second config folder of an Agent you already use, with a preview of where it writes. Each target's page edits include/exclude filters and collects local-only skills back to source. The list also counts the MCP servers each Agent gets. A target that has an MCP config file gets an **MCP** tab with one row per server; a click saves at once, and **Sync all targets** writes the MCP files of every target. Each target also has a tab named after its instruction file (**CLAUDE.md**, **GEMINI.md**, **AGENTS.md**, ...) that shows the read order, edits the file and converts it to `AGENTS.md` |
 | **Projects** | Global mode only. Project folders that the global config syncs into, from [`projects`](/docs/reference/targets/configuration#projects) and [`mcp.projects`](./mcp.md#projects-in-the-dashboard). **Add project** takes a folder, its targets and what to sync. Each project has **Skills** and **Agents** tabs with filters, a preview and the folders that get written, and an **MCP** tab that turns global servers off in that folder or gives it servers of its own. **Sync project** previews, then syncs only that project's skills, agents and MCP. Targets that already point into a project folder can be converted |
 | **Audit** | Security scan of skills and agents, with findings by severity. The **Rules** tab browses every rule by category: switch one off, change its severity, apply a severity to a whole category, pick the scan profile (`default`, `strict`, `permissive`), or open the editor for custom `audit-rules.yaml` |
-| **Settings** | Tabbed: **General** (source paths, sync mode, appearance), **Backup** (snapshots and restore), **Log** (operation history), **Health** (the same checks as [`doctor`](/docs/reference/commands/doctor)), **Extensions** (sync-time file transforms), **Files** (direct editors for `config.yaml`, `.skillignore`, and `.agentignore`) |
+| **Settings** | Tabbed: **General** (source paths, sync mode, appearance), **Backup** (target folder snapshots, earlier versions of files such as `AGENTS.md`, and MCP config backups; see [`backup`](./backup.md#dashboard)), **Log** (operation history), **Health** (the same checks as [`doctor`](/docs/reference/commands/doctor)), **Extensions** (sync-time file transforms), **Files** (direct editors for `config.yaml`, `.skillignore`, and `.agentignore`) |
+
+On the **Updates** tab, a progress bar tracks the update run and the active row is marked while it updates. Blocked or failed updates appear in a separate section.
 
 Old links such as `/collect`, `/install`, `/search`, `/trash`, `/analyze`, `/backup`, `/log`, and `/doctor` redirect to their new place.
 
@@ -138,6 +140,7 @@ When running in project mode (`-p`), the dashboard adapts:
   <img src="/img/web-skill-detail-demo.png" alt="Skill detail view" />
   <img src="/img/web-sync-demo.png" alt="Sync controls" />
   <img src="/img/web-search-skills-demo.png" alt="GitHub search view" />
+  <img src="/img/web-projects-demo.png" alt="Projects page listing project folders" />
 </div>
 
 ## REST API

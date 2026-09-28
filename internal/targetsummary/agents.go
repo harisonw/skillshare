@@ -8,6 +8,7 @@ import (
 	"skillshare/internal/config"
 	"skillshare/internal/resource"
 	ssync "skillshare/internal/sync"
+	"skillshare/internal/utils"
 )
 
 const defaultAgentMode = "merge"
@@ -108,6 +109,9 @@ func (b *Builder) buildSummary(targetName, path, displayPath string, ac config.R
 	if mode == "" {
 		mode = defaultAgentMode
 	}
+	if ac.Extension == "" {
+		mode = ssync.EffectiveAgentMode(mode)
+	}
 
 	summary := &AgentSummary{
 		Path:        path,
@@ -130,7 +134,7 @@ func (b *Builder) buildSummary(targetName, path, displayPath string, ac config.R
 	if b.sourceExists {
 		summary.ExpectedCount = len(expectedAgents)
 	}
-	summary.ManagedCount = countManagedAgents(path, mode, b.sourcePath, summary.ExpectedCount)
+	summary.ManagedCount = countManagedAgents(path, mode, b.sourcePath, summary.ExpectedCount, expectedAgents)
 	// Extension output is managed, not local, even when it keeps the .md name.
 	if ac.Extension == "" {
 		summary.LocalCount = countLocalAgents(path, b.sourcePath)
@@ -139,11 +143,11 @@ func (b *Builder) buildSummary(targetName, path, displayPath string, ac config.R
 	return summary, nil
 }
 
-func countManagedAgents(targetPath, mode, sourcePath string, expectedCount int) int {
+func countManagedAgents(targetPath, mode, sourcePath string, expectedCount int, agents []resource.DiscoveredResource) int {
 	switch mode {
 	case "copy":
 		_, managed, _ := ssync.CheckStatusCopy(targetPath)
-		return managed
+		return managed + ssync.SyncedAgentCopies(targetPath, agents)
 	case "symlink":
 		if ssync.CheckStatus(targetPath, sourcePath) == ssync.StatusLinked {
 			return expectedCount
@@ -168,7 +172,7 @@ func countHealthyAgentLinks(dir string) int {
 		if !strings.HasSuffix(strings.ToLower(entry.Name()), ".md") {
 			continue
 		}
-		if entry.Type()&os.ModeSymlink == 0 {
+		if !utils.IsLinkMode(filepath.Join(dir, entry.Name()), entry.Type()) {
 			continue
 		}
 		if _, err := os.Stat(filepath.Join(dir, entry.Name())); err == nil {

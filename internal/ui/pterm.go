@@ -350,7 +350,7 @@ const (
 	barColor         = "\033[0;36m" // reset + cyan (project accent)
 	barDim           = "\033[36;2m" // cyan + dim for empty dots
 	barMuted         = "\x1b[0;2m"  // dim attribute for label + count
-	barReset         = Reset
+	barReset         = "\033[0m"
 	hideCursor       = "\x1b[?25l"
 	showCursor       = "\x1b[?25h"
 	clearLine        = "\r\x1b[2K"

@@ -18,44 +18,52 @@ skillshare status
 - 有効な audit ポリシー（profile、threshold、dedupe mode）を確認する
 - CLI や skill の更新を確認する
 
-![status demo](/img/status-demo.png)
-
 ## 出力例
 
 ```
 Source
-✓ ~/.config/skillshare/skills (12 skills, 2026-01-20 15:30)
-→ .skillignore: 5 patterns, 2 skills ignored
-✓ ~/.config/skillshare/agents (8 agents, 2026-01-20 15:30)
+─────────────────────────────────────────
+✓ ~/.config/skillshare/skills (43 skills, 2026-09-28 12:52)
+✓ ~/.config/skillshare/agents (2 agents, 2026-09-28 12:39)
 
 Tracked Repositories
-_team-skills    ✓  5 skills, up-to-date
-_personal-repo  !  3 skills, has uncommitted changes
+─────────────────────────────────────────
+_superpowers ✓            15 skills, up-to-date
 
 Targets
+─────────────────────────────────────────
 claude
-  skills   merged       [merge] ~/.claude/skills (8 shared, 2 local)
-  agents   merged       [merge] 8/8 linked
+  skills   merged       [merge] ~/.claude/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
 cursor
-  skills   merged       [merge] ~/.cursor/skills (3 shared, 0 local)
-  agents   merged       [merge] 8/8 linked
-windsurf
-  skills   has files    [merge->needs sync] ~/.windsurf/skills
-⚠ 2 skill(s) not synced — run 'skillshare sync'
+  skills   merged       [merge] ~/.cursor/skills (43 shared, 1 local)
+  agents   merged       [merge] 2/2 linked
+gemini
+  skills   merged       [merge] ~/.gemini/skills (43 shared, 0 local)
+…
+universal
+  skills   merged       [merge] ~/.agents/skills (43 shared, 0 local)
 
 Extras
-rules        has files  [merge] .cursor/rules (4 files)
-commands     has files  [merge] .claude/commands (3 files)
+─────────────────────────────────────────
+rules        has files    [merge] ~/.claude/rules (2 files)
+rules        has files    [merge] ~/.cursor/rules (2 files)
+commands     has files    [merge] ~/.claude/commands (1 files)
+team         has files    [symlink] ~/.codex (1 files)
+team         has files    [import] ~/.claude (1 files)
+…
 
 Audit
+─────────────────────────────────────────
 → Profile:    DEFAULT
 → Block:      severity >= CRITICAL
 → Dedupe:     GLOBAL
 → Analyzers:  ALL
 
 Version
-✓ CLI: 0.17.0
-✓ Skill: 0.17.0 (up to date)
+─────────────────────────────────────────
+! Skill: 0.21.12 (update available: 0.21.13)
+→   Run: skillshare upgrade --skill && skillshare sync
 ```
 
 ## セクション
@@ -87,8 +95,9 @@ claude
 - **Shared/local の件数**: merge および copy mode では、その target の期待セット（`include`/`exclude` フィルター適用後）でカウントされます。Copy mode では "shared" の代わりに "managed" と表示されます。
 
 **Agents サブ項目**が表示するもの:
-- **Status**: `synced` または `drift`
-- **Linked count**: 例 `8/8 linked`
+- **Sync mode**: agents が実際に sync されるモード。Developer Mode がオフの Windows では、agent ファイルはリンクではなくコピーされるため、`merge` が `[copy]` と表示されます
+- **Status**: `merged`、`copied`、`linked`、または `drift`
+- **Linked count**: 例 `8/8 linked`（最新のコピーはリンク済みとして数えられます）。copy fallback では、skillshare が所有していない内容が同じローカルファイルは保持され、別に表示されます（例：`0/1 linked, 1 local preserved`）
 
 agents source が存在しない、または target に agent path が設定されていない場合、agents サブ項目は省略されます。
 

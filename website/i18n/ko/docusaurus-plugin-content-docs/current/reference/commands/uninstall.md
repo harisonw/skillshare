@@ -21,7 +21,21 @@ skillshare uninstall team-repo             # Remove tracked repository (_ prefix
 - skill 그룹 전체를 한 번에 일괄 제거할 때
 - `--all`로 **모든** skill을 한 번에 제거할 때
 
-![uninstall demo](/img/uninstall-demo.png)
+```text
+$ skillshare uninstall css-review
+
+Uninstalling skill
+─────────────────────────────────────────
+→ Name: frontend/css-review
+→ Path: ~/.config/skillshare/skills/frontend/css-review
+
+Are you sure you want to uninstall this skill? [y/N]: y
+✓ Uninstalled skill: frontend/css-review
+→ Moved to trash (7 days): ~/.local/share/skillshare/trash/frontend/css-review_2026-09-28_12-52-23
+
+  Next Steps
+→ Run 'skillshare sync' to update all targets
+```
 
 ## 동작 방식
 

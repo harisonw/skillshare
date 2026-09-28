@@ -18,44 +18,52 @@ skillshare status
 - 確認目前生效的 audit 政策（profile、threshold、dedupe 模式）
 - 檢查 CLI 或 skill 是否有更新
 
-![status demo](/img/status-demo.png)
-
 ## 輸出範例
 
 ```
 Source
-✓ ~/.config/skillshare/skills (12 skills, 2026-01-20 15:30)
-→ .skillignore: 5 patterns, 2 skills ignored
-✓ ~/.config/skillshare/agents (8 agents, 2026-01-20 15:30)
+─────────────────────────────────────────
+✓ ~/.config/skillshare/skills (43 skills, 2026-09-28 12:52)
+✓ ~/.config/skillshare/agents (2 agents, 2026-09-28 12:39)
 
 Tracked Repositories
-_team-skills    ✓  5 skills, up-to-date
-_personal-repo  !  3 skills, has uncommitted changes
+─────────────────────────────────────────
+_superpowers ✓            15 skills, up-to-date
 
 Targets
+─────────────────────────────────────────
 claude
-  skills   merged       [merge] ~/.claude/skills (8 shared, 2 local)
-  agents   merged       [merge] 8/8 linked
+  skills   merged       [merge] ~/.claude/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
 cursor
-  skills   merged       [merge] ~/.cursor/skills (3 shared, 0 local)
-  agents   merged       [merge] 8/8 linked
-windsurf
-  skills   has files    [merge->needs sync] ~/.windsurf/skills
-⚠ 2 skill(s) not synced — run 'skillshare sync'
+  skills   merged       [merge] ~/.cursor/skills (43 shared, 1 local)
+  agents   merged       [merge] 2/2 linked
+gemini
+  skills   merged       [merge] ~/.gemini/skills (43 shared, 0 local)
+…
+universal
+  skills   merged       [merge] ~/.agents/skills (43 shared, 0 local)
 
 Extras
-rules        has files  [merge] .cursor/rules (4 files)
-commands     has files  [merge] .claude/commands (3 files)
+─────────────────────────────────────────
+rules        has files    [merge] ~/.claude/rules (2 files)
+rules        has files    [merge] ~/.cursor/rules (2 files)
+commands     has files    [merge] ~/.claude/commands (1 files)
+team         has files    [symlink] ~/.codex (1 files)
+team         has files    [import] ~/.claude (1 files)
+…
 
 Audit
+─────────────────────────────────────────
 → Profile:    DEFAULT
 → Block:      severity >= CRITICAL
 → Dedupe:     GLOBAL
 → Analyzers:  ALL
 
 Version
-✓ CLI: 0.17.0
-✓ Skill: 0.17.0 (up to date)
+─────────────────────────────────────────
+! Skill: 0.21.12 (update available: 0.21.13)
+→   Run: skillshare upgrade --skill && skillshare sync
 ```
 
 ## 各區段說明
@@ -87,8 +95,9 @@ claude
 - **shared/local 數量**：在 merge 與 copy 模式下，數量以該 target 經過 `include`/`exclude` 過濾後的預期集合為準。copy 模式會顯示「managed」而非「shared」。
 
 **agents 子項目**顯示：
-- **狀態**：`synced` 或 `drift`
-- **連結數量**：例如 `8/8 linked`
+- **Sync 模式**：agents 實際使用的同步模式。在沒有開啟開發人員模式的 Windows 上，`merge` 會顯示為 `[copy]`，因為 agent 檔案是被複製而不是連結
+- **狀態**：`merged`、`copied`、`linked` 或 `drift`
+- **連結數量**：例如 `8/8 linked`（最新的副本也算作已連結）。在 copy fallback 中，skillshare 不擁有但內容相同的本機檔案會被保留並分開顯示，例如 `0/1 linked, 1 local preserved`
 
 若 agents source 不存在，或該 target 沒有設定 agent 路徑，則會省略 agents 子項目。
 
@@ -111,7 +120,7 @@ rules        has files  [merge] .cursor/rules (4 files)
 commands     has files  [merge] .claude/commands (3 files)
 ```
 
-每個項目顯示名稱、狀態、sync 模式、target 路徑與檔案數量。
+每個項目顯示名稱、狀態、sync 模式、target 路徑與檔案數量。Sync 模式是檔案實際使用的同步模式：在沒有開啟開發人員模式的 Windows 上，連結檔案的 target 會顯示 `[copy]`。
 
 ### Audit
 

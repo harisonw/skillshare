@@ -180,6 +180,27 @@ func TestHandleRemoveTarget_CleanupFailureKeepsTarget(t *testing.T) {
 	}
 }
 
+// Codex and universal share ~/.agents/skills. Removing one must leave the links
+// the other still syncs there, not turn them into copies it no longer manages.
+func TestHandleRemoveTarget_KeepsSkillsAnotherTargetShares(t *testing.T) {
+	shared := filepath.Join(t.TempDir(), "agents-skills")
+	s, sourceDir := newTestServerWithTargets(t, map[string]string{"universal": shared, "codex": shared})
+	addSkill(t, sourceDir, "alpha")
+	link := filepath.Join(shared, "alpha")
+	if err := os.Symlink(filepath.Join(sourceDir, "alpha"), link); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	s.handler.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/targets/codex", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("universal's link was not kept: %v", err)
+	}
+}
+
 // Removing an account the MCP config still selects succeeds and says where its name
 // is left behind, so the next mcp sync does not fail on a target it cannot resolve.
 func TestHandleRemoveTarget_WarnsWhenMCPStillNamesTheAccount(t *testing.T) {

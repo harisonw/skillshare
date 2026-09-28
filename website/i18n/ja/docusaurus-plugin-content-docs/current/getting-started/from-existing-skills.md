@@ -19,7 +19,7 @@ BEFORE                                  AFTER
                                         Targets (symlinked back)
 ~/.codex/skills/                        ~/.claude/skills/ → source
   └── skill-d/                          ~/.cursor/skills/ → source
-                                        ~/.codex/skills/  → source
+                                        ~/.agents/skills/ → source
 ```
 
 :::caution 先にバックアップを
@@ -75,6 +75,21 @@ skillshare sync
 1. symlink ではないローカルの Skill を Source にコピーします（Skill 内の `.git/` はスキップします）。
 2. 元の場所を Source を指す symlink に置き換えます。
 3. 重複（同じ Skill 名が複数の Target に存在する状態）を検出し、上書きせずに報告します。
+
+Skill は Source にコピーされ、元の場所は Source へのリンクに置き換わります:
+
+```mermaid
+flowchart LR
+    CL["~/.claude/skills"]
+    CU["~/.cursor/skills"]
+    SRC["Source<br/>~/.config/skillshare/skills"]
+    CL2["~/.claude/skills<br/>Source へのリンク"]
+    CU2["~/.cursor/skills<br/>Source へのリンク"]
+    CL -->|collect| SRC
+    CU -->|collect| SRC
+    SRC -.->|symlink| CL2
+    SRC -.->|symlink| CU2
+```
 
 ### 重複を解消する
 

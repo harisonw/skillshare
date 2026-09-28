@@ -18,7 +18,20 @@ skillshare upgrade --skill      # 僅 skill
 - 內建的 skillshare skill 需要更新
 - `doctor` 回報有可用更新之後
 
-![upgrade demo](/img/upgrade-demo.png)
+```text
+skillshare upgrade --skill --dry-run
+
+! Dry run mode - no changes will be made
+
+▸  Skill  skillshare
+│
+├─ Current  v0.21.12
+│
+├─ Checking latest version...
+├─ Latest: v0.21.13 (1.0s)
+│
+└─ Action  Would upgrade to v0.21.13
+```
 
 ## 執行內容
 
@@ -96,6 +109,12 @@ Downloading v0.21.4...  3.2 MB / 9.1 MB
 ```
 
 若執行檔位於受保護的目錄（例如 `/usr/local/bin`），skillshare 只會用 `sudo` 替換執行檔 — 不需要手動加上前綴。內建 skill、UI 資源與紀錄仍以你的身分寫入，所以不要用 `sudo` 執行整個升級：這會在 skill 來源目錄留下 root 擁有的檔案，之後 `git pull` 會出現 `Permission denied`。
+
+如果先前的升級已經留下這類檔案，更新內建 skill 會以 `permission denied` 失敗，錯誤訊息會附上把 skill 來源目錄還給你的指令，例如：
+
+```bash
+sudo chown -R "$(id -un)" ~/.config/skillshare/skills
+```
 
 沒有終端機可以輸入密碼時（Dashboard 的 **立即更新** 按鈕、CI），升級會立刻停止，並提示你改在終端機執行 `skillshare upgrade`，不會一直等待輸入。已快取的 `sudo` 憑證與 `NOPASSWD` 設定仍會直接升級，不會出現提示。
 

@@ -400,6 +400,18 @@ Targets 是 AI CLI 的 skill 目錄。Sync 之後，它們會包含指向 source
 ~/.claude/skills -> ~/.config/skillshare/skills/
 ```
 
+### 以副本取代檔案連結（Windows） {#copies-in-place-of-file-links-windows}
+
+在沒有開啟開發人員模式的 Windows 上，agent targets 以及 `merge` 模式的目錄型 extras 會拿到副本，而不是檔案連結。Target 目錄中會有一個 `.skillshare-manifest.json`，記錄每份副本的 checksum，讓之後的 sync 可以更新或清理它們，並保留你自己的檔案：
+```
+~/.claude/agents/
+├── reviewer.md                # source agent 的副本
+├── local-agent.md             # 使用者自建，會被保留
+└── .skillshare-manifest.json  # 追蹤複製的 agents 與 checksum
+```
+
+單一檔案 extra（例如共用 `AGENTS.md`）則會把它的副本記錄在 skillshare 的 [extras 備份資料夾](../commands/extras.md#single-file-extras)，而不是 target 目錄中。
+
 ---
 
 ## Tracked Repositories
@@ -470,7 +482,7 @@ skillshare 遵循 XDG Base Directory Specification。可用 `XDG_CONFIG_HOME`、
 | Logs | `%AppData%\skillshare\logs\` |
 | Version cache | `%AppData%\skillshare\version-check.json` |
 | UI cache | `%AppData%\skillshare\ui\{version}\` |
-| Link type | NTFS Junctions |
+| Link type | 資料夾用 NTFS Junctions；單一檔案用 symlinks（需要開發人員模式，否則改為複製） |
 
 ## XDG Base Directory 配置
 

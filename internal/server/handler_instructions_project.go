@@ -18,7 +18,7 @@ import (
 func (s *Server) requireProjectInstructions(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.IsProjectMode() {
-			writeError(w, http.StatusBadRequest, "the project AGENTS.md is available in project mode")
+			writeCodedError(w, http.StatusBadRequest, "instructions_project_required", "the project AGENTS.md is available in project mode", map[string]string{})
 			return
 		}
 		next(w, r)
@@ -51,7 +51,7 @@ func (s *Server) handleGetProjectInstructions(w http.ResponseWriter, r *http.Req
 	if info, err := os.Stat(path); err == nil && !info.IsDir() {
 		data, err := readLimited(path)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeCodedError(w, http.StatusInternalServerError, "instructions_read_failed", err.Error(), map[string]string{"detail": err.Error()})
 			return
 		}
 		resp["exists"], resp["content"], resp["size"] = true, string(data), info.Size()
@@ -66,7 +66,7 @@ func (s *Server) handlePutProjectInstructions(w http.ResponseWriter, r *http.Req
 		Content string `json:"content"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxInstructionsBytes+4096)).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_json", "invalid JSON body", map[string]string{})
 		return
 	}
 	s.mu.Lock()
@@ -74,7 +74,7 @@ func (s *Server) handlePutProjectInstructions(w http.ResponseWriter, r *http.Req
 	path := filepath.Join(s.projectRoot, instructions.AgentsFile)
 	if err := writeInstructionsFile(path, body.Content); err != nil {
 		s.writeOpsLog("instructions-edit", "error", start, map[string]any{"path": path, "scope": "ui"}, err.Error())
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_write_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	s.writeOpsLog("instructions-edit", "ok", start, map[string]any{"path": path, "scope": "ui"}, "")
@@ -89,30 +89,30 @@ func (s *Server) handleProjectInstructionsShim(w http.ResponseWriter, r *http.Re
 		Target string `json:"target"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Target == "" {
-		writeError(w, http.StatusBadRequest, "target is required")
+		writeCodedError(w, http.StatusBadRequest, "instructions_target_required", "target is required", map[string]string{})
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tc, found := s.cfg.Targets[body.Target]
 	if !found {
-		writeError(w, http.StatusNotFound, "target not found: "+body.Target)
+		writeCodedError(w, http.StatusNotFound, "instructions_target_not_found", "target not found: "+body.Target, map[string]string{"target": body.Target})
 		return
 	}
 	it, ok := config.TargetInstructions(body.Target, tc, true)
 	if !ok {
-		writeError(w, http.StatusBadRequest, body.Target+" has no instruction file")
+		writeCodedError(w, http.StatusBadRequest, "instructions_no_file", body.Target+" has no instruction file", map[string]string{"target": body.Target})
 		return
 	}
 	reach := instructions.ProjectReach(s.projectRoot, body.Target, it)
 	if reach.Shim == "" {
-		writeError(w, http.StatusBadRequest, body.Target+" needs no change to read "+instructions.AgentsFile)
+		writeCodedError(w, http.StatusBadRequest, "instructions_no_change_needed", body.Target+" needs no change to read "+instructions.AgentsFile, map[string]string{"target": body.Target})
 		return
 	}
 	args := map[string]any{"target": body.Target, "shim": reach.Shim, "scope": "ui"}
 	if err := instructions.ApplyShim(s.projectRoot, it, reach.Shim); err != nil {
 		s.writeOpsLog("instructions-shim", "error", start, args, err.Error())
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_write_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	s.writeOpsLog("instructions-shim", "ok", start, args, "")

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, CircleAlert, CircleArrowUp, CircleCheck, FolderX, GitBranch, Loader2, Puzzle, RefreshCw, Trash2 } from 'lucide-react';
+import { Bot, Check, CircleAlert, CircleArrowUp, CircleCheck, FolderX, GitBranch, Loader2, Puzzle, RefreshCw, ShieldAlert, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { CheckResult, Skill, UpdateResultItem } from '../api/client';
 import { queryKeys, staleTimes } from '../lib/queryKeys';
@@ -146,6 +147,8 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
   const [finished, setFinished] = useState(false);
   const [rehydrating, setRehydrating] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [retried, setRetried] = useState<Set<string>>(new Set());
+  const [openDetails, setOpenDetails] = useState<Set<string>>(new Set());
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => () => esRef.current?.close(), []);
@@ -202,6 +205,8 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
   const runCheck = useCallback(() => {
     esRef.current?.close();
     setChecking(true);
+    setRun(new Map());
+    setFinished(false);
     setStatuses((prev) => {
       const next = new Map(prev);
       for (const item of updatable) next.set(item.name, { status: 'checking' });
@@ -262,6 +267,8 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
     if (names.length === 0) return;
     esRef.current?.close();
     setRun(new Map(names.map((n) => [n, { status: 'pending' }])));
+    setRetried(new Set());
+    setOpenDetails(new Set());
     setRunning(true);
     setFinished(false);
 
@@ -291,6 +298,7 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
   }, [patchRun, applyUpdateResults, invalidateSkillData, toast]);
 
   const retryForce = useCallback((name: string) => {
+    setRetried((prev) => new Set(prev).add(name));
     patchRun(name, { status: 'in-progress' });
     esRef.current = api.updateAllStream(
       () => {},
@@ -305,6 +313,7 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
   }, [patchRun, applyUpdateResults, invalidateSkillData]);
 
   const purge = useCallback(async (name: string) => {
+    setRetried((prev) => new Set(prev).add(name));
     patchRun(name, { status: 'in-progress', message: t('update.updating.purging') });
     try {
       await api.batchUninstall({ names: [name], force: true });
@@ -344,13 +353,32 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
 
   const tally = { success: 0, skipped: 0, blocked: 0, error: 0 } as Record<RunStatus, number>;
   for (const s of run.values()) tally[s.status] = (tally[s.status] ?? 0) + 1;
-  const troubled = tally.blocked + tally.error > 0;
+  const tallyText = [
+    tally.success && t('update.summary.updated', { count: tally.success }),
+    tally.skipped && t('update.summary.skipped', { count: tally.skipped }),
+    tally.blocked && t('update.summary.blocked', { count: tally.blocked }),
+    tally.error && t('update.summary.failed', { count: tally.error }),
+  ].filter(Boolean).join(' · ');
+
+  // Once a run ends, failures leave the list for their own section so their messages have room;
+  // one retried from there stays put to show how the retry went.
+  const showDone = finished && !running && run.size > 0;
+  const isTrouble = (name: string) => {
+    const s = run.get(name)?.status;
+    return s === 'blocked' || s === 'error' || retried.has(name);
+  };
+  const failedUnits = showDone ? units.filter((u) => isTrouble(u.name)) : [];
+  const listUnits = failedUnits.length ? units.filter((u) => !isTrouble(u.name)) : units;
+
+  const runDone = [...run.values()].filter((s) => s.status !== 'pending' && s.status !== 'in-progress').length;
+  const current = running ? units.find((u) => run.get(u.name)?.status === 'in-progress') : undefined;
+  const available = countUpdates(statuses, units);
 
   const checkCell = (unit: UpdateUnit) => {
     const c = unitCheck(statuses, unit);
     switch (c.status) {
       case 'checking':
-        return <span className="inline-flex items-center gap-2 text-[13px] text-ink-2"><Loader2 size={13} className="animate-spin" />{t('update.check.checking')}</span>;
+        return <span className="inline-flex items-center gap-2 text-[13px] text-ink-3"><Loader2 size={13} className="animate-spin" />{t('update.check.checking')}</span>;
       case 'behind':
         return <span className="ss-st warn">{c.behind ? t('update.check.behind', { count: c.behind }) : t('update.check.behindFallback')}</span>;
       case 'update-available':
@@ -366,114 +394,121 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
     }
   };
 
-  // After a run, result cells (risk tag + status + retry) and row messages need room; before it the action cell only holds
-  // the Update button, so Source takes the space
-  const [sourceFlex, actionWidth] = run.size > 0 ? ['flex-1', 'w-[230px]'] : ['flex-[2]', 'w-[90px]'];
-  const actionCell = (unit: UpdateUnit) => {
+  // A row shows one status: how its update went once it has been run, otherwise what the check found.
+  const statusCell = (unit: UpdateUnit) => {
     const r = run.get(unit.name);
-    if (!r) {
-      const c = unitCheck(statuses, unit).status;
-      if (c === 'up-to-date' || c === 'checking') return null;
-      return (
-        <Button variant="secondary" size="sm" disabled={busy} onClick={() => startUpdate([unit.name], force)}>
-          {t('update.row.update')}
-        </Button>
-      );
-    }
-    const risk = r.auditRiskLabel && r.auditRiskLabel !== 'clean' ? <span className="ss-tag">{r.auditRiskLabel}</span> : null;
+    if (!r) return checkCell(unit);
     switch (r.status) {
       case 'pending':
         return <span className="ss-st off">{t('update.status.pending')}</span>;
       case 'in-progress':
-        return <span className="inline-flex items-center gap-2 text-[13px] text-ink-2"><Loader2 size={13} className="animate-spin" />{t('update.status.updating')}</span>;
+        return <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-ink"><Loader2 size={13} className="animate-spin" />{r.message ?? t('update.status.updating')}</span>;
       case 'success':
-        return <>{risk}<span className="ss-st ok">{t('update.status.updated')}</span></>;
+        return <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ok"><Check size={15} strokeWidth={2.6} className="ss-pop" />{t('update.status.updated')}</span>;
       case 'skipped':
         return <span className="ss-st off">{t('update.status.skipped')}</span>;
       case 'blocked':
-        return (
-          <>
-            {risk}
-            <span className="ss-st bad">{t('update.status.blocked')}</span>
-            <Button variant="ghost" size="sm" disabled={running} onClick={() => retryForce(unit.name)}>{t('update.updating.forceRetry')}</Button>
-          </>
-        );
+        return <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-bad"><X size={15} strokeWidth={2.6} className="ss-pop" />{t('update.status.blocked')}</span>;
       case 'error':
-        return (
-          <>
-            <span className="ss-st bad">{t('update.status.failed')}</span>
-            {isStaleError(r.message) ? (
-              <Button variant="ghost" size="sm" disabled={running} onClick={() => purge(unit.name)}>
-                <Trash2 size={14} />
-                {t('update.updating.purge')}
-              </Button>
-            ) : isForceRetryable(r.message) ? (
-              <Button variant="ghost" size="sm" disabled={running} onClick={() => retryForce(unit.name)}>{t('update.updating.forceRetry')}</Button>
-            ) : null}
-          </>
-        );
+        return <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-bad"><X size={15} strokeWidth={2.6} className="ss-pop" />{t('update.status.failed')}</span>;
     }
   };
 
-  const subLine = (unit: UpdateUnit) => {
+  const riskTag = (unit: UpdateUnit) => {
+    const label = run.get(unit.name)?.auditRiskLabel;
+    if (!label || label === 'clean') return null;
+    return <span className={`ss-tag ${label === 'critical' || label === 'high' ? 'bad' : ''}`}>{label}</span>;
+  };
+
+  const unitIcon = (unit: UpdateUnit) => (unit.isRepo
+    ? <span className="w-[26px] grid place-items-center text-ink-2"><GitBranch size={15} /></span>
+    : <span className={`ss-cat sm ${kind}`}>{kind === 'agent' ? <Bot size={14} /> : <Puzzle size={14} />}</span>);
+
+  const unitName = (unit: UpdateUnit) => (
+    <span className="flex items-baseline gap-3 min-w-0 flex-1">
+      <span className="nm m truncate shrink-0 max-w-[60%]">{unit.label}</span>
+      {unit.isRepo && <span className="ss-tag self-center">tracked</span>}
+      <span className="font-mono text-xs text-ink-3 truncate">{sourceLabel(unit.source)}</span>
+    </span>
+  );
+
+  const failureActions = (unit: UpdateUnit) => {
     const r = run.get(unit.name);
-    if (r?.message && (r.status === 'error' || r.status === 'blocked')) {
-      return <span className="text-[13px] text-bad whitespace-pre-wrap break-words">{stripCliHint(r.message)}</span>;
+    if (r?.status === 'blocked' || (r?.status === 'error' && isForceRetryable(r.message))) {
+      return <Button variant="secondary" size="sm" onClick={() => retryForce(unit.name)}>{t('update.updating.forceRetry')}</Button>;
     }
-    if (r?.message) return <span className="text-[13px] text-ink-3 truncate">{stripCliHint(r.message)}</span>;
-    if (!unit.isRepo) {
-      const dir = unit.name.includes('/') ? unit.name.slice(0, unit.name.lastIndexOf('/')) : '';
-      return dir ? <span className="font-mono text-xs text-ink-3 truncate">{dir}</span> : null;
+    if (r?.status === 'error' && isStaleError(r.message)) {
+      return <Button variant="secondary" size="sm" onClick={() => purge(unit.name)}><Trash2 size={14} />{t('update.updating.purge')}</Button>;
     }
-    const meta = [t(`resources.count.${kind}${unit.items.length === 1 ? '' : 's'}`, { count: unit.items.length }), unit.items[0].branch];
-    return <span className="text-xs text-ink-3 truncate">{meta.filter(Boolean).join(' · ')}</span>;
+    return statusCell(unit);
   };
 
-  const summary = checking
-    ? t('update.tab.checking')
-    : lastChecked
-    ? t('update.check.checkedAt', { time: formatRelativeTime(lastChecked, locale) })
-    : t('update.tab.notChecked');
+  let hero: { icon: ReactNode; tone: string; title: ReactNode; sub: ReactNode };
+  if (checking) {
+    hero = { icon: <Loader2 size={20} className="animate-spin" />, tone: '', title: t('update.tab.checking'), sub: t('update.tab.audited') };
+  } else if (running) {
+    hero = {
+      icon: <Loader2 size={20} className="animate-spin" />,
+      tone: '',
+      title: <>{t('update.hero.running', { current: Math.min(runDone + 1, run.size), total: run.size })}{current && <span className="ml-3 font-mono text-[14px] font-medium text-ink-2">{current.label}</span>}</>,
+      sub: tallyText || t('update.tab.audited'),
+    };
+  } else if (showDone) {
+    const troubled = tally.blocked + tally.error > 0;
+    hero = {
+      icon: troubled ? <CircleAlert size={20} /> : <Check size={20} strokeWidth={2.6} className="ss-pop" />,
+      tone: troubled ? 'warn' : 'ok',
+      title: <>{t('update.done.subtitle')} {tallyText}</>,
+      sub: tally.success > 0 ? t('update.done.syncHint') : t('update.tab.audited'),
+    };
+  } else {
+    const summary = lastChecked ? t('update.check.checkedAt', { time: formatRelativeTime(lastChecked, locale) }) : '';
+    hero = {
+      icon: <CircleArrowUp size={20} />,
+      tone: '',
+      title: !lastChecked ? t('update.tab.notChecked') : available > 0 ? t('update.hero.available', { count: available }) : t('update.hero.allCurrent'),
+      sub: `${summary} ${t('update.tab.audited')}`.trim(),
+    };
+  }
+  const syncFirst = showDone && tally.success > 0;
 
   return (
     <>
       {units.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 -mt-2">
-          <span className="flex-1 min-w-[260px] text-[13px] text-ink-2">{summary} {t('update.tab.audited')}</span>
-          <Checkbox size="sm" className="mr-2 text-[13px]" label={t('update.tab.force')} checked={force} onChange={setForce} disabled={busy} />
-          <Button variant="secondary" loading={checking} disabled={running} onClick={runCheck}>
-            <RefreshCw size={15} />
-            {t(lastChecked ? 'update.tab.checkAgain' : 'update.tab.checkNow')}
-          </Button>
-          {shown.length > 0 && (
-            <Button variant="secondary" disabled={busy} onClick={() => startUpdate(shown.map((u) => u.name), force)}>
-              {t('update.header.updateSelected', { count: shown.length })}
-            </Button>
-          )}
-          <Button variant="primary" disabled={busy} onClick={() => startUpdate(units.map((u) => u.name), force)}>
-            <CircleArrowUp size={15} />
-            {t('update.tab.updateAll')}
-          </Button>
-        </div>
-      )}
-
-      {finished && run.size > 0 && (
-        <div className={`ss-note ${troubled ? 'warn' : 'inf'}`}>
-          {troubled ? <CircleAlert size={16} /> : <CircleCheck size={16} />}
-          <div className="flex-1">
-            <b>{t('update.done.subtitle')}</b>{' '}
-            {[
-              tally.success && t('update.summary.updated', { count: tally.success }),
-              tally.skipped && t('update.summary.skipped', { count: tally.skipped }),
-              tally.blocked && t('update.summary.blocked', { count: tally.blocked }),
-              tally.error && t('update.summary.failed', { count: tally.error }),
-            ].filter(Boolean).join(' · ')}
-            {tally.success > 0 && <div>{t('update.done.syncHint')}</div>}
+        <section className="ss-box flex flex-col gap-4 -mt-2" aria-live="polite">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className={`ss-update-icon ${hero.tone}`}>{hero.icon}</span>
+            <div className="flex flex-col gap-0.5 min-w-[240px] flex-1">
+              <div key={String(running) + String(checking) + String(showDone)} className="text-[16px] font-semibold animate-fade-in">{hero.title}</div>
+              <div className="text-[13px] text-ink-2">{hero.sub}</div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Checkbox size="sm" className="mr-2 text-[13px]" label={t('update.tab.force')} checked={force} onChange={setForce} disabled={busy} />
+              <Button variant="secondary" loading={checking} disabled={running} onClick={runCheck}>
+                <RefreshCw size={15} />
+                {t(lastChecked ? 'update.tab.checkAgain' : 'update.tab.checkNow')}
+              </Button>
+              {shown.length > 0 && (
+                <Button variant="secondary" disabled={busy} onClick={() => startUpdate(shown.map((u) => u.name), force)}>
+                  {t('update.header.updateSelected', { count: shown.length })}
+                </Button>
+              )}
+              {syncFirst ? (
+                <Button variant="primary" onClick={() => setSyncOpen(true)}><RefreshCw size={15} />{t('syncPreview.syncNowButton')}</Button>
+              ) : (
+                <Button variant="primary" disabled={busy} onClick={() => startUpdate(units.map((u) => u.name), force)}>
+                  <CircleArrowUp size={15} />
+                  {t('update.tab.updateAll')}
+                </Button>
+              )}
+            </div>
           </div>
-          {tally.success > 0 && (
-            <Button variant="secondary" size="sm" onClick={() => setSyncOpen(true)}><RefreshCw size={14} />{t('syncPreview.syncNowButton')}</Button>
+          {busy && (
+            <div className={`ss-bar ${checking ? 'indet' : ''}`} role="progressbar" aria-valuemin={0} aria-valuemax={run.size} aria-valuenow={checking ? undefined : runDone}>
+              <span style={checking ? undefined : { width: `${run.size ? (runDone / run.size) * 100 : 0}%` }} />
+            </div>
           )}
-        </div>
+        </section>
       )}
 
       {missingRepos.length > 0 && (
@@ -487,6 +522,46 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
         </div>
       )}
 
+      {failedUnits.length > 0 && (
+        <section className="flex flex-col gap-2 animate-fade-in" aria-labelledby="update-failed-title">
+          <h2 id="update-failed-title" className="m-0 text-[13px] font-semibold text-bad">{t('update.failed.title', { count: failedUnits.length })}</h2>
+          <div className="ss-list">
+            {failedUnits.map((unit) => {
+              const r = run.get(unit.name);
+              const message = stripCliHint(r?.message);
+              const open = openDetails.has(unit.name);
+              const trouble = r?.status === 'blocked' || r?.status === 'error';
+              return (
+                <div key={unit.name} className="ss-r flex-col !items-stretch gap-2 py-3">
+                  <div className="flex items-center gap-3">
+                    {r?.status === 'blocked' ? <span className="w-[26px] grid place-items-center text-bad"><ShieldAlert size={16} /></span> : unitIcon(unit)}
+                    <span className="flex flex-col min-w-0 flex-1 gap-0.5">
+                      {unitName(unit)}
+                      {trouble && message && <span className="text-[13px] text-bad truncate">{failureSummary(message)}</span>}
+                    </span>
+                    {riskTag(unit)}
+                    {trouble && message && (
+                      <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpenDetails((prev) => {
+                        const next = new Set(prev);
+                        if (!next.delete(unit.name)) next.add(unit.name);
+                        return next;
+                      })}>
+                        {t(open ? 'update.failed.hideDetails' : 'update.failed.showDetails')}
+                      </Button>
+                    )}
+                    <span className="flex items-center justify-end gap-2 min-w-[96px]">{trouble ? failureActions(unit) : statusCell(unit)}</span>
+                  </div>
+                  {trouble && open && message && (
+                    <pre className="m-0 ml-[38px] p-3 rounded-lg bg-sunken font-mono text-xs leading-relaxed text-ink-2 whitespace-pre-wrap break-words animate-fade-in">{message}</pre>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="m-0 text-[13px] text-ink-3">{t('update.tab.footer')}</p>
+        </section>
+      )}
+
       {units.length === 0 ? (
         missingRepos.length === 0 && (
           <EmptyState
@@ -495,44 +570,47 @@ export default function UpdatePage({ kind }: { kind: Kind }) {
             description={t(kind === 'agent' ? 'update.empty.agentsDescription' : 'update.empty.description')}
           />
         )
-      ) : (
-        <div className="-mt-3 flex flex-col gap-3">
-          <div className="ss-list">
-            <div className="ss-lh">
-              <Checkbox
-                hideLabel
-                label={t('resources.select.selectAll')}
-                checked={allSelected}
-                indeterminate={shown.length > 0 && !allSelected}
-                disabled={busy}
-                onChange={() => setSelected(allSelected ? new Set() : new Set(units.map((u) => u.name)))}
-              />
-              <span className="w-[26px]" />
-              <span className="flex-1">{t('resources.col.name')}</span>
-              <span className="w-[150px]">{t('resources.col.status')}</span>
-              <span className={`min-w-0 ${sourceFlex}`}>{t('resources.col.source')}</span>
-              <span className={actionWidth} />
-            </div>
-            {units.map((unit) => (
-              <div key={unit.name} className={`ss-r ${selected.has(unit.name) ? 'sel' : ''}`}>
-                <Checkbox hideLabel label={unit.label} checked={selected.has(unit.name)} disabled={busy} onChange={() => toggle(unit.name)} />
-                {unit.isRepo
-                  ? <span className="w-[26px] grid place-items-center text-ink-2"><GitBranch size={15} /></span>
-                  : <span className={`ss-cat sm ${kind}`}>{kind === 'agent' ? <Bot size={14} /> : <Puzzle size={14} />}</span>}
-                <span className="flex flex-col min-w-0 flex-1 gap-px py-2">
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span className="nm m truncate">{unit.label}</span>
-                    {unit.isRepo && <span className="ss-tag">tracked</span>}
-                  </span>
-                  {subLine(unit)}
-                </span>
-                <span className="w-[150px]">{checkCell(unit)}</span>
-                <span className={`min-w-0 ${sourceFlex} font-mono text-xs text-ink-3 truncate`}>{sourceLabel(unit.source)}</span>
-                <span className={`${actionWidth} flex items-center justify-end gap-2`}>{actionCell(unit)}</span>
-              </div>
-            ))}
+      ) : listUnits.length > 0 && (
+        <div className="ss-list">
+          <div className="ss-lh">
+            <Checkbox
+              hideLabel
+              label={t('resources.select.selectAll')}
+              checked={allSelected}
+              indeterminate={shown.length > 0 && !allSelected}
+              disabled={busy}
+              onChange={() => setSelected(allSelected ? new Set() : new Set(units.map((u) => u.name)))}
+            />
+            <span className="w-[26px]" />
+            <span className="flex-1">{t('resources.col.name')}</span>
           </div>
-          {troubled && <p className="text-[13px] text-ink-3">{t('update.tab.footer')}</p>}
+          {listUnits.map((unit) => {
+            const r = run.get(unit.name);
+            const c = unitCheck(statuses, unit).status;
+            const canUpdate = !r && c !== 'up-to-date' && c !== 'checking';
+            const rowState = r?.status === 'in-progress' ? 'updating' : r?.status === 'pending' || (running && !r) ? 'dim' : r?.status === 'success' ? 'flash' : '';
+            return (
+              <div key={unit.name} className={`ss-r group ${selected.has(unit.name) ? 'sel' : ''} ${rowState}`}>
+                <Checkbox hideLabel label={unit.label} checked={selected.has(unit.name)} disabled={busy} onChange={() => toggle(unit.name)} />
+                {unitIcon(unit)}
+                {unitName(unit)}
+                {riskTag(unit)}
+                {canUpdate && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                    disabled={busy}
+                    onClick={() => startUpdate([unit.name], force)}
+                  >
+                    {t('update.row.update')}
+                  </Button>
+                )}
+                <span className="w-[140px] flex justify-end">{statusCell(unit)}</span>
+                {rowState === 'updating' && <span className="ss-rowbar" aria-hidden />}
+              </div>
+            );
+          })}
         </div>
       )}
       <SyncPreviewModal open={syncOpen} onClose={() => setSyncOpen(false)} kind={kind} />
@@ -610,6 +688,12 @@ export function stripCliHint(message?: string): string | undefined {
     .replace(/\n*Use --skip-audit to bypass: /, '\n\n')
     .replace(/ \(use --skip-audit to bypass\)/, '')
     .replace(/ \(try force update\)/, '');
+}
+
+// The first finding (or first line) stands in for the whole message; the rest opens on demand.
+function failureSummary(message: string): string {
+  const lines = message.split('\n').map((l) => l.trim()).filter(Boolean);
+  return lines.find((l) => /^(CRITICAL|HIGH|MEDIUM|LOW|INFO):/.test(l)) ?? lines[0] ?? '';
 }
 
 function matchesCheckSkill(item: Skill, resultName: string): boolean {

@@ -16,6 +16,8 @@ sidebar_position: 9
 2. 如果该 Source 中包含多个 plugin，请先选择一个，然后再选择兼容的工具。
 3. 检查变更内容并应用它们。
 
+![Add plugin 对话框：发现的 plugin，以及兼容与不支持的 targets](/img/plugins-add-dialog.png)
+
 大多数用户只需要一个仓库与目标复选框即可。**Advanced options** 可以新增
 一个 Git ref，用于选择某个 release。Discovery 会分别显示每个 Target 的组件与
 兼容性。当 OpenCode 因为其入口无法被检测而被列为不受支持时，该行上的

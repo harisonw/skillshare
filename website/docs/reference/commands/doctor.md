@@ -13,7 +13,56 @@ skillshare doctor -g        # Force global mode
 skillshare doctor --json    # Structured JSON output for CI
 ```
 
-![doctor demo](/img/doctor-demo.png)
+```text
+skillshare doctor
+
+Checking environment
+─────────────────────────────────────────
+✓ Config: ~/.config/skillshare/config.yaml
+→ Config directory: ~/.config/skillshare
+→ Data directory:   ~/.local/share/skillshare
+→ State directory:  ~/.local/state/skillshare
+
+✓ Source: ~/.config/skillshare/skills (43 skills)
+✓ Agents source: ~/.config/skillshare/agents (2 agents)
+→ Skillignore: not configured
+✓ Link support: OK
+! Git: not initialized (recommended for backup)
+
+✓ Skill integrity: 27/27 verified
+
+Checking targets
+─────────────────────────────────────────
+claude
+  skills   [merge] merged (43 shared, 0 local)
+  agents   [merge] synced (2/2 linked)
+cursor
+  skills   [merge] merged (43 shared, 1 local)
+  agents   [merge] synced (2/2 linked)
+gemini
+  skills   [merge] merged (43 shared, 0 local)
+…
+! gemini will see content from: universal
+    ~/.agents/skills ← universal
+…
+✗ claude: 1 broken symlink(s): frontend__css-review
+…
+
+Extras
+─────────────────────────────────────────
+✓ rules: 2 files, 2/2 targets OK
+✓ commands: 1 files, 1/1 targets OK
+✓ team: 1 files, 4/4 targets OK
+
+Storage
+─────────────────────────────────────────
+→ Backups: last backup 2026-09-28_12-41-50 (10 minutes ago)
+→ Trash: 1 item(s) (247 B), oldest <1 day
+
+Summary
+─────────────────────────────────────────
+✗ 6 error(s), 4 warning(s)
+```
 
 ## When to Use
 
@@ -44,10 +93,10 @@ Checking environment
 Checking targets
 claude
   skills   [merge] merged (8 shared, 2 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 cursor
   skills   [copy] copied (8 managed, 0 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 codex
   skills   [merge] needs sync
 
@@ -80,7 +129,7 @@ Summary
 
 Each target shows sub-items for **skills** and **agents** (when agents are configured):
 - Skills: path, sync mode, sync state, shared/local counts
-- Agents: linked count, drift detection
+- Agents: sync mode, linked count, drift detection. On Windows without Developer Mode, `merge` shows as `[copy]`; up-to-date managed copies count as linked. Identical local files that skillshare does not own are preserved. In copy fallback, agent counts show them separately as `local preserved`, for example `0/1 linked, 1 local preserved`.
 - No broken symlinks
 - Duplicate-skill checks for unintended local collisions:
   - `merge` mode: skipped (local skills are expected)
@@ -203,10 +252,12 @@ skillshare new my-skill  # Creates proper structure
 
 ### "Link not supported"
 
-On Windows without Developer Mode:
+`doctor` links a test folder inside the system temp directory (`%TEMP%` on Windows, `$TMPDIR` or `/tmp` elsewhere). On Windows that link is an NTFS junction, which needs neither Administrator nor Developer Mode, so turning on Developer Mode does not fix this error. The `junction error:` line in the message shows why Windows refused. Check that the temp directory:
 
-1. Enable Developer Mode in Settings
-2. Or run as Administrator
+1. Is on a local NTFS drive, not FAT32, exFAT, or a network share (junctions only work on NTFS)
+2. Is writable by your account, and not blocked by antivirus or security software
+
+This check does not test file links. Without Developer Mode, agents and extras that link single files are copied instead; see [Windows troubleshooting](../../troubleshooting/windows.md#file-links-need-windows-developer-mode-copying-instead).
 
 ## Example Output with Issues
 
@@ -225,7 +276,7 @@ Checking environment
 Checking targets
 claude
   skills   [merge] merged (8 shared, 2 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 cursor
   skills   [merge] 2 broken symlink(s): old-skill, removed-skill
 codex

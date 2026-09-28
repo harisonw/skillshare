@@ -9,10 +9,11 @@ import (
 	"skillshare/internal/theme"
 )
 
-// Deprecated: Use theme.ANSI() instead. These constants are retained
-// for backward compatibility with any third-party code that imports the
-// ui package directly. New code should use theme.ANSI().
-const (
+// Deprecated: Use theme.ANSI() instead. These raw escape sequences are
+// retained for existing callers. They are variables rather than constants so
+// DisableColors can blank them when NO_COLOR is set. New code should use
+// theme.ANSI().
+var (
 	Reset      = "\033[0m"
 	Red        = "\033[31m"
 	Green      = "\033[32m"
@@ -31,7 +32,7 @@ const (
 )
 
 // Semantic color aliases for consistent theming
-const (
+var (
 	// Primary brand color (yellow - matches logo)
 	Primary = Yellow
 	// Accent color for interactive elements
@@ -46,10 +47,25 @@ const (
 )
 
 // Bold variants
-const (
+var (
 	Bold      = "\033[1m"
 	BoldReset = "\033[22m"
 )
+
+// DisableColors blanks every raw escape variable above so output built from
+// them is plain text. main calls it once at startup when the resolved theme
+// has NoColor set, before any output is produced.
+func DisableColors() {
+	for _, v := range []*string{
+		&Reset, &Red, &Green, &Yellow, &Blue, &Magenta, &Cyan, &Orange,
+		&Purple, &BrightRed, &OrangeAlt, &BrightBlue, &Gray, &Dim, &White,
+		&Primary, &Accent, &Muted,
+		&StatusSuccess, &StatusError, &StatusWarning, &StatusInfo,
+		&Bold, &BoldReset,
+	} {
+		*v = ""
+	}
+}
 
 // Severity color IDs (256-color palette) — single source of truth for both
 // ANSI escape codes (SeverityColor) and lipgloss styles (SeverityColorID).

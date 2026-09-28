@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"skillshare/internal/utils"
 )
 
 var namePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
@@ -108,7 +110,7 @@ func hashTree(root string) (string, map[string]bool, error) {
 		if err != nil {
 			return err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(path, info.Mode()) {
 			link, err := os.Readlink(path)
 			if err != nil {
 				return err
@@ -334,7 +336,7 @@ func copyTree(root, dest string) error {
 		if err != nil {
 			return err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(path, info.Mode()) {
 			link, err := os.Readlink(path)
 			if err != nil {
 				return err

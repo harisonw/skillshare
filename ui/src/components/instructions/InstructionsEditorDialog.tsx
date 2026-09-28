@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useBeforeUnload } from 'react-router-dom';
 import { TriangleAlert, X } from 'lucide-react';
 import AgentIcon from '../AgentIcon';
 import Button from '../Button';
@@ -8,7 +9,9 @@ import DialogShell from '../DialogShell';
 import { useToast } from '../Toast';
 import { useT } from '../../i18n';
 import { shortenHome } from '../../lib/paths';
-import { formatSize, isImportLine, lineCount } from './instructionsView';
+import { useSaveShortcut } from './useSaveShortcut';
+import { BoxHeader, InstructionsPreview } from './ViewTabs';
+import { instructionsErrorMessage, isImportLine } from './instructionsView';
 
 /** Edits one instruction file in place: a shared file or the project AGENTS.md. */
 export default function InstructionsEditorDialog({ title, path, content, note, readers, warnings, onSave, onClose }: {
@@ -21,7 +24,8 @@ export default function InstructionsEditorDialog({ title, path, content, note, r
   readers?: string[];
   /** Problems the side panel should point out, e.g. targets that read only part of the file. */
   warnings?: string[];
-  onSave: (content: string) => Promise<void>;
+  /** Resolves to the toast text when the save did more than write the file. */
+  onSave: (content: string) => Promise<string | void>;
   onClose: () => void;
 }) {
   const t = useT();
@@ -30,50 +34,52 @@ export default function InstructionsEditorDialog({ title, path, content, note, r
   const [draft, setDraft] = useState(content);
   const [saving, setSaving] = useState(false);
   const [reverting, setReverting] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  // Preview shows the draft; the draft and ⌘S work the same in both views.
+  const [view, setView] = useState<'edit' | 'preview'>('edit');
   const dirty = draft !== base;
 
   const save = async () => {
     if (!dirty || saving) return;
     setSaving(true);
     try {
-      await onSave(draft);
+      const message = await onSave(draft);
       setBase(draft);
-      toast(t('instructions.saved', { path: shortenHome(path) }), 'success');
+      toast(message || t('instructions.saved', { path: shortenHome(path) }), 'success');
     } catch (err) {
-      toast((err as Error).message, 'error');
+      toast(instructionsErrorMessage(err, t), 'error');
     } finally {
       setSaving(false);
     }
   };
-  const saveRef = useRef(save);
-  saveRef.current = save;
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        void saveRef.current();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  const scope = useRef<HTMLDivElement>(null);
+  useSaveShortcut(() => void save(), true, scope);
+  useBeforeUnload((e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  // ✕, Esc and the backdrop ask before an unsaved edit is dropped.
+  const close = () => (dirty ? setDiscarding(true) : onClose());
 
   return (
-    <DialogShell open onClose={onClose} maxWidth="full" padding="none" preventClose={saving || dirty || reverting} ariaLabel={title}>
-      <div className="dh">
+    <DialogShell open onClose={close} maxWidth="full" padding="none" preventClose={saving || reverting || discarding} ariaLabel={title}>
+      <div ref={scope} className="dh">
         <div className="flex min-w-0 flex-col gap-1">
           <h2 className="ss-h2 font-mono">{title}</h2>
           <span className="truncate font-mono text-[12.5px] text-ink-3">{shortenHome(path)}</span>
         </div>
-        <button type="button" className="ss-ib" aria-label={t('common.close')} onClick={onClose} disabled={saving}><X size={16} /></button>
+        <button type="button" className="ss-ib" aria-label={t('common.close')} onClick={close} disabled={saving}><X size={16} /></button>
       </div>
       <div className="db">
         <div className="grid grid-cols-[minmax(0,1fr)_300px] items-start gap-6">
-          <CodeEditor value={draft} onChange={setDraft} ariaLabel={title} minHeight="calc(100vh - 16rem)" maxHeight="calc(100vh - 16rem)" markLine={isImportLine} disabled={saving} />
+          <div className="ss-code flex h-[calc(100vh-16rem)] min-w-0 flex-col !overflow-hidden !p-0 !whitespace-normal focus-within:!border-[var(--accent)]">
+            <BoxHeader content={draft} view={view} onChange={setView} />
+            {view === 'edit' ? (
+              <CodeEditor value={draft} onChange={setDraft} ariaLabel={title} markLine={isImportLine} disabled={saving} wrap fill className="min-h-0 flex-1 !rounded-none !border-0" />
+            ) : (
+              <InstructionsPreview content={draft} names={[]} />
+            )}
+          </div>
           <aside className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <span className={`ss-st ${dirty ? 'warn' : 'off'}`}>{t(dirty ? 'instructions.editor.modified' : 'instructions.editor.unchanged')}</span>
-              <span className="text-[13px] text-ink-3">{t('instructions.preview.stats', { lines: lineCount(draft), size: formatSize(new TextEncoder().encode(draft).length) })}</span>
             </div>
             {readers && readers.length > 0 && (
               <div className="flex flex-col gap-2">
@@ -104,6 +110,15 @@ export default function InstructionsEditorDialog({ title, path, content, note, r
         variant="danger"
         onCancel={() => setReverting(false)}
         onConfirm={() => { setDraft(base); setReverting(false); }}
+      />
+      <ConfirmDialog
+        open={discarding}
+        title={t('config.discard.title')}
+        message={t('config.discard.message')}
+        confirmText={t('config.discard.confirmText')}
+        variant="danger"
+        onCancel={() => setDiscarding(false)}
+        onConfirm={() => { setDiscarding(false); onClose(); }}
       />
     </DialogShell>
   );

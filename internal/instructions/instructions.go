@@ -10,6 +10,7 @@ import (
 
 	"skillshare/internal/config"
 	syncpkg "skillshare/internal/sync"
+	"skillshare/internal/utils"
 )
 
 // AgentsFile is the cross-tool instruction file name.
@@ -110,7 +111,18 @@ type Assignment struct {
 	Name   string `json:"name"`
 	Mode   string `json:"mode"`
 	Status string `json:"status"`
+	// Reason explains a status that is not synced: ReasonFolderLink or
+	// ReasonDirectory.
+	Reason string `json:"reason,omitempty"`
 }
+
+// ReasonFolderLink: the target is a Windows directory junction to the file,
+// which tools cannot read.
+const ReasonFolderLink = "folder_link"
+
+// ReasonDirectory: a real directory sits at the target path, so sync will not
+// replace it.
+const ReasonDirectory = "directory"
 
 // Assignments returns the single-file extras whose targets write file, in
 // config order.
@@ -123,11 +135,38 @@ func Assignments(extras []config.ExtraConfig, file string, r Resolver) []Assignm
 		for j := range extra.Targets {
 			f := ExtraFile(extra, j, r)
 			if samePath(f.Target, file) {
-				out = append(out, Assignment{Name: extra.Name, Mode: f.Mode, Status: syncpkg.ExtraFileStatus(f)})
+				a := Assignment{Name: extra.Name, Mode: f.Mode}
+				a.Status, a.Reason = FileStatus(f)
+				out = append(out, a)
 			}
 		}
 	}
 	return out
+}
+
+// FileStatus returns the sync status of one target of a shared file and,
+// when it is not synced, the reason (see Assignment).
+func FileStatus(f syncpkg.ExtraFile) (string, string) {
+	status := syncpkg.ExtraFileStatus(f)
+	if status == "synced" {
+		return status, ""
+	}
+	return status, notSyncedReason(f.Target)
+}
+
+// folderLink reports whether path is a directory junction rather than a
+// symlink. Only Windows has them.
+func notSyncedReason(path string) string {
+	info, err := os.Lstat(path)
+	switch {
+	case err != nil || info.Mode()&os.ModeSymlink != 0:
+		return ""
+	case utils.IsSymlinkOrJunction(path):
+		return ReasonFolderLink
+	case info.IsDir():
+		return ReasonDirectory
+	}
+	return ""
 }
 
 func samePath(a, b string) bool { return filepath.Clean(a) == filepath.Clean(b) }

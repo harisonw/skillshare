@@ -123,7 +123,7 @@ Agent sync 支援全部三種模式，與 skills 相同：
 
 | 模式 | 行為 |
 |------|------|
-| **merge**（預設） | 逐檔 symlink。Target 中的本機 agent 檔案會被保留。 |
+| **merge**（預設） | 逐檔 symlink。Target 中的本機 agent 檔案會被保留。在沒有開啟開發人員模式的 Windows 上，agents 會改為複製，並像連結一樣持續更新與清理（[詳情](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)）。 |
 | **symlink** | 整個 agents 目錄整包 symlink。 |
 | **copy** | Agent 檔案以真實檔案複製。 |
 

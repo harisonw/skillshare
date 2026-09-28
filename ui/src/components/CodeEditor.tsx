@@ -2,23 +2,68 @@ import { useMemo } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { syntaxHighlighting } from '@codemirror/language';
-import { Decoration, EditorView } from '@codemirror/view';
+import { Decoration, EditorView, WidgetType } from '@codemirror/view';
 import { classHighlighter } from '@lezer/highlight';
 
 // Colours come from the .ss-code tok-* rules, so the editor matches CodeView in every theme
 const chrome = EditorView.theme({
-  '&': { backgroundColor: 'transparent', color: 'var(--ink)', fontSize: '12.5px' },
+  // Gutters stay put while content scrolls sideways, so they inherit the
+  // wrapper's background down the chain instead of letting text show through.
+  '&': { backgroundColor: 'inherit', color: 'var(--ink)', fontSize: '12.5px' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--fm)', lineHeight: '1.65' },
+  '.cm-scroller': { backgroundColor: 'inherit', fontFamily: 'var(--fm)', lineHeight: '1.65' },
   '.cm-content': { padding: '10px 0', caretColor: 'var(--ink)' },
-  '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: 'var(--ink-3)', paddingLeft: '4px' },
+  '.cm-gutters': { backgroundColor: 'inherit', border: 'none', color: 'var(--ink-3)', paddingLeft: '4px' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { backgroundColor: 'var(--accent-bg) !important' },
   '.cm-matchingBracket': { backgroundColor: 'var(--accent-bg)', outline: 'none' },
   '.cm-placeholder': { color: 'var(--ink-3)' },
   '.cm-marked': { backgroundColor: 'var(--warn-bg)' },
   '.cm-marked .cm-gutterElement, .cm-gutterElement.cm-marked': { color: 'var(--warn)' },
+  // A noted line holds its floating note, so a note that does not fit drops under this line, not beside the next.
+  '.cm-noted': { display: 'flow-root' },
+  '.cm-block': { backgroundColor: 'var(--sunken)', boxShadow: 'inset 3px 0 0 color-mix(in srgb, var(--ink-3) 40%, transparent)' },
+  // Floats right of the line's last row: with wrapping it drops below rather than overlap, and a long note is cut short.
+  '.cm-note': { float: 'right', maxWidth: '50%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: '16px', paddingRight: '16px', fontFamily: 'var(--f)', fontSize: '12px', color: 'var(--ink-3)', userSelect: 'none' },
 });
+
+/** How lineDecor styles one line: block tints it, note adds muted text at its right end. */
+export type LineDecor = { block?: boolean; note?: string } | null;
+
+class NoteWidget extends WidgetType {
+  readonly text: string;
+  constructor(text: string) {
+    super();
+    this.text = text;
+  }
+  eq(other: NoteWidget) { return other.text === this.text; }
+  toDOM() {
+    const el = document.createElement('span');
+    el.className = 'cm-note';
+    el.textContent = this.text;
+    return el;
+  }
+}
+
+const block = Decoration.line({ class: 'cm-block' });
+const blockNoted = Decoration.line({ class: 'cm-block cm-noted' });
+const noted = Decoration.line({ class: 'cm-noted' });
+
+/** Styles lines from the whole text, recomputed as it changes. */
+function decorateLines(lineDecor: (lines: string[]) => LineDecor[]) {
+  const build = (state: EditorView['state']) => {
+    const lines = Array.from({ length: state.doc.lines }, (_, i) => state.doc.line(i + 1).text);
+    const ranges = [];
+    for (const [i, d] of lineDecor(lines).entries()) {
+      if (!d) continue;
+      const line = state.doc.line(i + 1);
+      if (d.block || d.note) ranges.push((d.block ? (d.note ? blockNoted : block) : noted).range(line.from));
+      if (d.note) ranges.push(Decoration.widget({ widget: new NoteWidget(d.note), side: 1 }).range(line.to));
+    }
+    return Decoration.set(ranges, true);
+  };
+  return EditorView.decorations.compute(['doc'], build);
+}
 
 const marked = Decoration.line({ class: 'cm-marked' });
 
@@ -48,9 +93,15 @@ interface Props {
   maxHeight?: string;
   /** Tints the lines it accepts, e.g. tool-specific syntax. Keep it stable (module level). */
   markLine?: (text: string) => boolean;
+  /** Per-line styling that needs the whole text (e.g. a managed block). Keep it stable between renders. */
+  lineDecor?: (lines: string[]) => LineDecor[];
+  /** Wraps long lines instead of scrolling sideways, for prose such as Markdown. */
+  wrap?: boolean;
+  /** Takes the full height of its parent (a sized flex item) and scrolls inside, instead of min/max height. */
+  fill?: boolean;
 }
 
-export default function CodeEditor({ value, onChange, lang = '', placeholder, ariaLabel, disabled = false, className = '', minHeight = '140px', maxHeight = '320px', markLine }: Props) {
+export default function CodeEditor({ value, onChange, lang = '', placeholder, ariaLabel, disabled = false, className = '', minHeight = '140px', maxHeight = '320px', markLine, lineDecor, wrap = false, fill = false }: Props) {
   const extensions = useMemo(
     () => [
       chrome,
@@ -58,20 +109,22 @@ export default function CodeEditor({ value, onChange, lang = '', placeholder, ar
       EditorView.contentAttributes.of({ 'aria-label': ariaLabel }),
       ...(lang === 'json' ? [json()] : []),
       ...(markLine ? [markLines(markLine)] : []),
+      ...(lineDecor ? [decorateLines(lineDecor)] : []),
+      ...(wrap ? [EditorView.lineWrapping] : []),
     ],
-    [lang, ariaLabel, markLine],
+    [lang, ariaLabel, markLine, lineDecor, wrap],
   );
   return (
     <div className={`ss-code !overflow-hidden !p-0 !whitespace-normal focus-within:!border-[var(--accent)] ${className}`}>
       <CodeMirror
+        className={`bg-inherit ${fill ? 'h-full' : ''}`}
         value={value}
         onChange={onChange}
         extensions={extensions}
         theme="none"
         placeholder={placeholder}
         editable={!disabled}
-        minHeight={minHeight}
-        maxHeight={maxHeight}
+        {...(fill ? { height: '100%' } : { minHeight, maxHeight })}
         basicSetup={{
           lineNumbers: true,
           foldGutter: false,

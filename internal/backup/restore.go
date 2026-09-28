@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"skillshare/internal/utils"
 )
 
 // RestoreOptions holds options for restore operation
@@ -28,7 +30,7 @@ func ValidateRestore(backupPath, targetName, destPath string, opts RestoreOption
 	// Check if destination exists
 	info, err := os.Lstat(destPath)
 	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(destPath, info.Mode()) {
 			return nil
 		}
 		if info.IsDir() {
@@ -62,9 +64,9 @@ func RestoreToPath(backupPath, targetName, destPath string, opts RestoreOptions)
 	targetBackupPath := filepath.Join(backupPath, targetName)
 
 	// Check if destination exists
-	info, err := os.Stat(destPath)
+	info, err := os.Lstat(destPath)
 	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(destPath, info.Mode()) {
 			// It's a symlink - remove it
 			if err := os.Remove(destPath); err != nil {
 				return fmt.Errorf("failed to remove existing symlink: %w", err)

@@ -332,7 +332,14 @@ func syncAgentTarget(name, agentPath, modeOverride string, spec *sync.ExtensionS
 	}
 
 	if !jsonOutput {
-		reportAgentSyncResult(name, mode, stats, dryRun)
+		shownMode := mode
+		if spec == nil {
+			shownMode = sync.EffectiveAgentMode(mode)
+			if shownMode != mode {
+				ui.Warning("%s: agents %s", name, sync.FileLinkFallbackWarning)
+			}
+		}
+		reportAgentSyncResult(name, shownMode, stats, dryRun)
 	}
 
 	return stats, err

@@ -140,7 +140,7 @@ SSH hub 来源会使用你的 SSH agent/密钥来克隆，因此适用于私有�
 
 ### 不写 JSON 也能建立 Hub
 
-在仪表板（`skillshare ui`）中打开 **Skills → My Hubs → New Hub**。
+在仪表板（`skillshare ui`）中打开 **Skills → Hubs → My hubs → New Hub**。
 
 1. 为草稿命名并填写可选的描述。这些仅用于本地识别草稿，不会包含在导出的 index 中。
 2. 选择 **Choose installed skills**，勾选要分享的 Skill 并加入；或使用 **Add source manually**。
@@ -148,6 +148,10 @@ SSH hub 来源会使用你的 SSH agent/密钥来克隆，因此适用于私有�
 4. 选择 **Save draft**。此页面会检查每个条目并显示任何导出阻挡项。
 5. 选择 **Download index** 以取得 `skillshare-hub.json`。
 6. 将下载的文件 commit 到你自己的 Git 仓库，或上传到 HTTP 服务器。在页面中输入该位置，即可复制一条给接收者使用的 `skillshare hub add` 指令。
+
+下图的草稿中，有一个 skill 只有本地来源，因此在补上远程来源之前无法导出：
+
+![My hubs：一份 hub 草稿，其中一个条目无法导出](/img/hub-builder-draft.png)
 
 下载并不会发布任何内容。此目录只引用 Skill，不会打包其文件内容。来源验证只检查语法，不检查仓库是否存在或接收者是否具有权限。私有仓库仍然需要相应的访问权限。
 
@@ -169,7 +173,7 @@ SSH hub 来源会使用你的 SSH agent/密钥来克隆，因此适用于私有�
 2. 在搜索来源选择器中选择一个 Hub。可在安装对话框的 Hub 管理器中新增 URL、SSH 仓库或本地 index 路径。
 3. 搜索、预览并安装 Skill。
 
-已订阅的 Hub 来源会保存在当前的 skillshare 设置中，并与 CLI 共享。它们与 **My Hubs** 中的草稿是分开的。
+已订阅的 Hub 来源会保存在当前的 skillshare 设置中，并与 CLI 共享。它们与 **My hubs** 中的草稿是分开的。
 
 既有的 `skillshare hub index` 指令与 `/api/hub/index` 端点会继续照旧生成 index，包含对本地来源的支持。上述可移植导出规则同样适用于仪表板中的建构器。
 

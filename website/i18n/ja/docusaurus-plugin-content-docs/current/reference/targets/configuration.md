@@ -1094,7 +1094,7 @@ targets:
     path: %USERPROFILE%\.claude\skills
 ```
 
-NTFS ジャンクションを使用します（管理者権限不要）。
+フォルダーは NTFS ジャンクションでリンクされます（管理者権限不要）。単一のファイル（`merge` モードの agents とディレクトリ Extras、および単一ファイルの Extras）にはファイルのシンボリックリンクが必要で、これには Developer Mode が必要です。Developer Mode がない場合はコピーされます。[Windows のトラブルシューティング](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead) を参照してください。
 
 ---
 

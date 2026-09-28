@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // keepBackups bounds the backups kept per Agent file; every write adds one.
@@ -12,9 +15,49 @@ const keepBackups = 20
 
 // BackupInfo exposes metadata only, never the backed-up connection values.
 type BackupInfo struct {
-	ID     string `json:"id"`
-	Target string `json:"target"`
-	Path   string `json:"path"`
+	ID      string         `json:"id"`
+	Target  string         `json:"target"`
+	Path    string         `json:"path"`
+	Time    string         `json:"time"` // RFC3339, from the ID's nanosecond prefix
+	Servers []BackupServer `json:"servers"`
+}
+
+// BackupServer names one server entry the backed-up write changed.
+type BackupServer struct {
+	Name   string `json:"name"`
+	Change string `json:"change"` // added, changed, or removed
+}
+
+// backupServers lists the entries a write changed, from the stored before and
+// after values, sorted by name.
+func backupServers(record backupRecord) []BackupServer {
+	names := make([]string, 0, len(record.After))
+	for name := range record.After {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	servers := make([]BackupServer, 0, len(names))
+	for _, name := range names {
+		change := "changed"
+		switch {
+		case record.Before[name] == nil && record.After[name] != nil:
+			change = "added"
+		case record.Before[name] != nil && record.After[name] == nil:
+			change = "removed"
+		}
+		servers = append(servers, BackupServer{Name: name, Change: change})
+	}
+	return servers
+}
+
+// backupTime reads the nanosecond time that starts a backup ID.
+func backupTime(id string) string {
+	stamp, _, _ := strings.Cut(id, "-")
+	n, err := strconv.ParseInt(stamp, 10, 64)
+	if err != nil {
+		return ""
+	}
+	return time.Unix(0, n).Format(time.RFC3339)
 }
 
 func (s *Service) Backups() ([]BackupInfo, error) {
@@ -29,7 +72,7 @@ func (s *Service) Backups() ([]BackupInfo, error) {
 	}
 	for _, record := range records {
 		if record.Owner == owner {
-			result = append(result, BackupInfo{ID: record.ID, Target: shownTarget(record.Target), Path: record.Path})
+			result = append(result, BackupInfo{ID: record.ID, Target: shownTarget(record.Target), Path: record.Path, Time: backupTime(record.ID), Servers: backupServers(record)})
 		}
 	}
 	return result, nil

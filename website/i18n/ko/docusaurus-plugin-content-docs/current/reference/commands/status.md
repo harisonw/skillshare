@@ -18,44 +18,52 @@ skillshare status
 - 활성 audit policy(profile, threshold, dedupe mode)를 확인
 - CLI 또는 skill 업데이트 여부 확인
 
-![status demo](/img/status-demo.png)
-
 ## 출력 예시
 
 ```
 Source
-✓ ~/.config/skillshare/skills (12 skills, 2026-01-20 15:30)
-→ .skillignore: 5 patterns, 2 skills ignored
-✓ ~/.config/skillshare/agents (8 agents, 2026-01-20 15:30)
+─────────────────────────────────────────
+✓ ~/.config/skillshare/skills (43 skills, 2026-09-28 12:52)
+✓ ~/.config/skillshare/agents (2 agents, 2026-09-28 12:39)
 
 Tracked Repositories
-_team-skills    ✓  5 skills, up-to-date
-_personal-repo  !  3 skills, has uncommitted changes
+─────────────────────────────────────────
+_superpowers ✓            15 skills, up-to-date
 
 Targets
+─────────────────────────────────────────
 claude
-  skills   merged       [merge] ~/.claude/skills (8 shared, 2 local)
-  agents   merged       [merge] 8/8 linked
+  skills   merged       [merge] ~/.claude/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
 cursor
-  skills   merged       [merge] ~/.cursor/skills (3 shared, 0 local)
-  agents   merged       [merge] 8/8 linked
-windsurf
-  skills   has files    [merge->needs sync] ~/.windsurf/skills
-⚠ 2 skill(s) not synced — run 'skillshare sync'
+  skills   merged       [merge] ~/.cursor/skills (43 shared, 1 local)
+  agents   merged       [merge] 2/2 linked
+gemini
+  skills   merged       [merge] ~/.gemini/skills (43 shared, 0 local)
+…
+universal
+  skills   merged       [merge] ~/.agents/skills (43 shared, 0 local)
 
 Extras
-rules        has files  [merge] .cursor/rules (4 files)
-commands     has files  [merge] .claude/commands (3 files)
+─────────────────────────────────────────
+rules        has files    [merge] ~/.claude/rules (2 files)
+rules        has files    [merge] ~/.cursor/rules (2 files)
+commands     has files    [merge] ~/.claude/commands (1 files)
+team         has files    [symlink] ~/.codex (1 files)
+team         has files    [import] ~/.claude (1 files)
+…
 
 Audit
+─────────────────────────────────────────
 → Profile:    DEFAULT
 → Block:      severity >= CRITICAL
 → Dedupe:     GLOBAL
 → Analyzers:  ALL
 
 Version
-✓ CLI: 0.17.0
-✓ Skill: 0.17.0 (up to date)
+─────────────────────────────────────────
+! Skill: 0.21.12 (update available: 0.21.13)
+→   Run: skillshare upgrade --skill && skillshare sync
 ```
 
 ## 섹션
@@ -87,8 +95,9 @@ claude
 - **Shared/local 개수**: merge와 copy mode에서는 해당 target의 expected set(`include`/`exclude` filter 적용 후)을 기준으로 개수를 계산합니다. copy mode는 "shared" 대신 "managed"를 표시합니다.
 
 **agents 하위 항목**은 다음을 표시합니다.
-- **Status**: `synced` 또는 `drift`
-- **Linked 개수**: 예) `8/8 linked`
+- **Sync mode**: agents가 실제로 sync되는 mode. Developer Mode가 없는 Windows에서는 agent 파일을 링크하지 않고 복사하므로 `merge`가 `[copy]`로 표시됩니다
+- **Status**: `merged`, `copied`, `linked`, 또는 `drift`
+- **Linked 개수**: 예) `8/8 linked` (최신 상태의 복사본도 linked로 집계). copy fallback에서는 skillshare가 소유하지 않는 내용이 같은 로컬 파일을 유지하고 따로 표시합니다(예: `0/1 linked, 1 local preserved`)
 
 agent source가 존재하지 않거나 target에 agent path가 구성되어 있지 않으면 agents 하위 항목은 생략됩니다.
 
@@ -111,7 +120,7 @@ rules        has files  [merge] .cursor/rules (4 files)
 commands     has files  [merge] .claude/commands (3 files)
 ```
 
-각 항목은 이름, 상태, sync mode, target 경로, file 개수를 표시합니다.
+각 항목은 이름, 상태, sync mode, target 경로, file 개수를 표시합니다. sync mode는 파일이 실제로 sync되는 mode입니다. Developer Mode가 없는 Windows에서는 파일을 링크하는 target이 `[copy]`로 표시됩니다.
 
 ### Audit
 

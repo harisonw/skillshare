@@ -1,34 +1,82 @@
-import { useId, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Fragment, useId, useMemo, useState } from 'react';
+import { Link, useBeforeUnload, useBlocker, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileX, Info, TriangleAlert } from 'lucide-react';
-import { api, ApiError } from '../../api/client';
+import { FileX, Info, TriangleAlert, X } from 'lucide-react';
+import { api } from '../../api/client';
 import type { InstructionsEntry, TargetInstructions as Data } from '../../api/client';
 import Button from '../Button';
 import CodeEditor from '../CodeEditor';
 import ConfirmDialog from '../ConfirmDialog';
+import DialogShell from '../DialogShell';
 import EmptyState from '../EmptyState';
 import { Checkbox, Input } from '../Input';
+import { targetLabel } from '../mcp/mcpView';
 import { PageSkeleton } from '../Skeleton';
 import { useToast } from '../Toast';
+import { useAppContext } from '../../context/AppContext';
 import { useT } from '../../i18n';
 import { queryKeys } from '../../lib/queryKeys';
-import { shortenHome } from '../../lib/paths';
+import { fileName, shortenHome } from '../../lib/paths';
 import ConvertDialog from './ConvertDialog';
-import { formatSize, importLines, isImportLine, lineRanges, refreshInstructions, setupPathProblem } from './instructionsView';
+import InstructionFileList from './InstructionFileList';
+import { useFillHeight } from './useFillHeight';
+import { BoxHeader, InstructionsPreview } from './ViewTabs';
+import { useSaveShortcut } from './useSaveShortcut';
+import { instructionsErrorMessage, importDecor, readChain, refreshInstructions, setupPathOf, setupPathProblem, sharedOfImport } from './instructionsView';
 
-const base = (path: string) => path.split('/').pop() ?? path;
 
-/** ① A target's Instructions tab: the files it reads, in order, and an editor for its own file. */
+// The page's bottom padding, and the least height the tab keeps on a short window.
+const PAGE_BOTTOM = 40;
+const MIN_TAB = 480;
+
+/**
+ * ① A target's Instructions tab, filling the window down to the page bottom so
+ * the editor gets the room. Tools that read this target's skills but keep
+ * their own instruction file (riders: Codex under universal) are listed beside
+ * it; the pick lives in ?tool= so it survives a reload.
+ */
 export default function TargetInstructions({ name }: { name: string }) {
   const t = useT();
+  const [params, setParams] = useSearchParams();
+  const { data } = useQuery({ queryKey: queryKeys.instructions.target(name), queryFn: () => api.getTargetInstructions(name) });
+  const [fillRef, height] = useFillHeight<HTMLDivElement>(PAGE_BOTTOM, MIN_TAB);
+  const riders = data?.riders ?? [];
+  if (!data?.supported || riders.length === 0) {
+    return <div ref={fillRef} style={{ height }} className="flex flex-col"><Panel name={name} /></div>;
+  }
+
+  const tool = riders.find((r) => r.name === params.get('tool'))?.name ?? name;
+  // Switching tools is a navigation, so the editor's guard asks before an unsaved edit is dropped.
+  const pick = (next: string) => setParams((prev) => {
+    const p = new URLSearchParams(prev);
+    if (next === name) p.delete('tool');
+    else p.set('tool', next);
+    return p;
+  }, { replace: true });
+  // Tools by the name people know them by (Codex, not codex); the target itself keeps its own name.
+  const items = [
+    { id: name, label: name, path: data.path ?? '', exists: data.exists },
+    ...riders.map((r) => ({ id: r.name, label: targetLabel(r.name), path: r.path, exists: r.exists })),
+  ];
+
+  return (
+    <div ref={fillRef} style={{ height }} className="grid grid-cols-[220px_minmax(0,1fr)] gap-7">
+      <InstructionFileList items={items} selected={tool} onSelect={pick} divider={1} caption={t('instructions.files.caption', { name })} />
+      <div className="flex min-h-0 min-w-0 flex-col">
+        <Panel key={tool} name={tool} />
+      </div>
+    </div>
+  );
+}
+
+/** The files a target (or rider) reads, in order, and an editor for its own file. */
+function Panel({ name }: { name: string }) {
+  const t = useT();
   const { data, error, isPending } = useQuery({ queryKey: queryKeys.instructions.target(name), queryFn: () => api.getTargetInstructions(name) });
-  const [changingSetup, setChangingSetup] = useState(false);
   if (isPending) return <PageSkeleton />;
-  if (error) return <div className="ss-note bad"><span className="flex-1">{error.message}</span></div>;
+  if (error) return <div className="ss-note bad"><span className="flex-1">{instructionsErrorMessage(error, t)}</span></div>;
   // skillshare does not know the file: let the user say which one the tool reads.
-  if (!data.supported && name !== 'cursor') return <SetupForm data={data} />;
-  if (changingSetup) return <SetupForm data={data} onClose={() => setChangingSetup(false)} />;
+  if (!data.supported && name !== 'cursor') return <SetupFormInline data={data} />;
   if (!data.supported) {
     return (
       <EmptyState
@@ -39,73 +87,163 @@ export default function TargetInstructions({ name }: { name: string }) {
     );
   }
   // Remount on a new file version so the draft starts from it.
-  return <Editor key={`${data.path}:${data.content}`} data={data} onChangeSetup={() => setChangingSetup(true)} />;
+  return <Editor key={`${data.path}:${data.content}`} data={data} />;
 }
 
-/** Where the target's instruction file is, for a tool skillshare does not know. onClose: changing an existing setting. */
-function SetupForm({ data, onClose }: { data: Data; onClose?: () => void }) {
+/**
+ * Which file the target reads: for a tool skillshare does not know, or to move
+ * a known tool's file elsewhere (builtIn: it has a default to go back to).
+ * onDone runs after a save or reset.
+ */
+function useSetupForm(data: Data, onDone?: () => void) {
   const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { projectRoot } = useAppContext();
   const id = useId();
-  const [path, setPath] = useState(data.setup?.path ?? '');
-  const [imports, setImports] = useState(data.setup?.import ?? false);
+  const builtIn = Boolean(data.default_path);
+  const [path, setPath] = useState(data.setup?.path ?? (data.supported && data.path ? setupPathOf(data.path, data.project, projectRoot) : ''));
+  const [imports, setImports] = useState(data.setup?.import ?? (data.supported && data.import));
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  // What the server said about the last save or reset, shown in the form as it came.
+  const [failure, setFailure] = useState('');
   const problem = setupPathProblem(path, data.project);
   const example = data.project ? `.${data.target}/AGENTS.md` : `~/.${data.target}/AGENTS.md`;
 
+
   const save = async () => {
     setSaving(true);
+    setFailure('');
     try {
       await api.setTargetInstructionsSetup(data.target, { path: path.trim(), import: imports });
       refreshInstructions(queryClient);
       toast(t('instructions.setup.saved'), 'success');
-      onClose?.();
+      onDone?.();
     } catch (err) {
-      toast(err instanceof ApiError && err.code === 'instructions_in_use' ? t('instructions.setup.inUseChange', { name: data.target }) : (err as Error).message, 'error');
+      setFailure(instructionsErrorMessage(err, t));
     } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <div className="ss-box flex max-w-[560px] flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h3 className="font-semibold text-ink">{t('instructions.setup.title', { name: data.target })}</h3>
-        <p className="text-[13px] text-ink-2">{t('instructions.setup.description', { name: data.target })}</p>
-      </div>
+  // Back to the built-in file, or, for a tool skillshare does not know, no file.
+  const reset = async () => {
+    setResetting(true);
+    setFailure('');
+    try {
+      await api.removeTargetInstructionsSetup(data.target);
+      refreshInstructions(queryClient);
+      toast(t('instructions.setup.removed'), 'success');
+      onDone?.();
+    } catch (err) {
+      setFailure(instructionsErrorMessage(err, t));
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const title = t(builtIn ? 'instructions.setup.builtInTitle' : 'instructions.setup.title', { name: data.target });
+  const description = builtIn ? t('instructions.setup.builtInDescription', { path: shortenHome(data.default_path ?? '') }) : t('instructions.setup.description', { name: data.target });
+  const fields = (
+    <>
       <div className="ss-fld">
-        <label htmlFor={id}>{t('instructions.setup.pathLabel')}</label>
+        <label htmlFor={id}>{t(builtIn ? 'instructions.setup.locationLabel' : 'instructions.setup.pathLabel')}</label>
         <Input id={id} value={path} onChange={(e) => setPath(e.target.value)} placeholder={example} className="font-mono" spellCheck={false} autoComplete="off" />
         <span className={`hp ${problem ? '!text-bad' : ''}`}>
-          {problem ? t(`instructions.setup.problem.${problem}`) : t(data.project ? 'instructions.setup.pathHelpProject' : 'instructions.setup.pathHelp', { example })}
+          {problem ? t(`instructions.setup.problem.${problem}`)
+            : builtIn && !data.project ? t('instructions.setup.pathHelpBuiltIn')
+              : t(data.project ? 'instructions.setup.pathHelpProject' : 'instructions.setup.pathHelp', { example })}
         </span>
       </div>
       <Checkbox label={t('instructions.setup.import')} checked={imports} onChange={setImports} size="sm" />
-      <div className="flex items-center gap-2">
-        <Button variant="primary" size="sm" onClick={save} loading={saving} disabled={!path.trim() || problem !== null}>{t('common.save')}</Button>
-        {onClose && <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>{t('common.cancel')}</Button>}
+      {failure && <div className="ss-note bad"><span className="flex-1">{failure}</span></div>}
+    </>
+  );
+  const busy = saving || resetting;
+  const saveButton = <Button variant="primary" size="sm" onClick={save} loading={saving} disabled={!path.trim() || problem !== null || resetting}>{t('common.save')}</Button>;
+  const resetButton = data.custom && (
+    <Button variant="ghost" size="sm" onClick={reset} loading={resetting} disabled={saving}>{t(builtIn ? 'instructions.setup.reset' : 'instructions.setup.remove')}</Button>
+  );
+  return { title, description, fields, busy, saveButton, resetButton };
+}
+
+/** The location form in the page, for a target with no known file: there is nothing else to show. */
+function SetupFormInline({ data }: { data: Data }) {
+  const f = useSetupForm(data);
+  return (
+    <div className="ss-box flex max-w-[560px] flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h3 className="font-semibold text-ink">{f.title}</h3>
+        <p className="text-[13px] text-ink-2">{f.description}</p>
       </div>
+      {f.fields}
+      <div className="flex items-center gap-2">{f.saveButton}</div>
     </div>
   );
 }
 
-function Editor({ data, onChangeSetup }: { data: Data; onChangeSetup: () => void }) {
+/** Change which file a target reads. */
+function PathDialog({ data, onClose }: { data: Data; onClose: () => void }) {
+  const t = useT();
+  const f = useSetupForm(data, onClose);
+  return (
+    <DialogShell open onClose={onClose} padding="none" preventClose={f.busy} ariaLabel={f.title} className="!max-w-[540px]">
+      <div className="dh">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 className="ss-h2">{f.title}</h2>
+          <p className="text-[13px] text-ink-2">{f.description}</p>
+        </div>
+        <button type="button" className="ss-ib" aria-label={t('common.close')} onClick={onClose} disabled={f.busy}><X size={16} /></button>
+      </div>
+      <div className="db flex flex-col gap-4">{f.fields}</div>
+      <div className="df">
+        {f.resetButton}
+        <span className="flex-1" />
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={f.busy}>{t('common.cancel')}</Button>
+        {f.saveButton}
+      </div>
+    </DialogShell>
+  );
+}
+
+function Editor({ data }: { data: Data }) {
   const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(data.content);
   const [saving, setSaving] = useState(false);
   const [converting, setConverting] = useState(false);
-  const [removingSetup, setRemovingSetup] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [changingPath, setChangingPath] = useState(false);
+  // Preview renders the draft, so switching keeps unsaved edits.
+  const [view, setView] = useState<'edit' | 'preview'>('edit');
   const path = data.path ?? '';
-  const file = base(path);
+  const file = fileName(path);
   const linked = Boolean(data.link_shared);
   const shared = data.shared;
-  const imports = importLines(draft);
   const tooLong = Boolean(data.max_chars) && [...draft].length > (data.max_chars ?? 0);
   const importNote = !data.project && data.convert.includes('import') && shared.length === 0;
+  // The server refuses to move a file a shared AGENTS.md is written into.
+  const inUse = linked || shared.length > 0;
+
+  // Says at the end of each @import line who expands it; the import-target
+  // wording is about converting, so it drops that part once nothing is left to convert.
+  const lineDecor = useMemo(() => {
+    const names = shared.map((s) => s.name);
+    const why = !data.import ? t('instructions.target.lineNote.other')
+      : data.convert.length > 0 ? t('instructions.target.lineNote.import', { name: data.target, file })
+        : t('instructions.target.lineNote.importOnly', { name: data.target });
+    return (lines: string[]) => importDecor(lines, (line, inBlock) => {
+      const name = inBlock ? sharedOfImport(line, names) : undefined;
+      return name ? `${name} · ${why}` : why;
+    });
+  }, [shared, data.import, data.convert.length, data.target, file, t]);
+
+  // Leaving with an unsaved edit asks first: links, the sidebar, other tools in the list, a reload.
+  const dirty = draft !== data.content;
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty
+    && (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search));
+  useBeforeUnload((e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
   const save = async () => {
     setSaving(true);
@@ -114,28 +252,22 @@ function Editor({ data, onChangeSetup }: { data: Data; onChangeSetup: () => void
       refreshInstructions(queryClient);
       toast(t('instructions.saved', { path: shortenHome(path) }), 'success');
     } catch (err) {
-      toast((err as Error).message, 'error');
+      toast(instructionsErrorMessage(err, t), 'error');
     } finally {
       setSaving(false);
     }
   };
+  // Only an editable file with changes; the same in Edit and Preview.
+  useSaveShortcut(() => {
+    if (!saving && draft !== data.content) void save();
+  }, !linked);
 
-  const removeSetup = async () => {
-    setRemoving(true);
-    try {
-      await api.removeTargetInstructionsSetup(data.target);
-      refreshInstructions(queryClient);
-      toast(t('instructions.setup.removed'), 'success');
-    } catch (err) {
-      toast(err instanceof ApiError && err.code === 'instructions_in_use' ? t('instructions.setup.inUse', { name: data.target }) : (err as Error).message, 'error');
-    } finally {
-      setRemoving(false);
-      setRemovingSetup(false);
-    }
-  };
+  const order = readChain(data.read_order);
+  const readBy = data.read_by.map(targetLabel).join(t('instructions.shared.listSep'));
+  const unread = data.read_order.some((e) => e.kind === 'unread');
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       {importNote && (
         <div className="ss-note inf">
           <Info size={16} />
@@ -144,119 +276,113 @@ function Editor({ data, onChangeSetup }: { data: Data; onChangeSetup: () => void
         </div>
       )}
 
-      <div className="grid grid-cols-[280px_minmax(0,1fr)] items-start gap-6">
-        <aside className="flex flex-col gap-5">
-          <div className="ss-list">
-            <div className="ss-lh">
-              <span className="flex-1">{t('instructions.target.readOrder')}</span>
-              <span>{data.project ? 'project' : 'global'}</span>
-            </div>
-            {data.read_order.map((e, i) => <ReadOrderRow key={e.path} entry={e} n={e.kind === 'unread' ? null : i + 1} target={data.target} />)}
-          </div>
-
-          {data.custom && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-2">
-              <span className="w-full">{t('instructions.setup.custom')}</span>
-              <button type="button" className="min-h-6 font-semibold text-ink-2 hover:text-ink" onClick={onChangeSetup}>{t('instructions.setup.change')}</button>
-              <button type="button" className="min-h-6 font-semibold text-ink-2 hover:text-ink" onClick={() => setRemovingSetup(true)}>{t('instructions.setup.remove')}</button>
-            </div>
-          )}
-
-          {!data.project && (
-            <div className="flex flex-col gap-1.5 text-[13px]">
-              <span className="font-semibold">{t('instructions.target.sharedTitle')}</span>
-              {shared.length > 0 ? (
-                <span className="text-ink-2">
-                  {t('instructions.target.sharedUses')}{' '}
-                  {shared.map((s, i) => (
-                    <span key={s.name}>
-                      {i > 0 && ', '}
-                      <Link to={`/extras?tab=instructions&file=${encodeURIComponent(s.name)}`} className="font-mono font-semibold text-ink hover:underline">{s.name}</Link>
-                    </span>
-                  ))}
-                </span>
-              ) : (
-                <span className="text-ink-2">{t('instructions.target.sharedNone')}</span>
-              )}
-              <Link to="/extras?tab=instructions" className="font-semibold text-ink-2 hover:text-ink">{t('instructions.target.sharedPick')}</Link>
-            </div>
-          )}
-        </aside>
-
-        <section className="ss-list min-w-0">
-          <div className="ss-r !min-h-12 !gap-3">
-            <span className="min-w-0 truncate font-mono text-[13px] font-semibold" title={path}>{shortenHome(path)}</span>
-            <span className="shrink-0 text-[12px] text-ink-3">
-              {data.exists ? formatSize(data.size) : t('instructions.target.notCreated')}
-              {linked && ` · ${t('instructions.target.linked')}`}
-            </span>
-            <span className="flex-1" />
-            {data.convert.length > 0 && !linked && !importNote && (
-              <Button variant="secondary" size="sm" onClick={() => setConverting(true)} disabled={draft !== data.content}>{t('instructions.convert.open')}</Button>
-            )}
-            {!linked && <Button variant="primary" size="sm" onClick={save} loading={saving} disabled={draft === data.content}>{t('common.save')}</Button>}
-          </div>
-          {linked && (
-            <div className="ss-r !min-h-0 !py-2.5 text-[13px] text-ink-2">
-              <span className="flex-1">
-                {t('instructions.target.linkedHint')}{' '}
-                <Link to={`/extras?tab=instructions&file=${encodeURIComponent(data.link_shared ?? '')}`} className="font-mono font-semibold text-ink hover:underline">{data.link_shared}</Link>
-              </span>
-            </div>
-          )}
-          <div className="p-3">
-            <CodeEditor value={draft} onChange={setDraft} ariaLabel={file} minHeight="360px" maxHeight="560px" markLine={isImportLine} disabled={saving || linked} placeholder={t('instructions.target.placeholder', { file })} />
-          </div>
-          {/* The import-target wording is about converting; it means nothing once there is nothing left to convert. */}
-          {imports.length > 0 && (!data.import || data.convert.length > 0) && (
-            <div className="ss-r !min-h-0 !py-2.5 text-[13px] text-warn">
-              <TriangleAlert size={15} className="shrink-0" />
-              <span className="flex-1">
-                {t(data.import ? 'instructions.target.importLines' : 'instructions.target.importLinesOther', { lines: lineRanges(imports), name: data.target, file })}
-              </span>
-            </div>
-          )}
-          {tooLong && (
-            <div className="ss-r !min-h-0 !py-2.5 text-[13px] text-warn">
-              <TriangleAlert size={15} className="shrink-0" />
-              <span className="flex-1">{t('instructions.tooLong', { name: data.target, max: data.max_chars?.toLocaleString() ?? '' })}</span>
-            </div>
-          )}
-        </section>
+      <div className="flex min-h-8 items-center gap-3.5">
+        <span className="min-w-0 truncate font-mono text-[14px] font-semibold" title={path}>{shortenHome(path)}</span>
+        {/* Lines and size are in the box header below; this says only what they cannot. */}
+        {(!data.exists || linked) && (
+          <span className="shrink-0 text-[12px] text-ink-3">
+            {[!data.exists && t('instructions.target.notCreated'), linked && t('instructions.target.linked')].filter(Boolean).join(' · ')}
+          </span>
+        )}
+        <span className="flex-1" />
+        {/* A rider is not a target, so there is no setting to change for it; one on a shared file moves only after it is off. */}
+        {/* A disabled button gets no hover, so the reason sits on a wrapper. */}
+        {!data.rider_of && (
+          <span title={inUse ? t('instructions.setup.locationLocked') : undefined}>
+            <Button variant="ghost" size="sm" onClick={() => setChangingPath(true)} disabled={inUse}>{t('instructions.setup.changeLocation')}</Button>
+          </span>
+        )}
+        {data.convert.length > 0 && !linked && !importNote && (
+          <Button variant="ghost" size="sm" onClick={() => setConverting(true)} disabled={draft !== data.content}>{t('instructions.convert.open')}</Button>
+        )}
+        {!linked && <Button variant="primary" size="sm" onClick={save} loading={saving} disabled={draft === data.content}>{t('common.save')}</Button>}
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-ink-2">
+        <span className="text-ink-3">{t('instructions.target.readOrder')}</span>
+        {order.map((e, i) => (
+          <Fragment key={e.path}>
+            {i > 0 && <span className="text-ink-3" aria-hidden="true">→</span>}
+            <ReadOrderItem entry={e} target={data.target} />
+          </Fragment>
+        ))}
+        {unread && (
+          <>
+            <span className="text-ink-3" aria-hidden="true">·</span>
+            <span className="text-ink-3">{t('instructions.target.unreadShort')}</span>
+          </>
+        )}
+        {readBy && (
+          <>
+            <span className="text-ink-3" aria-hidden="true">·</span>
+            <span className="text-ink-3">{t('instructions.target.readBy', { names: readBy })}</span>
+          </>
+        )}
+        <span className="flex-1" />
+        {!data.project && (
+          <span className="inline-flex items-center gap-2.5 whitespace-nowrap">
+            <span className="text-ink-3">{t('instructions.target.sharedTitle')}</span>
+            {shared.map((s) => (
+              <Link key={s.name} to={`/extras?tab=instructions&file=${encodeURIComponent(s.name)}`} className="font-mono font-semibold text-ink hover:underline">{s.name}</Link>
+            ))}
+            <Link to="/extras?tab=instructions" className="font-semibold text-ink hover:underline">
+              {t(shared.length > 0 ? 'instructions.target.sharedChange' : 'instructions.target.sharedPick')}
+            </Link>
+          </span>
+        )}
+      </div>
+
+      {linked && (
+        <p className="text-[13px] text-ink-2">
+          {t('instructions.target.linkedHint')}{' '}
+          <Link to={`/extras?tab=instructions&file=${encodeURIComponent(data.link_shared ?? '')}`} className="font-mono font-semibold text-ink hover:underline">{data.link_shared}</Link>
+        </p>
+      )}
+
+      <div className="ss-code flex min-h-[360px] flex-1 flex-col !bg-surface !overflow-hidden !p-0 !whitespace-normal focus-within:!border-[var(--accent)]">
+        <BoxHeader content={draft} view={view} onChange={setView} />
+        {view === 'edit' ? (
+          <CodeEditor value={draft} onChange={setDraft} ariaLabel={file} lineDecor={lineDecor} disabled={saving || linked} wrap fill
+            className="min-h-0 flex-1 !rounded-none !border-0 !bg-surface" placeholder={t('instructions.target.placeholder', { file })} />
+        ) : (
+          <InstructionsPreview content={draft} names={shared.map((s) => s.name)} />
+        )}
+      </div>
+      {tooLong && (
+        <p className="flex items-center gap-2 text-[13px] text-warn">
+          <TriangleAlert size={15} className="shrink-0" />
+          {t('instructions.tooLong', { name: data.target, max: data.max_chars?.toLocaleString() ?? '' })}
+        </p>
+      )}
+
       {converting && <ConvertDialog data={{ ...data, content: draft }} onClose={() => setConverting(false)} />}
+      {changingPath && <PathDialog data={data} onClose={() => setChangingPath(false)} />}
       <ConfirmDialog
-        open={removingSetup}
-        title={t('instructions.setup.removeTitle', { name: data.target })}
-        message={t('instructions.setup.removeMessage', { name: data.target })}
-        confirmText={t('instructions.setup.remove')}
+        open={blocker.state === 'blocked'}
+        title={t('config.discard.title')}
+        message={t('config.discard.message')}
+        confirmText={t('config.discard.confirmText')}
         variant="danger"
-        loading={removing}
-        onConfirm={removeSetup}
-        onCancel={() => setRemovingSetup(false)}
+        onConfirm={() => blocker.state === 'blocked' && blocker.proceed()}
+        onCancel={() => blocker.state === 'blocked' && blocker.reset()}
       />
     </div>
   );
 }
 
-function ReadOrderRow({ entry, n, target }: { entry: InstructionsEntry; n: number | null; target: string }) {
+/** One file in the read-order line: a dot for whether the target loads it now. */
+function ReadOrderItem({ entry, target }: { entry: InstructionsEntry; target: string }) {
   const t = useT();
-  const name = entry.kind === 'rules' ? `${base(entry.path)}/*.md` : base(entry.path);
-  const detail =
-    entry.kind === 'unread' ? t('instructions.target.unread', { name: target })
-      : entry.kind === 'rules' ? t(entry.count === 1 ? 'instructions.target.rules.one' : 'instructions.target.rules.other', { count: entry.count ?? 0 })
-        : entry.kind === 'fallback' && !entry.read && entry.exists ? t('instructions.target.fallbackSkipped', { name: target })
-          : shortenHome(entry.path);
-  const state = entry.kind === 'unread' ? 'n/a' : entry.read ? 'loaded' : entry.exists ? 'skipped' : 'missing';
+  const name = entry.kind === 'rules' ? `${fileName(entry.path)}/*.md` : fileName(entry.path);
+  const detail = entry.kind === 'rules' ? t(entry.count === 1 ? 'instructions.target.rules.one' : 'instructions.target.rules.other', { count: entry.count ?? 0 })
+    : entry.kind === 'fallback' && !entry.read && entry.exists ? t('instructions.target.fallbackSkipped', { name: target })
+      : '';
+  const state = entry.read ? 'loaded' : entry.exists ? 'skipped' : 'missing';
   return (
-    <div className="ss-r !min-h-[52px] !gap-2.5" title={entry.path}>
-      <span className="ss-cnt w-5 shrink-0 text-center">{n ?? '–'}</span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className={`truncate font-mono text-[13px] font-semibold ${entry.read ? '' : 'text-ink-2'}`}>{name}</span>
-        <span className={`text-[12px] text-ink-3 ${detail === shortenHome(entry.path) ? 'truncate font-mono' : ''}`}>{detail}</span>
-      </span>
-      <span className={`ss-st ${entry.read ? 'ok' : 'off'}`}>{state}</span>
-    </div>
+    <span className="inline-flex items-center gap-1.5" title={`${shortenHome(entry.path)} · ${state}`}>
+      <span className={`ss-st ${entry.read ? 'ok' : 'off'} !gap-1.5 font-mono !text-[12px] !font-normal ${entry.read ? 'text-ink' : ''}`}>{name}</span>
+      {detail && <span className="text-ink-3">{detail}</span>}
+    </span>
   );
 }
+

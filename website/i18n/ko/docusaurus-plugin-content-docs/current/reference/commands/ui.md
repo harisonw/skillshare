@@ -97,7 +97,9 @@ skillshare ui start --clear-cache
 | **Targets** | 상태가 표시된 target 목록. **대상 추가**는 **다른 계정**도 받습니다. 이미 사용 중인 Agent의 두 번째 config 폴더이며, 어디에 기록되는지 미리보기로 보여줍니다. 각 target의 페이지에서 include/exclude 필터를 편집하고 로컬 전용 skill을 source로 다시 수집합니다. 목록에는 각 Agent가 받는 MCP 서버 수도 표시됩니다. MCP 설정 파일이 있는 target에는 **MCP** 탭이 있어 서버마다 한 행으로 고릅니다. 클릭하면 바로 저장되고 **Sync all targets**가 모든 target의 MCP 파일에 기록합니다. 각 target에는 지침 파일 이름을 딴 탭(**CLAUDE.md**, **GEMINI.md**, **AGENTS.md**, ...)도 있어, 읽는 순서를 보여 주고 파일을 편집하며 `AGENTS.md`로 변환합니다 |
 | **프로젝트** | Global mode 전용. global 설정이 동기화하는 프로젝트 폴더이며, [`projects`](/docs/reference/targets/configuration#projects)와 [`mcp.projects`](./mcp.md#projects-in-the-dashboard)에서 옵니다. **프로젝트 추가**는 폴더, 그 target, 동기화할 항목을 받습니다. 각 프로젝트에는 필터, 미리보기, 기록될 폴더를 보여주는 **Skills**와 **Agents** 탭, 그리고 해당 폴더에서 global 서버를 끄거나 프로젝트 자체 서버를 부여하는 **MCP** 탭이 있습니다. **Sync project**는 미리 본 뒤 해당 프로젝트의 skill, agent, MCP만 동기화합니다. 이미 프로젝트 폴더를 가리키는 Target은 변환할 수 있습니다 |
 | **Audit** | skill과 agent에 대한 보안 스캔이며, 심각도별로 findings를 표시합니다. **Rules** 탭에서는 카테고리별로 모든 rule을 탐색할 수 있습니다: rule을 끄거나, 심각도를 변경하거나, 카테고리 전체에 심각도를 적용하거나, 스캔 profile(`default`, `strict`, `permissive`)을 선택하거나, 사용자 지정 `audit-rules.yaml` 편집기를 엽니다 |
-| **Settings** | 탭으로 구성: **General**(source 경로, sync mode, 외관), **Backup**(스냅샷과 복원), **Log**(작업 이력), **Health**([`doctor`](/docs/reference/commands/doctor)와 동일한 검사), **Extensions**(sync 시점의 파일 변환), **Files**(`config.yaml`, `.skillignore`, `.agentignore`를 위한 직접 편집기) |
+| **Settings** | 탭으로 구성: **General**(source 경로, sync mode, 외관), **Backup**(대상 폴더 스냅샷, `AGENTS.md` 같은 파일의 이전 버전, MCP 설정 백업. [`backup`](./backup.md#dashboard) 참고), **Log**(작업 이력), **Health**([`doctor`](/docs/reference/commands/doctor)와 동일한 검사), **Extensions**(sync 시점의 파일 변환), **Files**(`config.yaml`, `.skillignore`, `.agentignore`를 위한 직접 편집기) |
+
+**Updates** 탭의 진행률 표시줄은 업데이트 진행 상황을 보여 주며 업데이트 중인 행도 표시됩니다. 차단되거나 실패한 업데이트는 별도 섹션에 표시됩니다.
 
 `/collect`, `/install`, `/search`, `/trash`, `/analyze`, `/backup`, `/log`, `/doctor`와 같은 이전 링크는 새 위치로 리디렉션됩니다.
 
@@ -138,6 +140,7 @@ project mode(`-p`)로 실행할 때 대시보드는 다음과 같이 달라집�
   <img src="/img/web-skill-detail-demo.png" alt="Skill 상세 보기" />
   <img src="/img/web-sync-demo.png" alt="Sync 컨트롤" />
   <img src="/img/web-search-skills-demo.png" alt="GitHub 검색 화면" />
+  <img src="/img/web-projects-demo.png" alt="프로젝트 폴더 목록을 보여 주는 Projects 페이지" />
 </div>
 
 ## REST API

@@ -61,15 +61,17 @@ skillshare backup --list
 ```
 
 **出力例:**
-```
-Backups
+```text
+All backups in ~/.local/share/skillshare/backups (56.3 KB total)
 ─────────────────────────────────────────
-  2026-01-20_15-30-00/
-    claude/    5 skills, 2.1 MB
-    cursor/    5 skills, 2.1 MB
-  2026-01-19_10-00-00/
-    claude/    4 skills, 1.8 MB
+  2026-09-28_12-52-50  claude, claude-work, cursor, gemini, opencode, universal   11.3 KB  ~/.local/share/skillshare/backups/2026-09-28_12-52-50
+  2026-09-28_12-41-50  claude, claude-work, cursor, gemini, opencode, universal   11.2 KB  ~/.local/share/skillshare/backups/2026-09-28_12-41-50
+  2026-09-28_12-39-56  claude, claude-work, cursor, gemini, opencode, universal   11.2 KB  ~/.local/share/skillshare/backups/2026-09-28_12-39-56
 ```
+
+ダッシュボードでは **Settings → Backup → Target folders** に同じスナップショットが並びます。
+
+![Settings › Backup › Target folders：スナップショットの一覧と復元操作](/img/backup-target-folders.png)
 
 ---
 
@@ -174,6 +176,18 @@ skillshare restore agents claude --from 2026-01-19_10-00-00
 ```
 
 Project mode では Agent のみバックアップ・復元が可能です — `skillshare backup -p agents` は動作しますが、単純な `skillshare backup -p` はエラーになります。Project mode のルールについては [backup](/docs/reference/commands/backup#agent-backup) を参照してください。
+
+### ファイルの以前のバージョンを取り戻す
+
+skillshare は、`AGENTS.md`、`CLAUDE.md`、共有ファイルの配置先など、書き換える単一ファイルの以前のバージョンも保存しています。
+
+```bash
+skillshare backup files                               # 保存済みバージョンがあるファイル
+skillshare backup files show ~/.claude/CLAUDE.md      # バージョン ID を選ぶ
+skillshare backup files restore ~/.claude/CLAUDE.md <id>
+```
+
+ダッシュボードでも **設定 › バックアップ › ファイル** で同じことができ、復元前に差分を確認できます。[ファイル履歴](/docs/reference/commands/backup#file-history) を参照してください。
 
 ---
 

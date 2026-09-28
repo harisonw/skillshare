@@ -77,12 +77,13 @@ func removeExtraFromGlobalConfig(cfg *config.Config, name string) (string, error
 
 	sourceDir := config.ResolveExtrasSourceDir(removed, cfg.EffectiveExtrasSource(), cfg.EffectiveSkillsSource())
 
-	cfg.Extras = append(cfg.Extras[:idx], cfg.Extras[idx+1:]...)
-	if err := cfg.Save(); err != nil {
-		return "", fmt.Errorf("failed to save config: %w", err)
-	}
-
 	restored, restoreErr := restoreExtraFileTargets(removed, sourceDir, modeGlobal, "")
+	if restoreErr == nil {
+		cfg.Extras = append(cfg.Extras[:idx], cfg.Extras[idx+1:]...)
+		if err := cfg.Save(); err != nil {
+			return "", fmt.Errorf("failed to save config: %w", err)
+		}
+	}
 
 	e := oplog.NewEntry("extras-remove", statusFromErr(restoreErr), 0)
 	e.Args = map[string]any{"name": name, "scope": "global", "restored": restored}
@@ -100,14 +101,14 @@ func removeExtraFromProjectConfig(projCfg *config.ProjectConfig, cwd, name strin
 		return "", fmt.Errorf("extra %q not found in project config", name)
 	}
 
-	projCfg.Extras = append(projCfg.Extras[:idx], projCfg.Extras[idx+1:]...)
-	if err := projCfg.Save(cwd); err != nil {
-		return "", fmt.Errorf("failed to save project config: %w", err)
-	}
-
 	sourceDir := config.ExtrasSourceDirProject(projCfg.EffectiveExtrasSource(cwd), name)
-
 	restored, restoreErr := restoreExtraFileTargets(removed, sourceDir, modeProject, cwd)
+	if restoreErr == nil {
+		projCfg.Extras = append(projCfg.Extras[:idx], projCfg.Extras[idx+1:]...)
+		if err := projCfg.Save(cwd); err != nil {
+			return "", fmt.Errorf("failed to save project config: %w", err)
+		}
+	}
 
 	cfgPath := config.ProjectConfigPath(cwd)
 	e := oplog.NewEntry("extras-remove", statusFromErr(restoreErr), 0)
@@ -259,8 +260,9 @@ func printExtrasRemoveHelp() {
 
 Remove an extra resource type from config.
 
-Source files and target symlinks are NOT deleted.
-Run 'skillshare sync extras' after removal to clean up orphaned links.
+Source files are NOT deleted. Single-file targets are restored to their
+pre-attach state. Directory extras leave target files in place; run
+'skillshare sync extras' to clean up their orphaned links.
 
 Arguments:
   name                Name of the extra to remove

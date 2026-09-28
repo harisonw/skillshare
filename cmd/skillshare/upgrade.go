@@ -353,7 +353,7 @@ func doSkillDownload(skillshareSkillDir, sourceDir, fromVersion string) error {
 	})
 	if err != nil {
 		treeSpinner.Fail("Failed to download")
-		return err
+		return skillPermissionHint(err, sourceDir)
 	}
 
 	newVersion := versionpkg.ReadLocalSkillVersion(sourceDir)
@@ -370,6 +370,17 @@ func doSkillDownload(skillshareSkillDir, sourceDir, fromVersion string) error {
 	ui.Info("Run 'skillshare sync' to distribute to all targets")
 
 	return nil
+}
+
+// skillPermissionHint adds the command that gives the skills source back to the user when
+// its files could not be replaced. Before v0.21.10 an upgrade that needed sudo wrote the
+// skill as root, and every later upgrade then fails with only "permission denied".
+func skillPermissionHint(err error, sourceDir string) error {
+	if !errors.Is(err, os.ErrPermission) || runtime.GOOS == "windows" {
+		return err
+	}
+	quoted := "'" + strings.ReplaceAll(sourceDir, "'", `'\''`) + "'"
+	return fmt.Errorf("%w\n  Files in the skills source are not yours, often left by an earlier upgrade run with sudo.\n  Take them back, then run 'skillshare upgrade --skill' again:\n  sudo chown -R \"$(id -un)\" %s", err, quoted)
 }
 
 // downloadProgress returns a callback that appends "read / total" to label.

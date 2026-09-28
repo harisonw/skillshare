@@ -21,7 +21,27 @@ skillshare update agents --all       # 更新所有 tracked/可更新的 agents
 - 某個已安裝的 skill 有新版本可用
 - 你想從原始來源重新下載某個 skill
 
-![update demo](/img/update-skilk-demo.png)
+```text
+$ skillshare update pdf
+
+Updating
+─────────────────────────────────────────
+▸  Source  ~/.config/skillshare/skills
+│
+└─ Items  0 tracked repo(s), 1 skill(s)
+│
+├─ Skill  pdf
+│
+├─ Source  github.com/anthropics/skills/skills/pdf
+│
+└─ ✓ SUCCESS  Updated successfully (1.9s)
+
+- Audit Findings
+→ risk: CLEAN
+
+- Next Steps
+→ Run 'skillshare sync' to distribute changes
+```
 
 ## 執行內容
 

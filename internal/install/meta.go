@@ -105,7 +105,7 @@ func ComputeFileHashes(skillPath string) (map[string]string, error) {
 		if info.Name() == MetadataFileName {
 			return nil
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(path, info.Mode()) {
 			// Walk does not follow symlinks, but FileHashFormatted does.
 			// Leave stat failures to hashing so they retain the existing error path.
 			if target, err := os.Stat(path); err == nil && target.IsDir() {

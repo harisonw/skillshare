@@ -1030,7 +1030,7 @@ targets:
     path: %USERPROFILE%\.claude\skills
 ```
 
-NTFS junction을 사용합니다 (관리자 권한 불필요).
+폴더는 NTFS junction으로 링크됩니다 (관리자 권한 불필요). 단일 파일 — `merge` 모드의 agents와 디렉터리 extras, 그리고 single-file extras — 은 파일 symlink가 필요하며, 이는 Developer Mode가 있어야 합니다. 없으면 대신 복사됩니다. [Windows 문제 해결](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)을 참고하세요.
 
 ---
 

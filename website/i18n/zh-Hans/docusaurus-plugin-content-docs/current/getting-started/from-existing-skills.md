@@ -19,7 +19,7 @@ BEFORE                                  AFTER
                                         Targets (symlinked back)
 ~/.codex/skills/                        ~/.claude/skills/ → source
   └── skill-d/                          ~/.cursor/skills/ → source
-                                        ~/.codex/skills/  → source
+                                        ~/.agents/skills/ → source
 ```
 
 :::caution 请先备份
@@ -75,6 +75,21 @@ skillshare sync
 1. 把未被 symlink 的本地 skills 复制进 Source（会跳过 skill 内部的 `.git/`）。
 2. 用指回 Source 的 symlink 替换原来的文件。
 3. 检测重复（同一个 skill 名出现在多个 Target 中）并报告，不做覆盖。
+
+skills 会被复制进 Source，原来的位置则换成指回去的链接：
+
+```mermaid
+flowchart LR
+    CL["~/.claude/skills"]
+    CU["~/.cursor/skills"]
+    SRC["Source<br/>~/.config/skillshare/skills"]
+    CL2["~/.claude/skills<br/>链接回 Source"]
+    CU2["~/.cursor/skills<br/>链接回 Source"]
+    CL -->|collect| SRC
+    CU -->|collect| SRC
+    SRC -.->|symlink| CL2
+    SRC -.->|symlink| CU2
+```
 
 ### 处理重复
 

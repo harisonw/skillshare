@@ -216,6 +216,36 @@ targets:
 	}
 }
 
+// Codex and universal share ~/.agents/skills. Removing one must leave the links
+// the other still syncs there, not turn them into copies it no longer manages.
+func TestTargetRemove_SharedPath_KeepsOtherTargetsSkills(t *testing.T) {
+	sb := testutil.NewSandbox(t)
+	defer sb.Cleanup()
+
+	sb.CreateSkill("skill1", map[string]string{"SKILL.md": "# Skill 1"})
+	shared := sb.CreateTarget("agents")
+
+	sb.WriteConfig(`source: ` + sb.SourcePath + `
+targets:
+  universal:
+    path: ` + shared + `
+  codex:
+    path: ` + shared + `
+`)
+	sb.RunCLI("sync").AssertSuccess(t)
+
+	preview := sb.RunCLI("target", "remove", "codex", "--dry-run")
+	preview.AssertSuccess(t)
+	preview.AssertOutputContains(t, "universal uses the same folder")
+
+	sb.RunCLI("target", "remove", "codex").AssertSuccess(t)
+
+	info, err := os.Lstat(filepath.Join(shared, "skill1"))
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("universal's link was not kept: %v", err)
+	}
+}
+
 func TestTargetRemove_MergeMode_PreservesLocalSkills(t *testing.T) {
 	sb := testutil.NewSandbox(t)
 	defer sb.Cleanup()

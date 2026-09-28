@@ -48,6 +48,8 @@ export interface MCPPlan {
 export interface MCPResult { plan?: MCPPlan; applied: string[]; backupIds: string[] }
 /** Servers in one Agent file that skillshare does not manage; `project` is a root under mcp.projects. */
 export interface MCPUnmanaged { target: string; project?: string; path: string; names: string[] }
+/** `servers`: what the write the backup was taken before changed; `time`: when it was taken. */
+export interface MCPBackup { id: string; target: string; path: string; time?: string; servers?: { name: string; change: 'added' | 'changed' | 'removed' }[] }
 export interface MCPCandidate { name: string; server: MCPServer; problems: string[]; warnings: string[]; from?: string }
 const post = <T,>(path: string, body: unknown) => apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) });
 export const mcpApi = {
@@ -56,7 +58,7 @@ export const mcpApi = {
     /** Project roots that also have their own .skillshare/config.yaml. */
     projectConfigs: string[];
     paths: Record<string, string>; detected: string[]; plan: MCPPlan | null; previewError: string;
-    backups: { id: string; target: string; path: string }[];
+    backups: MCPBackup[];
     unmanaged: MCPUnmanaged[];
   }>('/mcp'),
   preview: (mutation: MCPMutation = {}) => post<MCPPlan>('/mcp/preview', { mutation }),

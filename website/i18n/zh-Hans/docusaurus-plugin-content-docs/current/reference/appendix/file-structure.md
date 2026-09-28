@@ -400,6 +400,18 @@ Target 是 AI CLI 的 skill 目录。同步后，其中包含指向 source 的�
 ~/.claude/skills -> ~/.config/skillshare/skills/
 ```
 
+### 用副本代替文件链接（Windows）
+
+在未开启 Developer Mode 的 Windows 上，agent targets 以及 `merge` mode 下的目录类 extras 会得到副本，而不是文件链接。此时 target 目录中会有一个 `.skillshare-manifest.json`，为每个副本记录 checksum，这样之后的 sync 就能更新或清理它们，而不会动到你自己的文件：
+```
+~/.claude/agents/
+├── reviewer.md                # Copy of the source agent
+├── local-agent.md             # User-created, preserved
+└── .skillshare-manifest.json  # Tracks copied agents + checksums
+```
+
+单文件 extra（例如共享 `AGENTS.md`）则把它的副本记录在 skillshare 的 [extras 备份文件夹](../commands/extras.md#single-file-extras)中，而不是 target 目录中。
+
 ---
 
 ## Tracked Repositories
@@ -470,7 +482,7 @@ skillshare 遵循 XDG Base Directory Specification。可通过 `XDG_CONFIG_HOME`
 | Logs | `%AppData%\skillshare\logs\` |
 | Version cache | `%AppData%\skillshare\version-check.json` |
 | UI cache | `%AppData%\skillshare\ui\{version}\` |
-| Link type | NTFS Junctions |
+| Link type | 文件夹用 NTFS Junctions；单个文件用 symlinks（需要 Developer Mode，否则复制） |
 
 ## XDG Base Directory Layout
 

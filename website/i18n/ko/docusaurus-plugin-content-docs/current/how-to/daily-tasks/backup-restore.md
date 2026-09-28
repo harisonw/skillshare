@@ -61,15 +61,17 @@ skillshare backup --list
 ```
 
 **출력 예시:**
-```
-Backups
+```text
+All backups in ~/.local/share/skillshare/backups (56.3 KB total)
 ─────────────────────────────────────────
-  2026-01-20_15-30-00/
-    claude/    5 skills, 2.1 MB
-    cursor/    5 skills, 2.1 MB
-  2026-01-19_10-00-00/
-    claude/    4 skills, 1.8 MB
+  2026-09-28_12-52-50  claude, claude-work, cursor, gemini, opencode, universal   11.3 KB  ~/.local/share/skillshare/backups/2026-09-28_12-52-50
+  2026-09-28_12-41-50  claude, claude-work, cursor, gemini, opencode, universal   11.2 KB  ~/.local/share/skillshare/backups/2026-09-28_12-41-50
+  2026-09-28_12-39-56  claude, claude-work, cursor, gemini, opencode, universal   11.2 KB  ~/.local/share/skillshare/backups/2026-09-28_12-39-56
 ```
+
+대시보드에서는 **Settings → Backup → Target folders**에 같은 스냅샷이 표시됩니다.
+
+![Settings › Backup › Target folders: 스냅샷 목록과 복원 작업](/img/backup-target-folders.png)
 
 ---
 
@@ -174,6 +176,18 @@ skillshare restore agents claude --from 2026-01-19_10-00-00
 ```
 
 Project mode에서는 agent만 백업하거나 복원할 수 있습니다 — `skillshare backup -p agents`는 작동하지만, 단순 `skillshare backup -p`는 오류가 발생합니다. project-mode 규칙은 [backup](/docs/reference/commands/backup#agent-backup)을 참고하세요.
+
+### 파일의 이전 버전 되돌리기
+
+skillshare는 `AGENTS.md`, `CLAUDE.md`, 공유 파일의 위치처럼 자신이 다시 쓰는 단일 파일의 이전 버전도 보관합니다.
+
+```bash
+skillshare backup files                               # Files with saved versions
+skillshare backup files show ~/.claude/CLAUDE.md      # Pick a version ID
+skillshare backup files restore ~/.claude/CLAUDE.md <id>
+```
+
+대시보드의 **설정 › 백업 › 파일**에서도 같은 작업을 할 수 있으며, 복원 전에 diff를 보여 줍니다. [파일 이력](/docs/reference/commands/backup#file-history)을 참고하세요.
 
 ---
 

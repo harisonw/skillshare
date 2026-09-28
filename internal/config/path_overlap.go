@@ -69,3 +69,24 @@ func DetectPathOverlap(targets map[string]TargetConfig, isProject bool) []string
 	}
 	return out
 }
+
+// SkillsPathKeptBy returns a target, other than name and those in leaving, that
+// writes to the same skills folder as name, or "" when none does. Removing name
+// must then leave the folder alone: its links are that target's too.
+func SkillsPathKeptBy(targets map[string]TargetConfig, name string, leaving map[string]bool) string {
+	self := targets[name]
+	raw := self.SkillsConfig().Path
+	if raw == "" {
+		return ""
+	}
+	path := filepath.Clean(ExpandPath(raw))
+	for other, target := range targets {
+		if other == name || leaving[other] || target.SkillsConfig().Path == "" {
+			continue
+		}
+		if filepath.Clean(ExpandPath(target.SkillsConfig().Path)) == path {
+			return other
+		}
+	}
+	return ""
+}

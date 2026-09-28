@@ -200,10 +200,12 @@ skillshare ui -p
 如果 `.skillshare/config.yaml` 存在，直接執行 `skillshare ui` 也可以（會自動偵測）。
 
 在 project mode 下，dashboard 會：
-- 在側邊欄顯示 **「Project」徽章**
+- 在側邊欄名稱下方顯示 `Project · <project path>`
 - 隱藏 **Git Sync**（請使用你專案自己的 git）
-- 在 Config 頁面編輯 **`.skillshare/config.yaml`**
+- 在 **Settings → Files** 編輯 **`.skillshare/config.yaml`**
 - 在安裝遠端 skills 後自動 **同步** `skills:` 項目
+
+![專案模式的儀表板：側邊欄顯示專案路徑，不顯示 Git Sync](/img/project-mode-dashboard.png)
 
 ---
 

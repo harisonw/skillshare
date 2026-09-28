@@ -47,8 +47,8 @@ export default function ProjectsPage() {
     const servers = Object.keys(mcp.data?.source.projects?.[p.path]?.servers ?? {}).length;
     const filtered = (p.skills?.include.length ?? 0) + (p.skills?.exclude.length ?? 0) > 0;
     return [
-      p.skills && t(filtered ? 'projects.content.skills' : 'projects.content.allSkills', { count: skills }),
-      p.agents && t('projects.content.agents', { count: agents }),
+      p.skills && t(filtered ? (skills === 1 ? 'projects.content.skills.one' : 'projects.content.skills.other') : 'projects.content.allSkills', { count: skills }),
+      p.agents && t(agents === 1 ? 'projects.content.agents.one' : 'projects.content.agents.other', { count: agents }),
       mcp.data?.source.projects?.[p.path] && (servers > 0 ? t('projects.content.mcp', { count: servers }) : 'MCP'),
     ].filter(Boolean).join(' · ') || t('projects.content.none');
   };
@@ -106,7 +106,7 @@ export default function ProjectsPage() {
                   )}
                 </span>
                 <span className="w-[270px] shrink-0 truncate text-[13px] text-ink-2">{content(p)}</span>
-                <span className="w-[130px] shrink-0"><span className={`ss-st ${TONE[state]}`}>{t(`projects.state.${state}`, { count })}</span></span>
+                <span className="w-[130px] shrink-0"><span className={`ss-st ${TONE[state]}`}>{t(state === 'conflict' ? `projects.state.conflict.${count === 1 ? 'one' : 'other'}` : `projects.state.${state}`, { count })}</span></span>
                 <ChevronRight size={16} className="shrink-0 text-ink-3" />
               </Link>
             );

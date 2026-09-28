@@ -8,6 +8,7 @@ import (
 
 	"skillshare/internal/config"
 	syncpkg "skillshare/internal/sync"
+	"skillshare/internal/utils"
 )
 
 // How a target reaches the project's AGENTS.md.
@@ -55,7 +56,7 @@ func ProjectReach(root, name string, it config.InstructionsTarget) Reach {
 		}
 	case err != nil:
 		r.How = ReachShadowed
-	case info.Mode()&os.ModeSymlink != 0 && pointsTo(own, filepath.Join(root, AgentsFile)):
+	case utils.IsLinkMode(own, info.Mode()) && pointsTo(own, filepath.Join(root, AgentsFile)):
 		r.How, r.Reads = ReachLink, true
 	case it.Import && importsAgents(own, filepath.Join(root, AgentsFile)):
 		r.How, r.Reads = ReachImport, true
@@ -122,7 +123,7 @@ func ApplyShim(root string, it config.InstructionsTarget, shim string) error {
 			if importsAgents(own, agents) {
 				return nil
 			}
-			if err := syncpkg.BackupFile(own); err != nil {
+			if err := syncpkg.BackupFile(own, syncpkg.BackupReasonShim); err != nil {
 				return err
 			}
 		}

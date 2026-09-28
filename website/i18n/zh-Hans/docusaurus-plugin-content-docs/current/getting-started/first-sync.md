@@ -85,7 +85,32 @@ skillshare sync
 skillshare status
 ```
 
-输出中应当能看到 Source 路径、每个 Target 都标记为 `synced`，以及你刚刚安装的那个 skill。
+```text
+$ skillshare status
+
+Source
+─────────────────────────────────────────
+✓ ~/.config/skillshare/skills (43 skills, 2026-09-28 12:39)
+✓ ~/.config/skillshare/agents (2 agents, 2026-09-28 12:39)
+
+Targets
+─────────────────────────────────────────
+claude
+  skills   merged       [merge] ~/.claude/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
+cursor
+  skills   merged       [merge] ~/.cursor/skills (43 shared, 0 local)
+  agents   merged       [merge] 2/2 linked
+gemini
+  skills   merged       [merge] ~/.gemini/skills (43 shared, 0 local)
+…
+```
+
+输出会显示 Source 路径和每个 Target。`merge` 模式下已同步的 Target 会标记为 `merged`，shared 数量也包含你刚刚安装的 skill。
+
+仪表板（`skillshare ui`）也能一眼看到同样的状态：
+
+![首次同步后的 Dashboard：一个 source 连接到每个 target，全部已同步](/img/web-dashboard-demo.png)
 
 ---
 

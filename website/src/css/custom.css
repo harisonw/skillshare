@@ -941,3 +941,11 @@ a:focus-visible {
   outline: 2px solid var(--color-blue);
   outline-offset: 2px;
 }
+
+/* Rspack orders this after Infima's `:last-child { padding-right: 0 }`, which the webpack build did not,
+   so the search box lost its right padding and pushed the navbar items right. */
+@media (min-width: 997px) {
+  .navbar .navbar__items--right > [class*='navbarSearchContainer'] {
+    padding-right: var(--ifm-navbar-item-padding-horizontal);
+  }
+}

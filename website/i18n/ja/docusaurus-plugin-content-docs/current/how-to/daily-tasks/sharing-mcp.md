@@ -57,6 +57,8 @@ Codex 由来か Grok 由来かを選択します。**Import from a target** は�
 書き込みます。Sync ページには、skills、agents、extras、MCP をまとめて Sync するための
 **Sync all resources** もあります。
 
+![MCP ページ: server ごとに 1 行と送り先の Agent、そして Sync ボックス](/img/mcp-servers.png)
+
 Config エディタは保存時に YAML を整形し、スペース2つのインデントを使い、コメントを保持します。
 フィールドをクリックすると、右パネルにその説明が表示されます。`mcp`、`sources.mcp`、接続フィールド、
 環境変数の参照などが対象です。
@@ -72,6 +74,21 @@ Sync 後は、Agent を再読み込みしてください。その Agent 内で�
 |---|---|---|
 | コマンドと引数 | `stdio`: Agent がローカルプロセスを起動する | `command: npx` と `args` |
 | MCP エンドポイント URL | Streamable HTTP: Agent が稼働中のサービスに接続する | `url: https://example.com/mcp` |
+
+どちらの場合も、定義は 1 回だけ保存され、各 Agent 自身のファイルに書き込まれます:
+
+```mermaid
+flowchart LR
+    CFG["config.yaml<br/>mcp.servers"]
+    SYNC["skillshare sync mcp"]
+    A["Claude Code<br/>~/.claude.json"]
+    B["Codex<br/>~/.codex/config.toml"]
+    C["Cursor<br/>~/.cursor/mcp.json"]
+    CFG --> SYNC
+    SYNC --> A
+    SYNC --> B
+    SYNC --> C
+```
 
 通常、`transport` を設定する必要はありません。skillshare は `command` または `url` から推測します。
 URL は自分のコンピューター上のサービスを指すことも、リモートサービスを指すこともできます。通常の
@@ -223,6 +240,8 @@ skillshare sync mcp
 何が書き込まれるか、また他の Agent が対応していない理由については
 [コマンドリファレンス](/docs/reference/commands/mcp#turn-off-a-global-server-in-one-project)
 を参照してください。
+
+![プロジェクトの MCP タブ: プロジェクトごとに切り替えるグローバル server と、プロジェクト専用の server](/img/projects-mcp-tab.png)
 
 ## 削除と復元
 

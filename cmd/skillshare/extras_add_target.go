@@ -31,7 +31,7 @@ func cmdExtrasAddTarget(args []string) error {
 	}
 	applyModeLabel(mode)
 
-	var name, addPath, syncMode string
+	var name, addPath, syncMode, as string
 	var flatten bool
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
@@ -41,6 +41,12 @@ func cmdExtrasAddTarget(args []string) error {
 			}
 			i++
 			addPath = rest[i]
+		case "--as":
+			if i+1 >= len(rest) {
+				return fmt.Errorf("--as requires a filename")
+			}
+			i++
+			as = rest[i]
 		case "--mode":
 			if i+1 >= len(rest) {
 				return fmt.Errorf("--mode requires an argument (merge/copy/symlink)")
@@ -77,6 +83,7 @@ func cmdExtrasAddTarget(args []string) error {
 	var extras []config.ExtraConfig
 	var configPath string
 	var saveFn func() error
+	var validateFn func() error
 	if mode == modeProject {
 		projCfg, loadErr := config.LoadProject(cwd)
 		if loadErr != nil {
@@ -85,6 +92,7 @@ func cmdExtrasAddTarget(args []string) error {
 		extras = projCfg.Extras
 		configPath = config.ProjectConfigPath(cwd)
 		saveFn = func() error { return projCfg.Save(cwd) }
+		validateFn = func() error { return projCfg.ValidateExtras(cwd, name) }
 	} else {
 		cfg, loadErr := config.Load()
 		if loadErr != nil {
@@ -93,6 +101,7 @@ func cmdExtrasAddTarget(args []string) error {
 		extras = cfg.Extras
 		configPath = config.ConfigPath()
 		saveFn = cfg.Save
+		validateFn = func() error { return cfg.ValidateExtras(name) }
 	}
 
 	idx := -1
@@ -112,7 +121,7 @@ func cmdExtrasAddTarget(args []string) error {
 	}
 
 	storedPath := storedExtraTargetPath(mode, cwd, addPath)
-	et := config.ExtraTargetConfig{Path: storedPath, Flatten: flatten}
+	et := config.ExtraTargetConfig{Path: storedPath, Flatten: flatten, As: as}
 	if syncMode != "" {
 		et.Mode = syncMode
 	}
@@ -121,6 +130,9 @@ func cmdExtrasAddTarget(args []string) error {
 	}
 	extras[idx].Targets = append(extras[idx].Targets, et)
 
+	if err := validateFn(); err != nil {
+		return err
+	}
 	if err := saveFn(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
@@ -143,7 +155,8 @@ Add a new target directory to an existing extra. Config-only — run
 
 Options:
   --add-target <path>   Target directory to add (required)
-  --mode <mode>         Sync mode for the new target: merge (default), copy, symlink
+  --mode <mode>         Sync mode: merge (default), copy, symlink, import
+  --as <filename>        Target filename (single-file extras only)
   --flatten             Flatten subdirectory files into the target root
   --project, -p         Use project mode (.skillshare/)
   --global, -g          Use global mode (~/.config/skillshare/)

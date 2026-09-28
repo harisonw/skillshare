@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -17,17 +18,36 @@ import (
 )
 
 // Shared instruction files are single-file extras attached to the global
-// instruction files of targets. Project mode has one ./AGENTS.md instead
-// (handler_instructions_project.go).
+// instruction files of targets. In project mode they are the project's
+// single-file extras, with every target listed as a location; the project's
+// own ./AGENTS.md is handled in handler_instructions_project.go.
 
 func (s *Server) requireGlobalInstructions(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.IsProjectMode() {
-			writeError(w, http.StatusBadRequest, "shared instruction files are set up in global mode")
+			writeCodedError(w, http.StatusBadRequest, "instructions_global_required", "shared instruction files are set up in global mode", map[string]string{})
 			return
 		}
 		next(w, r)
 	}
+}
+
+// sharedExtras returns the extras of the current mode, to change in place.
+// Callers must hold s.mu.
+func (s *Server) sharedExtras() *[]config.ExtraConfig {
+	if s.IsProjectMode() {
+		return &s.projectCfg.Extras
+	}
+	return &s.cfg.Extras
+}
+
+// validateSharedExtras runs the ownership and import checks of the current
+// mode for the named extra. Callers must hold s.mu.
+func (s *Server) validateSharedExtras(name string) error {
+	if s.IsProjectMode() {
+		return s.projectCfg.ValidateExtras(s.projectRoot, name)
+	}
+	return s.cfg.ValidateExtras(name)
 }
 
 type sharedInstructionsFile struct {
@@ -38,21 +58,29 @@ type sharedInstructionsFile struct {
 	Size    int64  `json:"size"`
 	Chars   int    `json:"chars"`
 	Targets int    `json:"targets"`
+	// Locations are targets outside the tools listed in targets.
+	Locations []sharedInstructionsLocation `json:"locations"`
 }
 
 type sharedInstructionsTarget struct {
-	Name     string                    `json:"name"`
-	Path     string                    `json:"path"`
-	Import   bool                      `json:"import"`
-	Exists   bool                      `json:"exists"`
-	SameAs   string                    `json:"same_as,omitempty"` // locked to this target: both read the same file
-	MaxChars int                       `json:"max_chars,omitempty"`
-	Assigned []instructions.Assignment `json:"assigned"`
+	LinkedShared string                    `json:"linked_shared,omitempty"` // shared source reached by the target, including untracked links
+	Name         string                    `json:"name"`
+	Path         string                    `json:"path"`
+	Import       bool                      `json:"import"`
+	Exists       bool                      `json:"exists"`
+	SameAs       string                    `json:"same_as,omitempty"`  // locked to this target: both read the same file
+	RiderOf      string                    `json:"rider_of,omitempty"` // not configured; reads this configured target's skills
+	MaxChars     int                       `json:"max_chars,omitempty"`
+	Assigned     []instructions.Assignment `json:"assigned"`
 }
 
 // instructionTargets returns the configured targets with a global instruction
-// file, sorted by name. Callers must hold s.mu.
+// file and their riders (see config.InstructionRiders), sorted by name.
+// Empty in project mode, where tools have no global file. Callers must hold s.mu.
 func (s *Server) instructionTargets() []sharedInstructionsTarget {
+	if s.IsProjectMode() {
+		return []sharedInstructionsTarget{}
+	}
 	names := make([]string, 0, len(s.cfg.Targets))
 	for name := range s.cfg.Targets {
 		names = append(names, name)
@@ -72,8 +100,18 @@ func (s *Server) instructionTargets() []sharedInstructionsTarget {
 		_, err := os.Stat(it.Path)
 		t.Exists = err == nil
 		t.Assigned = instructions.Assignments(s.cfg.Extras, it.Path, res)
+		t.LinkedShared = s.sharedLinkName(it.Path)
 		out = append(out, t)
 	}
+	for _, r := range s.instructionRiders() {
+		t := sharedInstructionsTarget{Name: r.Name, Path: r.Path, Import: r.Import, MaxChars: r.MaxChars, RiderOf: r.Via}
+		_, err := os.Stat(r.Path)
+		t.Exists = err == nil
+		t.Assigned = instructions.Assignments(s.cfg.Extras, r.Path, res)
+		t.LinkedShared = s.sharedLinkName(r.Path)
+		out = append(out, t)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 
@@ -82,18 +120,20 @@ func (s *Server) handleListSharedInstructions(w http.ResponseWriter, r *http.Req
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	tools := s.instructionTargets()
 	files := []sharedInstructionsFile{}
-	for _, extra := range s.cfg.Extras {
+	for _, extra := range s.extrasConfig() {
 		if extra.File == "" {
 			continue
 		}
-		f := sharedInstructionsFile{Name: extra.Name, File: extra.File, Path: filepath.Join(s.extrasSourceDir(extra), extra.File), Targets: len(extra.Targets)}
+		f := sharedInstructionsFile{Name: extra.Name, File: extra.File, Path: filepath.Join(s.extrasSourceDir(extra), extra.File), Targets: len(extra.Targets), Locations: s.sharedLocations(extra, tools)}
 		if data, err := readLimited(f.Path); err == nil {
 			f.Exists, f.Size, f.Chars = true, int64(len(data)), utf8.RuneCount(data)
 		}
 		files = append(files, f)
 	}
-	writeJSON(w, map[string]any{"files": files, "targets": s.instructionTargets()})
+	// file_links: false on Windows without Developer Mode, where link modes copy.
+	writeJSON(w, map[string]any{"files": files, "targets": tools, "file_links": syncpkg.CanCreateFileLink()})
 }
 
 // handleCreateSharedInstructions — POST /api/instructions
@@ -108,30 +148,36 @@ func (s *Server) handleCreateSharedInstructions(w http.ResponseWriter, r *http.R
 		FromTarget string `json:"from_target,omitempty"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxInstructionsBytes+4096)).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_json", "invalid JSON body", map[string]string{})
 		return
 	}
 	if err := config.ValidateExtraName(body.Name); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_name", err.Error(), map[string]string{"name": body.Name})
+		return
+	}
+
+	if body.FromTarget != "" && s.IsProjectMode() {
+		writeCodedError(w, http.StatusBadRequest, "instructions_global_required", "moving a tool's file into a shared file is done in global mode", map[string]string{})
 		return
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := config.ValidateExtraNameUnique(body.Name, s.cfg.Extras); err != nil {
-		writeError(w, http.StatusConflict, err.Error())
+	extras := s.sharedExtras()
+	if err := config.ValidateExtraNameUnique(body.Name, *extras); err != nil {
+		writeCodedError(w, http.StatusConflict, "instructions_name_taken", err.Error(), map[string]string{"name": body.Name})
 		return
 	}
 	extra := config.ExtraConfig{Name: body.Name, File: instructions.AgentsFile, Targets: []config.ExtraTargetConfig{}}
 	path := filepath.Join(s.extrasSourceDir(extra), extra.File)
 	if _, err := os.Lstat(path); err == nil {
-		writeError(w, http.StatusConflict, path+" already exists")
+		writeCodedError(w, http.StatusConflict, "instructions_path_exists", path+" already exists", map[string]string{"path": path})
 		return
 	}
 	args := map[string]any{"name": body.Name, "from_target": body.FromTarget, "scope": "ui"}
 	fail := func(status int, err error) {
 		s.writeOpsLog("instructions-create", "error", start, args, err.Error())
-		writeError(w, status, err.Error())
+		writeCodedError(w, status, "instructions_create_failed", err.Error(), map[string]string{"detail": err.Error()})
 	}
 
 	if body.FromTarget == "" {
@@ -139,7 +185,7 @@ func (s *Server) handleCreateSharedInstructions(w http.ResponseWriter, r *http.R
 			fail(http.StatusInternalServerError, err)
 			return
 		}
-		s.cfg.Extras = append(s.cfg.Extras, extra)
+		*extras = append(*extras, extra)
 	} else if status, err := s.moveTargetIntoShared(body.FromTarget, &extra, path); err != nil {
 		fail(status, err)
 		return
@@ -158,11 +204,10 @@ func (s *Server) handleCreateSharedInstructions(w http.ResponseWriter, r *http.R
 // backed up and linked. It appends extra to the config. Callers must hold
 // s.mu and save the config afterwards.
 func (s *Server) moveTargetIntoShared(target string, extra *config.ExtraConfig, path string) (int, error) {
-	tc, found := s.cfg.Targets[target]
+	it, found, ok := s.targetInstructions(target)
 	if !found {
 		return http.StatusBadRequest, fmt.Errorf("target not found: %s", target)
 	}
-	it, ok := config.TargetInstructions(target, tc, false)
 	if !ok {
 		return http.StatusBadRequest, fmt.Errorf("%s has no global instruction file", target)
 	}
@@ -205,7 +250,7 @@ func (s *Server) moveTargetIntoShared(target string, extra *config.ExtraConfig, 
 
 // sharedExtra returns the named single-file extra. Callers must hold s.mu.
 func (s *Server) sharedExtra(name string) (config.ExtraConfig, bool) {
-	for _, extra := range s.cfg.Extras {
+	for _, extra := range s.extrasConfig() {
 		if extra.Name == name && extra.File != "" {
 			return extra, true
 		}
@@ -220,13 +265,13 @@ func (s *Server) handleGetSharedInstructionsContent(w http.ResponseWriter, r *ht
 	defer s.mu.RUnlock()
 	extra, ok := s.sharedExtra(name)
 	if !ok {
-		writeError(w, http.StatusNotFound, "shared instruction file not found: "+name)
+		writeCodedError(w, http.StatusNotFound, "instructions_shared_not_found", "shared instruction file not found: "+name, map[string]string{"name": name})
 		return
 	}
 	path := filepath.Join(s.extrasSourceDir(extra), extra.File)
 	data, err := readLimited(path)
 	if err != nil && !os.IsNotExist(err) {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_read_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	writeJSON(w, map[string]any{"name": name, "path": path, "exists": err == nil, "content": string(data)})
@@ -240,41 +285,86 @@ func (s *Server) handlePutSharedInstructionsContent(w http.ResponseWriter, r *ht
 		Content string `json:"content"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxInstructionsBytes+4096)).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_json", "invalid JSON body", map[string]string{})
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	extra, ok := s.sharedExtra(name)
 	if !ok {
-		writeError(w, http.StatusNotFound, "shared instruction file not found: "+name)
+		writeCodedError(w, http.StatusNotFound, "instructions_shared_not_found", "shared instruction file not found: "+name, map[string]string{"name": name})
 		return
 	}
 	path := filepath.Join(s.extrasSourceDir(extra), extra.File)
 	if err := writeInstructionsFile(path, body.Content); err != nil {
 		s.writeOpsLog("instructions-edit", "error", start, map[string]any{"name": name, "scope": "ui"}, err.Error())
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_write_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
-	s.writeOpsLog("instructions-edit", "ok", start, map[string]any{"name": name, "path": path, "scope": "ui"}, "")
-	writeJSON(w, map[string]any{"success": true, "path": path})
+	// Links and import lines read the new content already; copies are rewritten.
+	copies := s.syncSharedCopies(extra)
+	status, msg := "ok", ""
+	for _, c := range copies {
+		if c.Error != "" {
+			status, msg = "partial", c.Target+": "+c.Error
+		}
+	}
+	s.writeOpsLog("instructions-edit", status, start, map[string]any{"name": name, "path": path, "copies": len(copies), "scope": "ui"}, msg)
+	writeJSON(w, map[string]any{"success": true, "path": path, "copies": copies})
+}
+
+type sharedCopyResult struct {
+	Target   string   `json:"target"`
+	Warnings []string `json:"warnings,omitempty"`
+	Error    string   `json:"error,omitempty"`
+}
+
+// syncSharedCopies rewrites the targets of a shared file that get it as a
+// copy (copy mode, or a link mode copying because file links are
+// unavailable), as a sync of that file would. A copy the user edited is kept
+// as a drift backup first. Callers must hold s.mu.
+func (s *Server) syncSharedCopies(extra config.ExtraConfig) []sharedCopyResult {
+	names := map[string]string{}
+	for _, t := range s.instructionTargets() {
+		names[filepath.Clean(t.Path)] = t.Name
+	}
+	res := s.instructionsResolver()
+	out := []sharedCopyResult{}
+	for j := range extra.Targets {
+		f := instructions.ExtraFile(extra, j, res)
+		if f.Mode != "copy" {
+			continue
+		}
+		r := sharedCopyResult{Target: names[filepath.Clean(f.Target)]}
+		if r.Target == "" {
+			r.Target = f.Target
+		}
+		result, err := syncpkg.SyncExtraFile(f, false, s.projectRoot)
+		if err != nil {
+			r.Error = err.Error()
+		} else {
+			// The copy fallback is how the target is set up, not news about this save.
+			r.Warnings = slices.DeleteFunc(result.Warnings, func(w string) bool { return w == syncpkg.FileLinkFallbackWarning })
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // assignTarget attaches exactly want to the named target. Callers must hold
 // s.mu and save the config afterwards.
-func (s *Server) assignTarget(name string, want []string) error {
-	tc, found := s.cfg.Targets[name]
+func (s *Server) assignTarget(name string, want []string, warnings ...*[]syncpkg.FileWarning) error {
+	it, found, ok := s.targetInstructions(name)
 	if !found {
 		return fmt.Errorf("target not found: %s", name)
 	}
-	it, ok := config.TargetInstructions(name, tc, false)
 	if !ok {
 		return fmt.Errorf("%s has no global instruction file", name)
 	}
 	if _, linked := s.cfg.Targets[it.SameAs]; linked {
 		return fmt.Errorf("%s reads the same file as %s; change %s instead", name, it.SameAs, it.SameAs)
 	}
-	extras, err := instructions.Assign(s.cfg.Extras, instructions.Target{Name: name, File: it.Path, Import: it.Import}, want, s.instructionsResolver())
+	extras, err := instructions.Assign(s.cfg.Extras, instructions.Target{Name: name, File: it.Path, Import: it.Import}, want, s.instructionsResolver(), warnings...)
 	s.cfg.Extras = extras
 	return err
 }
@@ -289,11 +379,11 @@ func (s *Server) handleAssignSharedInstructions(w http.ResponseWriter, r *http.R
 		Extras  []string `json:"extras"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_json", "invalid JSON body", map[string]string{})
 		return
 	}
 	if len(body.Targets) == 0 {
-		writeError(w, http.StatusBadRequest, "at least one target is required")
+		writeCodedError(w, http.StatusBadRequest, "instructions_target_required", "at least one target is required", map[string]string{})
 		return
 	}
 	if body.Extras == nil {
@@ -302,18 +392,46 @@ func (s *Server) handleAssignSharedInstructions(w http.ResponseWriter, r *http.R
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Validate every target before attaching any of them, including connect-all.
+	planned := s.cfg.Extras
+	for _, name := range body.Targets {
+		it, found, ok := s.targetInstructions(name)
+		if !found || !ok {
+			writeCodedError(w, http.StatusBadRequest, "instructions_no_file", "target has no instruction file: "+name, map[string]string{"target": name})
+			return
+		}
+		if _, linked := s.cfg.Targets[it.SameAs]; linked {
+			writeCodedError(w, http.StatusBadRequest, "instructions_same_file", fmt.Sprintf("%s reads the same file as %s; change %s instead", name, it.SameAs, it.SameAs), map[string]string{"target": name, "other": it.SameAs})
+			return
+		}
+		for _, shared := range body.Extras {
+			if _, found := s.sharedExtra(shared); !found {
+				writeCodedError(w, http.StatusNotFound, "instructions_shared_not_found", fmt.Sprintf("shared instruction file %q not found", shared), map[string]string{"name": shared})
+				return
+			}
+		}
+		var err error
+		planned, err = instructions.PlanAssign(planned, instructions.Target{Name: name, File: it.Path, Import: it.Import}, body.Extras, s.instructionsResolver())
+		if err != nil {
+			if !writeExtraTargetConflict(w, err, name) {
+				writeCodedError(w, http.StatusBadRequest, "instructions_assign_failed", err.Error(), map[string]string{"detail": err.Error()})
+			}
+			return
+		}
+	}
+	warnings := []syncpkg.FileWarning{}
 	errs := []string{}
 	for _, name := range body.Targets {
-		if err := s.assignTarget(name, body.Extras); err != nil {
+		if err := s.assignTarget(name, body.Extras, &warnings); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
-	s.saveSharedAfterChange(w, start, "instructions-assign", map[string]any{"targets": body.Targets, "extras": body.Extras, "scope": "ui"}, errs)
+	s.saveSharedAfterChange(w, start, "instructions-assign", map[string]any{"targets": body.Targets, "extras": body.Extras, "scope": "ui"}, errs, warnings)
 }
 
 // saveSharedAfterChange saves the config (files on disk already changed),
 // logs, and answers with the per-target errors.
-func (s *Server) saveSharedAfterChange(w http.ResponseWriter, start time.Time, cmd string, args map[string]any, errs []string) {
+func (s *Server) saveSharedAfterChange(w http.ResponseWriter, start time.Time, cmd string, args map[string]any, errs []string, warnings ...[]syncpkg.FileWarning) {
 	if err := s.saveAndReloadConfig(); err != nil {
 		errs = append(errs, err.Error())
 	}
@@ -322,7 +440,28 @@ func (s *Server) saveSharedAfterChange(w http.ResponseWriter, start time.Time, c
 		status, msg = "partial", fmt.Sprint(errs)
 	}
 	s.writeOpsLog(cmd, status, start, args, msg)
-	writeJSON(w, map[string]any{"success": len(errs) == 0, "errors": errs})
+	if len(errs) > 0 {
+		for _, ws := range warnings {
+			for _, warning := range ws {
+				if warning.Code == "target_directory" {
+					writeCodedError(w, http.StatusConflict, "instructions_target_directory", strings.Join(errs, "; "), warning.Params)
+					return
+				}
+			}
+		}
+		code := "instructions_assign_failed"
+		if cmd == "instructions-restore" {
+			code = "instructions_restore_failed"
+		}
+		writeCodedError(w, http.StatusInternalServerError, code, strings.Join(errs, "; "), map[string]string{"detail": strings.Join(errs, "; ")})
+		return
+	}
+
+	outWarnings := []syncpkg.FileWarning{}
+	for _, ws := range warnings {
+		outWarnings = append(outWarnings, ws...)
+	}
+	writeJSON(w, map[string]any{"success": len(errs) == 0, "errors": errs, "warnings": outWarnings})
 }
 
 // handleRestoreSharedInstructions — POST /api/instructions/{name}/restore
@@ -334,14 +473,14 @@ func (s *Server) handleRestoreSharedInstructions(w http.ResponseWriter, r *http.
 		Target string `json:"target"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Target == "" {
-		writeError(w, http.StatusBadRequest, "target is required")
+		writeCodedError(w, http.StatusBadRequest, "instructions_target_required", "target is required", map[string]string{})
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	it, _, ok := s.targetInstructions(body.Target)
 	if !ok {
-		writeError(w, http.StatusBadRequest, body.Target+" has no instruction file")
+		writeCodedError(w, http.StatusBadRequest, "instructions_no_file", body.Target+" has no instruction file", map[string]string{"target": body.Target})
 		return
 	}
 	var keep []string
@@ -366,40 +505,49 @@ func (s *Server) handleResolveSharedInstructions(w http.ResponseWriter, r *http.
 	name := r.PathValue("name")
 	var body struct {
 		Target string `json:"target"`
+		Path   string `json:"path"` // a location (see sharedLocations) instead of a target
 		Action string `json:"action"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Target == "" {
-		writeError(w, http.StatusBadRequest, "target is required")
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || (body.Target == "" && body.Path == "") {
+		writeCodedError(w, http.StatusBadRequest, "instructions_target_required", "target is required", map[string]string{})
 		return
 	}
 	if !slices.Contains([]string{"collect", "reapply"}, body.Action) {
-		writeError(w, http.StatusBadRequest, "action must be collect or reapply")
+		writeCodedError(w, http.StatusBadRequest, "instructions_invalid_action", "action must be collect or reapply", map[string]string{"action": body.Action})
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	it, _, ok := s.targetInstructions(body.Target)
-	if !ok {
-		writeError(w, http.StatusBadRequest, body.Target+" has no instruction file")
-		return
-	}
 	res := s.instructionsResolver()
-	i, j := instructions.Find(s.cfg.Extras, name, it.Path, res)
-	if j == -1 {
-		writeError(w, http.StatusNotFound, name+" is not attached to "+body.Target)
-		return
+	var i, j int
+	if body.Path != "" {
+		var ok bool
+		if i, j, ok = s.lookupLocation(w, name, body.Path); !ok {
+			return
+		}
+	} else {
+		it, _, ok := s.targetInstructions(body.Target)
+		if !ok {
+			writeCodedError(w, http.StatusBadRequest, "instructions_no_file", body.Target+" has no instruction file", map[string]string{"target": body.Target})
+			return
+		}
+		i, j = instructions.Find(*s.sharedExtras(), name, it.Path, res)
+		if j == -1 {
+			writeCodedError(w, http.StatusNotFound, "instructions_not_attached", name+" is not attached to "+body.Target, map[string]string{"name": name, "target": body.Target})
+			return
+		}
 	}
-	f := instructions.ExtraFile(s.cfg.Extras[i], j, res)
+	f := instructions.ExtraFile((*s.sharedExtras())[i], j, res)
 	var err error
 	if body.Action == "collect" {
-		err = syncpkg.CollectBackExtraFile(f, "")
+		err = syncpkg.CollectBackExtraFile(f, s.projectRoot)
 	} else {
-		err = syncpkg.ReapplyExtraFile(f, "")
+		err = syncpkg.ReapplyExtraFile(f, s.projectRoot)
 	}
-	args := map[string]any{"name": name, "target": body.Target, "action": body.Action, "scope": "ui"}
+	args := map[string]any{"name": name, "target": body.Target, "path": body.Path, "action": body.Action, "scope": "ui"}
 	if err != nil {
 		s.writeOpsLog("instructions-resolve", "error", start, args, err.Error())
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeCodedError(w, http.StatusInternalServerError, "instructions_resolve_failed", err.Error(), map[string]string{"detail": err.Error()})
 		return
 	}
 	s.writeOpsLog("instructions-resolve", "ok", start, args, "")

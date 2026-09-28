@@ -19,7 +19,7 @@ BEFORE                                  AFTER
                                         Targets (symlinked back)
 ~/.codex/skills/                        ~/.claude/skills/ → source
   └── skill-d/                          ~/.cursor/skills/ → source
-                                        ~/.codex/skills/  → source
+                                        ~/.agents/skills/ → source
 ```
 
 :::caution Back up first
@@ -75,6 +75,21 @@ What `collect` does to each target:
 1. Copies non-symlinked local skills into source (skips any `.git/` inside a skill).
 2. Replaces the originals with symlinks pointing back at source.
 3. Detects duplicates (the same skill name appearing in multiple targets) and reports them without overwriting.
+
+Skills are copied into source, and each original becomes a link back:
+
+```mermaid
+flowchart LR
+    CL["~/.claude/skills"]
+    CU["~/.cursor/skills"]
+    SRC["source<br/>~/.config/skillshare/skills"]
+    CL2["~/.claude/skills<br/>links to source"]
+    CU2["~/.cursor/skills<br/>links to source"]
+    CL -->|collect| SRC
+    CU -->|collect| SRC
+    SRC -.->|symlink| CL2
+    SRC -.->|symlink| CU2
+```
 
 ### Resolving duplicates
 

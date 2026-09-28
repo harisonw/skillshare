@@ -10,6 +10,7 @@ import (
 	"skillshare/internal/resource"
 	"skillshare/internal/sync"
 	"skillshare/internal/ui"
+	"skillshare/internal/utils"
 )
 
 // checkAgentTargetInline validates the agent target for a single target,
@@ -22,10 +23,7 @@ func checkAgentTargetInline(name string, target config.TargetConfig, builtinAgen
 	}
 
 	ac := target.AgentsConfig()
-	mode := ac.Mode
-	if mode == "" {
-		mode = "merge"
-	}
+	mode, _ := agentStatusLabel(ac)
 
 	// Apply per-target include/exclude filters to get expected agent count
 	filtered, filterErr := sync.FilterAgents(allAgents, ac.Include, ac.Exclude)
@@ -36,7 +34,8 @@ func checkAgentTargetInline(name string, target config.TargetConfig, builtinAgen
 			fmt.Sprintf("Agent target %s: invalid filter: %v", name, filterErr), nil)
 		return
 	}
-	agentCount := len(sync.FilterAgentsByTarget(filtered, name))
+	expected := sync.FilterAgentsByTarget(filtered, name)
+	agentCount := len(expected)
 
 	// Build details for JSON output
 	var details []string
@@ -73,8 +72,11 @@ func checkAgentTargetInline(name string, target config.TargetConfig, builtinAgen
 	}
 
 	linked, broken := countAgentLinksAndBroken(agentPath)
+	preserved := 0
+	linked += sync.SyncedAgentCopies(agentPath, expected, &preserved)
+	countLabel := agentCountLabel(linked, agentCount, preserved)
 	if broken > 0 {
-		msg := fmt.Sprintf("[%s] %d linked, %d broken", mode, linked, broken)
+		msg := fmt.Sprintf("[%s] %s, %d broken", mode, countLabel, broken)
 		fmt.Printf("  agents   %s%s%s\n", ui.Yellow, msg, ui.Reset)
 		result.addWarning()
 		result.addCheck("agent_target_"+name, checkWarning,
@@ -83,14 +85,14 @@ func checkAgentTargetInline(name string, target config.TargetConfig, builtinAgen
 	}
 
 	if linked != agentCount && agentCount > 0 {
-		fmt.Printf("  agents   [%s] %sdrift%s %s(%d/%d linked)%s\n", mode, ui.Yellow, ui.Reset, ui.Dim, linked, agentCount, ui.Reset)
+		fmt.Printf("  agents   [%s] %sdrift%s %s(%s)%s\n", mode, ui.Yellow, ui.Reset, ui.Dim, countLabel, ui.Reset)
 		result.addWarning()
 		result.addCheck("agent_target_"+name, checkWarning,
 			fmt.Sprintf("Agent target %s: drift (%d/%d agents linked)", name, linked, agentCount), details)
 		return
 	}
 
-	fmt.Printf("  agents   [%s] %ssynced%s %s(%d/%d linked)%s\n", mode, ui.Green, ui.Reset, ui.Dim, linked, agentCount, ui.Reset)
+	fmt.Printf("  agents   [%s] %ssynced%s %s(%s)%s\n", mode, ui.Green, ui.Reset, ui.Dim, countLabel, ui.Reset)
 	result.addCheck("agent_target_"+name, checkPass,
 		fmt.Sprintf("Agent target %s: %d agents synced", name, linked), details)
 }
@@ -108,7 +110,7 @@ func countAgentLinksAndBroken(dir string) (linked, broken int) {
 		if !strings.HasSuffix(strings.ToLower(e.Name()), ".md") {
 			continue
 		}
-		if e.Type()&os.ModeSymlink == 0 {
+		if !utils.IsLinkMode(filepath.Join(dir, e.Name()), e.Type()) {
 			continue
 		}
 		// It's a symlink — check if target exists (os.Stat follows symlinks)

@@ -4,6 +4,7 @@ import IconButton from '../IconButton';
 import { RailGroup, RailRow, RailSection } from '../StatusRail';
 import PluginDocsLink from './PluginDocsLink';
 import { useT } from '../../i18n';
+import { useSlow } from '../../hooks/useSlow';
 
 interface Props {
   inventory: PluginInventory;
@@ -17,6 +18,8 @@ interface Props {
 /** Agents grouped by what you would do about them: use it, open it, leave it, or install its CLI. */
 export default function PluginAgents({ inventory, ready, refreshing, disabled, onRefresh }: Props) {
   const t = useT();
+  // One Agent's CLI can hang on its own network call; say so instead of spinning in silence.
+  const slow = useSlow(!ready, 10000);
   const definitions = inventory.targetDefinitions ?? [];
   const labels = targetMap(definitions);
   const label = (target: string) => labels[target]?.label ?? target;
@@ -33,7 +36,7 @@ export default function PluginAgents({ inventory, ready, refreshing, disabled, o
   return (
     <RailSection title={t('layout.nav.agents')} count={definitions.length} action={<IconButton icon={<RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />} label={t('plugins.refresh')} disabled={disabled || refreshing} onClick={onRefresh} />}>
       {!ready ? (
-        <RailGroup label={t('plugins.hostsAsking')}>
+        <RailGroup label={t('plugins.hostsAsking')} foot={slow ? t('plugins.hostsSlow') : undefined}>
           {definitions.map((d) => <RailRow key={d.target} target={d.target} label={d.label} dim right={<span className="ss-skel w-11 shrink-0" />} />)}
         </RailGroup>
       ) : (

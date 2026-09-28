@@ -140,7 +140,7 @@ When a GitHub/GHE hub is loaded over SSH, same-host domain-prefixed skill source
 
 ### Create a Hub without writing JSON
 
-Open **Skills → My Hubs → New Hub** in the dashboard (`skillshare ui`).
+Open **Skills → Hubs → My hubs → New Hub** in the dashboard (`skillshare ui`).
 
 1. Give the draft a name and optional description. These identify the draft locally; they are not included in the exported index.
 2. Choose **Choose installed skills**, select the skills to share, and add them. Or use **Add source manually**.
@@ -148,6 +148,10 @@ Open **Skills → My Hubs → New Hub** in the dashboard (`skillshare ui`).
 4. Choose **Save draft**. The page checks every entry and displays any export blockers.
 5. Choose **Download index** to obtain `skillshare-hub.json`.
 6. Commit the downloaded file to your own Git repository or upload it to an HTTP server. Enter that location in the page to copy a `skillshare hub add` command for recipients.
+
+In this draft, one skill has only a local source, so export is blocked until it gets a remote source:
+
+![My hubs: a hub draft with one entry blocked from export](/img/hub-builder-draft.png)
 
 Downloading does **not** publish anything. The catalog references skills; it does not bundle their files. Source validation checks syntax, not whether a repository exists or whether recipients have permission. Private repositories still require access.
 
@@ -171,7 +175,7 @@ The portable export removes the author's `sourcePath` and known local metadata (
 2. Choose a Hub from the search source selector. Use the Hub manager in the install dialog to add a URL, SSH repository, or local index path.
 3. Search, preview, and install skills.
 
-Subscribed Hub sources are saved in the active skillshare configuration and shared with the CLI. They are separate from the drafts in **My Hubs**.
+Subscribed Hub sources are saved in the active skillshare configuration and shared with the CLI. They are separate from the drafts in **My hubs**.
 
 The existing `skillshare hub index` command and `/api/hub/index` endpoint continue to generate indexes as before, including support for local sources. The portable-export rules above apply to the dashboard builder.
 

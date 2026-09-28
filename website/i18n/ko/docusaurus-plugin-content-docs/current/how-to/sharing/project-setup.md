@@ -200,10 +200,12 @@ skillshare ui -p
 또는 `.skillshare/config.yaml`이 존재한다면 (자동 감지) 그냥 `skillshare ui`를 실행하세요.
 
 Project mode에서 대시보드는:
-- 사이드바에 **"Project" 배지**를 표시합니다
+- 사이드바의 이름 아래에 `Project · <project path>`를 표시합니다
 - **Git Sync**를 숨깁니다 (프로젝트 자체의 git을 사용하세요)
-- Config 페이지에서 **`.skillshare/config.yaml`**을 편집합니다
+- **Settings → Files**에서 **`.skillshare/config.yaml`**을 편집합니다
 - 원격 Skill을 설치한 후 `skills:` 항목을 자동으로 **조정**합니다
+
+![프로젝트 모드의 대시보드: 사이드바에 프로젝트 경로가 표시되고 Git Sync는 숨겨짐](/img/project-mode-dashboard.png)
 
 ---
 

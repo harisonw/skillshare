@@ -62,6 +62,10 @@ Sync는 install/update/uninstall과 의도적으로 분리되어 있습니다. �
 skillshare sync --dry-run
 ```
 
+대시보드의 **Sync** 페이지는 쓰기 전에 Target별로 같은 미리 보기를 보여 줍니다.
+
+![쓰기 전에 Target별 변경 사항을 미리 보여 주는 Sync 페이지](/img/web-sync-demo.png)
+
 ### Agent만 sync
 
 agent만 변경했거나(또는 agent 지원 target에만 agent를 push하고 싶다면) sync 범위를 지정하세요.

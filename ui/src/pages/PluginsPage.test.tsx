@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PluginsPage from './PluginsPage';
 import { pluginsApi } from '../api/plugins';
+import { ApiError } from '../api/client';
 
 vi.mock('../api/plugins', async (importOriginal) => ({ ...await importOriginal<typeof import('../api/plugins')>(), pluginsApi: { list: vi.fn(), files: vi.fn(), file: vi.fn(), discover: vi.fn(), preview: vi.fn(), apply: vi.fn() } }));
 vi.mock('../i18n', () => ({ useT: () => (key: string) => key }));
@@ -71,6 +72,14 @@ describe('PluginsPage', () => {
     expect(screen.getByRole('button', { name: 'plugins.moreBlocked' })).toBeEnabled();
     fireEvent.click(claude);
     await waitFor(() => expect(pluginsApi.preview).toHaveBeenCalledWith({ action: 'add', source: 'https://github.com/owner/demo', sourceRef: undefined, entry: undefined, plugin: 'demo', name: 'demo', targets: ['claude'] }));
+  });
+  it('asks for a managed plugin by name, and says why its source could not be read', async () => {
+    vi.mocked(pluginsApi.list).mockResolvedValue({ targetDefinitions: [{ target: 'codex', label: 'codex', project: false, operations: ['add', 'sync'] }], packages: { demo: { bindings: { codex: { id: 'demo@market', source: 'https://github.com/owner/demo.git', plugin: 'demo' } } } }, hosts: [] });
+    vi.mocked(pluginsApi.discover).mockRejectedValue(new ApiError(400, 'download plugin source: could not reach the plugin source', { code: 'plugins.error.network' }));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'mcp.chooseAgents' }));
+    expect(await screen.findByText('plugins.error.network')).toBeInTheDocument();
+    expect(pluginsApi.discover).toHaveBeenCalledWith('https://github.com/owner/demo.git', undefined, undefined, 'demo');
   });
   it('opens the files of a plugin that has a local copy, on its README', async () => {
     vi.mocked(pluginsApi.list).mockResolvedValue({ targetDefinitions: [{ target: 'codex', label: 'Codex', project: false, operations: ['add', 'sync'] }], packages: { demo: { bindings: { codex: { id: 'demo@market', source: 'owner/demo' } } } }, hosts: [] });

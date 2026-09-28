@@ -458,7 +458,7 @@ func (m extrasListTUIModel) renderExtrasDetail(e extrasListEntry) string {
 			case "synced":
 				icon = "✓"
 				style = theme.Success()
-			case "drift", "modified":
+			case "drift", "modified", "invalid mode":
 				icon = "△"
 				style = theme.Warning()
 				hasDrift = true
@@ -610,7 +610,11 @@ func (m *extrasListTUIModel) reloadExtras() {
 	if m.projCfg != nil {
 		extensionsDir = projectExtensionsDir(m.cwd)
 	}
-	entries := buildExtrasListEntries(extras, extrasSource, extensionsDir, m.sourceFunc)
+	root := ""
+	if m.projCfg != nil {
+		root = m.cwd
+	}
+	entries := buildExtrasListEntries(extras, extrasSource, extensionsDir, m.sourceFunc, root)
 	m.allItems = entries
 	m.applyExtrasFilter()
 }

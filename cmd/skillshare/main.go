@@ -60,7 +60,9 @@ func main() {
 
 	// Resolve theme early so OSC 11 probe overhead happens at startup,
 	// not inside a TUI render loop.
-	_ = theme.Get()
+	if theme.Get().NoColor {
+		ui.DisableColors()
+	}
 
 	// Migrate Windows legacy ~/.config/skillshare → %AppData%\skillshare
 	results := config.MigrateWindowsLegacyDir()
@@ -167,10 +169,10 @@ func reportMigrationResults(results []config.MigrationResult) {
 
 func printUsage() {
 	// Colors
-	y := "\033[33m" // yellow - commands
-	c := "\033[36m" // cyan - arguments
-	g := ui.Dim     // dim
-	r := "\033[0m"  // reset
+	y := ui.Yellow // yellow - commands
+	c := ui.Cyan   // cyan - arguments
+	g := ui.Dim    // dim
+	r := ui.Reset  // reset
 
 	// ASCII art logo
 	ui.Logo("")

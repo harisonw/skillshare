@@ -58,6 +58,8 @@ TOML，则需要选择它来自 Codex 还是 Grok。**Import from a target** 是
 **Sync MCP** 只写入 MCP 配置文件。Sync 页面也提供
 **Sync all resources**，用于同步 Skill、Agent、extras 与 MCP。
 
+![MCP 页面：每个 server 一行并列出其 Agents，以及 Sync 区块](/img/mcp-servers.png)
+
 Config editor 在你保存时会使用两个空格缩进格式化 YAML，
 并保留注释。点击某个字段即可在右侧面板中查看其说明，
 包括 `mcp`、`sources.mcp`、连接字段与环境变量引用。
@@ -72,6 +74,21 @@ Skillshare 不会测试连接、安装服务器程序，或复制登录会话。
 |---|---|---|
 | 一个命令与参数 | `stdio`：Agent 会启动一个本地进程 | `command: npx` 加上 `args` |
 | 一个 MCP 端点 URL | Streamable HTTP：Agent 会连接到一个正在运行的服务 | `url: https://example.com/mcp` |
+
+无论哪一种，定义都只保存一次，再写入每个 Agent 自己的文件：
+
+```mermaid
+flowchart LR
+    CFG["config.yaml<br/>mcp.servers"]
+    SYNC["skillshare sync mcp"]
+    A["Claude Code<br/>~/.claude.json"]
+    B["Codex<br/>~/.codex/config.toml"]
+    C["Cursor<br/>~/.cursor/mcp.json"]
+    CFG --> SYNC
+    SYNC --> A
+    SYNC --> B
+    SYNC --> C
+```
 
 你通常不需要设置 `transport`；Skillshare 会从 `command`
 或 `url` 中自动推断。URL 既可以指向你自己电脑上的服务，也可以指向远程服务。
@@ -223,6 +240,8 @@ skillshare sync mcp
 Agent 则会被拒绝。对于 Pi，请加上 `--pi-extension pi-mcp-adapter`。
 [命令参考文档](/docs/reference/commands/mcp#turn-off-a-global-server-in-one-project)
 说明了针对每个 Agent 会写入什么内容，以及为何其他 Agent 不受支持。
+
+![项目的 MCP 标签页：按项目开关的全局 server，以及项目专用的 server](/img/projects-mcp-tab.png)
 
 ## 移除与还原
 

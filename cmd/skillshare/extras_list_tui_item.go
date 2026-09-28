@@ -55,7 +55,7 @@ func extrasStatusBadge(e extrasListEntry) string {
 		switch t.Status {
 		case "synced":
 			synced++
-		case "drift":
+		case "drift", "invalid mode":
 			drift++
 		}
 	}

@@ -123,7 +123,7 @@ Agent 同步支持全部三种模式,与 Skills 相同:
 
 | 模式 | 行为 |
 |------|----------|
-| **merge**(默认) | 逐文件符号链接。Target 中的本地 agent 文件会被保留。 |
+| **merge**(默认) | 逐文件符号链接。Target 中的本地 agent 文件会被保留。在未开启 Developer Mode 的 Windows 上，agents 会改为复制，并像链接一样被更新和清理（[详情](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)）。 |
 | **symlink** | 整个 agents 目录被符号链接。 |
 | **copy** | Agent 文件被复制为真实文件。 |
 

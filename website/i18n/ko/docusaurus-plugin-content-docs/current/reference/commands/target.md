@@ -72,6 +72,8 @@ skillshare target remove cursor --dry-run # Preview
    - **Copy mode:** `.skillshare-manifest.json`을 제거합니다. 관리되는 복사본과 로컬 skill은 일반 디렉터리로 보존됩니다.
 3. config에서 target을 제거합니다
 
+같은 skills 폴더에 쓰는 다른 target이 있으면(예: `codex`와 `universal`은 둘 다 `~/.agents/skills`를 사용) 2단계를 건너뜁니다. skills는 그 target을 위해 링크된 채 남고, 제거한 target만 config에서 빠집니다.
+
 ### target list
 
 구성된 모든 target을 나열합니다.

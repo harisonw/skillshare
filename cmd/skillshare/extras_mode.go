@@ -82,6 +82,7 @@ func cmdExtrasMode(args []string) error {
 	var extras []config.ExtraConfig
 	var configPath string
 	var saveFn func() error
+	var validateFn func() error
 
 	if mode == modeProject {
 		projCfg, loadErr := config.LoadProject(cwd)
@@ -91,6 +92,7 @@ func cmdExtrasMode(args []string) error {
 		extras = projCfg.Extras
 		configPath = config.ProjectConfigPath(cwd)
 		saveFn = func() error { return projCfg.Save(cwd) }
+		validateFn = func() error { return projCfg.ValidateExtras(cwd, name) }
 	} else {
 		cfg, loadErr := config.Load()
 		if loadErr != nil {
@@ -99,6 +101,7 @@ func cmdExtrasMode(args []string) error {
 		extras = cfg.Extras
 		configPath = config.ConfigPath()
 		saveFn = cfg.Save
+		validateFn = func() error { return cfg.ValidateExtras(name) }
 	}
 
 	// Auto-resolve target when omitted
@@ -170,6 +173,9 @@ func cmdExtrasMode(args []string) error {
 		}
 	}
 
+	if err := validateFn(); err != nil {
+		return err
+	}
 	if err := saveFn(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}

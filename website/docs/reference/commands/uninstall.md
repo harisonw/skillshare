@@ -21,7 +21,21 @@ skillshare uninstall team-repo             # Remove tracked repository (_ prefix
 - Batch-remove an entire group of skills at once
 - Remove **all** skills at once with `--all`
 
-![uninstall demo](/img/uninstall-demo.png)
+```text
+$ skillshare uninstall css-review
+
+Uninstalling skill
+─────────────────────────────────────────
+→ Name: frontend/css-review
+→ Path: ~/.config/skillshare/skills/frontend/css-review
+
+Are you sure you want to uninstall this skill? [y/N]: y
+✓ Uninstalled skill: frontend/css-review
+→ Moved to trash (7 days): ~/.local/share/skillshare/trash/frontend/css-review_2026-09-28_12-52-23
+
+  Next Steps
+→ Run 'skillshare sync' to update all targets
+```
 
 ## What Happens
 

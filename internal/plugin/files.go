@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
 // maxPreview keeps a stray bundle or binary from being sent to the browser whole.
@@ -36,6 +37,32 @@ func (s *Service) snapshotDir(name string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// discoverSnapshot reads a remote source from the snapshot of a binding made from it, nil
+// when there is none. A snapshot whose digest no longer matches was edited, so it does not answer.
+func (s *Service) discoverSnapshot(name, source, ref, entry string) *Discovery {
+	if name == "" || !strings.HasPrefix(source, "https://") {
+		return nil
+	}
+	d, err := s.load()
+	if err != nil {
+		return nil
+	}
+	pack := d.packages[name]
+	for _, target := range slices.Sorted(maps.Keys(pack.Bindings)) {
+		b := pack.Bindings[target]
+		if b.Source != source || b.SourceRef != ref || b.Digest == "" {
+			continue
+		}
+		found, err := discoverRoot(filepath.Join(s.snapshotPath(b, target), "content"), b.Source, entry)
+		if err != nil || found.Digest != b.Digest {
+			continue
+		}
+		found.SourceRef, found.Commit = b.SourceRef, b.Commit
+		return found
+	}
+	return nil
 }
 
 // Files lists the snapshot, slash separated and sorted. Nothing is read from the network.

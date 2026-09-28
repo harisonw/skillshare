@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+
+	"skillshare/internal/utils"
 )
 
 var ErrDraftConflict = errors.New("draft changed in another window; reload before saving")
@@ -38,7 +40,7 @@ func noDraftSymlink(path string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err == nil && info.Mode()&os.ModeSymlink != 0 {
+	if err == nil && utils.IsLinkMode(path, info.Mode()) {
 		return fmt.Errorf("draft storage cannot be a symbolic link")
 	}
 	return nil

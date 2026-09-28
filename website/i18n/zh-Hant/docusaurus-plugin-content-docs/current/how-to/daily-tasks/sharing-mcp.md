@@ -52,6 +52,8 @@ skillshare mcp add
 驗證、預覽與衝突規則。MCP 頁面 Sync 框中的 **Sync MCP** 只會寫入 MCP 設定檔。
 Sync 頁面也提供 **Sync all resources**，可同步 Skills、agents、extras 與 MCP。
 
+![MCP 頁面：每個 server 一列並列出其 Agents，以及 Sync 區塊](/img/mcp-servers.png)
+
 儲存時 Config 編輯器會以兩個空格縮排格式化 YAML，並保留註解。點選某個欄位即可在右側面板
 看到其說明，包括 `mcp`、`sources.mcp`、連線欄位與環境變數參照。
 
@@ -65,6 +67,21 @@ Sync 頁面也提供 **Sync all resources**，可同步 Skills、agents、extras
 |---|---|---|
 | 一個指令與參數 | `stdio`：由 Agent 啟動一個本機行程 | `command: npx` 加上 `args` |
 | 一個 MCP endpoint URL | Streamable HTTP：Agent 連接到一個運行中的服務 | `url: https://example.com/mcp` |
+
+無論哪一種，定義都只存一次，再寫入每個 Agent 自己的檔案：
+
+```mermaid
+flowchart LR
+    CFG["config.yaml<br/>mcp.servers"]
+    SYNC["skillshare sync mcp"]
+    A["Claude Code<br/>~/.claude.json"]
+    B["Codex<br/>~/.codex/config.toml"]
+    C["Cursor<br/>~/.cursor/mcp.json"]
+    CFG --> SYNC
+    SYNC --> A
+    SYNC --> B
+    SYNC --> C
+```
 
 你通常不需要自行設定 `transport`；Skillshare 會從 `command` 或 `url` 自動推斷。
 URL 可以指向你自己電腦上的服務，也可以是遠端服務。請使用提供者實際的 MCP endpoint，
@@ -207,6 +224,8 @@ skillshare sync mcp
 其他 Agents 則會被拒絕。若是 Pi，請加上 `--pi-extension pi-mcp-adapter`。
 [指令參考](/docs/reference/commands/mcp#turn-off-a-global-server-in-one-project)
 說明了各個 Agent 會寫入什麼內容，以及為什麼其他 Agent 不受支援。
+
+![專案的 MCP 分頁：依專案開關的全域 server，以及專案專用的 server](/img/projects-mcp-tab.png)
 
 ## 移除與復原
 

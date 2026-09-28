@@ -350,7 +350,7 @@ func TestRestoreExtraTarget_NoFileAtAttachIgnoresOlderBackup(t *testing.T) {
 	src, tgt := setupExtraFileTest(t, "# agents")
 	target := filepath.Join(tgt, "AGENTS.md")
 	os.WriteFile(target, []byte("old content"), 0644)
-	if err := BackupFile(target); err != nil {
+	if err := BackupFile(target, BackupReasonEdit); err != nil {
 		t.Fatal(err)
 	}
 	os.Remove(target)
@@ -438,5 +438,132 @@ func TestRestoreExtraTarget_ModeSwitchKeepsUserFile(t *testing.T) {
 				t.Fatalf("restored %q, want the pre-attach file", got)
 			}
 		})
+	}
+}
+
+func TestSyncExtraFile_SwitchBackToImportRestoresUserLines(t *testing.T) {
+	for _, via := range []string{"copy", "symlink"} {
+		t.Run("import->"+via+"->import", func(t *testing.T) {
+			src, tgt := setupExtraFileTest(t, "# agents")
+			target := filepath.Join(tgt, "CLAUDE.md")
+			os.WriteFile(target, []byte("mine\n"), 0644)
+			imp := NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", "import")
+			SyncExtraFile(imp, false, "")
+			attached := readFile(t, target)
+			SyncExtraFile(NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", via), false, "")
+
+			if _, err := SyncExtraFile(imp, false, ""); err != nil {
+				t.Fatal(err)
+			}
+			if got := readFile(t, target); got != attached {
+				t.Fatalf("after switching back = %q, want %q", got, attached)
+			}
+			if _, err := RestoreExtraTarget(imp); err != nil {
+				t.Fatal(err)
+			}
+			if got := readFile(t, target); got != "mine\n" {
+				t.Errorf("restored %q, want the original file", got)
+			}
+		})
+	}
+}
+
+func TestSyncExtraFile_SwitchBackToImportBacksUpEditedCopy(t *testing.T) {
+	src, tgt := setupExtraFileTest(t, "# agents")
+	target := filepath.Join(tgt, "CLAUDE.md")
+	os.WriteFile(target, []byte("mine\n"), 0644)
+	imp := NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", "import")
+	SyncExtraFile(imp, false, "")
+	SyncExtraFile(NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", "copy"), false, "")
+	os.WriteFile(target, []byte("edited in copy mode"), 0644)
+
+	if _, err := SyncExtraFile(imp, false, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := driftBackups(t, target); len(got) != 1 || got[0] != "edited in copy mode" {
+		t.Errorf("drift = %v, want the edit", got)
+	}
+	if got := readFile(t, target); !strings.HasSuffix(got, "\nmine\n") {
+		t.Errorf("target = %q, want the user lines back", got)
+	}
+}
+
+func TestSyncExtraFile_SwitchBackToImportKeepsOtherImports(t *testing.T) {
+	src, tgt := setupExtraFileTest(t, "# agents")
+	os.WriteFile(filepath.Join(src, "TEAM.md"), []byte("# team"), 0644)
+	target := filepath.Join(tgt, "CLAUDE.md")
+	os.WriteFile(target, []byte("mine\n"), 0644)
+	a := NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", "import")
+	b := NewExtraFile(src, "TEAM.md", tgt, "CLAUDE.md", "import")
+	SyncExtraFile(a, false, "")
+	SyncExtraFile(b, false, "")
+	SyncExtraFile(NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", "copy"), false, "")
+	SyncExtraFile(b, false, "")
+
+	if _, err := SyncExtraFile(a, false, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	got := readFile(t, target)
+	if len(ManagedImportLines(got)) != 4 || !strings.Contains(got, a.ImportLine()) || !strings.Contains(got, b.ImportLine()) || !strings.HasSuffix(got, "\nmine\n") {
+		t.Errorf("target = %q, want both imports in one block and the user lines", got)
+	}
+}
+
+func TestSyncExtraFile_SwitchBackToImportKeepsEditsMadeInImportMode(t *testing.T) {
+	for _, via := range []string{"copy", "symlink"} {
+		t.Run("import->"+via+"->import", func(t *testing.T) {
+			src, tgt := setupExtraFileTest(t, "# agents")
+			target := filepath.Join(tgt, "CLAUDE.md")
+			os.WriteFile(target, []byte("A\n"), 0644)
+			imp := NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", "import")
+			other := NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", via)
+			// Leave import once so the attach-time restore point holds only A.
+			SyncExtraFile(imp, false, "")
+			SyncExtraFile(other, false, "")
+			SyncExtraFile(imp, false, "")
+			os.WriteFile(target, []byte(readFile(t, target)+"B\n"), 0644)
+			before := readFile(t, target)
+
+			SyncExtraFile(other, false, "")
+			if _, err := SyncExtraFile(imp, false, ""); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := readFile(t, target); got != before {
+				t.Fatalf("after switching back = %q, want %q", got, before)
+			}
+			if _, err := RestoreExtraTarget(imp); err != nil {
+				t.Fatal(err)
+			}
+			// Import-mode restore drops only the import line, as it would have
+			// before the switch: A plus the edit made in import mode.
+			if got := readFile(t, target); got != "A\nB\n" {
+				t.Errorf("restored %q, want the file as left in import mode", got)
+			}
+		})
+	}
+}
+
+func TestSyncExtraFile_ModeSwitchPreservesEmptyImportBase(t *testing.T) {
+	src, tgt := setupExtraFileTest(t, "shared")
+	f := NewExtraFile(src, "AGENTS.md", tgt, "CLAUDE.md", "copy")
+	os.WriteFile(f.Target, []byte("old local content"), 0644)
+	run := func(mode string) {
+		t.Helper()
+		f.Mode = mode
+		if _, err := SyncExtraFile(f, false, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("copy")
+	run("import")
+	only, _ := addImportLine("", f.importLine())
+	os.WriteFile(f.Target, []byte(only), 0644)
+	run("copy")
+	run("import")
+	if got := readFile(t, f.Target); strings.Contains(got, "old local content") {
+		t.Fatalf("deleted import content resurrected: %q", got)
 	}
 }

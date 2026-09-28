@@ -140,7 +140,7 @@ GitHub/GHE Hub가 SSH로 로드되면, 동일한 호스트의 도메인 접두�
 
 ### JSON을 작성하지 않고 Hub 만들기
 
-대시보드(`skillshare ui`)에서 **Skills → My Hubs → New Hub**를 여세요.
+대시보드(`skillshare ui`)에서 **Skills → Hubs → My hubs → New Hub**를 여세요.
 
 1. 초안에 이름과 선택적 설명을 지정하세요. 이는 로컬에서 초안을 식별하는 용도이며 내보낸 index에는 포함되지 않습니다.
 2. **Choose installed skills**를 선택하고 공유할 Skill을 선택해 추가하세요. 또는 **Add source manually**를 사용하세요.
@@ -148,6 +148,10 @@ GitHub/GHE Hub가 SSH로 로드되면, 동일한 호스트의 도메인 접두�
 4. **Save draft**를 선택하세요. 페이지가 모든 항목을 검사하고 내보내기를 막는 문제가 있으면 표시합니다.
 5. **Download index**를 선택해 `skillshare-hub.json`을 받으세요.
 6. 다운로드한 파일을 자신의 Git 저장소에 커밋하거나 HTTP 서버에 업로드하세요. 페이지에 해당 위치를 입력하면 수신자를 위한 `skillshare hub add` 명령을 복사할 수 있습니다.
+
+아래 초안에서는 한 Skill의 Source가 로컬뿐이라 원격 Source를 지정하기 전까지 내보낼 수 없습니다.
+
+![My hubs: 한 항목이 내보내기에서 막힌 Hub 초안](/img/hub-builder-draft.png)
 
 다운로드는 아무것도 게시하지 **않습니다**. 카탈로그는 Skill을 참조할 뿐 파일을 번들로 포함하지 않습니다. Source 검증은 문법만 확인하며, 저장소가 실제로 존재하는지 또는 수신자가 권한을 가지고 있는지는 확인하지 않습니다. 비공개 저장소는 여전히 접근 권한이 필요합니다.
 
@@ -171,7 +175,7 @@ GitHub/GHE Hub가 SSH로 로드되면, 동일한 호스트의 도메인 접두�
 2. 검색 소스 선택기에서 Hub를 선택하세요. 설치 대화상자의 Hub manager를 사용해 URL, SSH 저장소, 또는 로컬 index 경로를 추가하세요.
 3. Skill을 검색, 미리보기, 설치하세요.
 
-구독한 Hub Source는 활성 skillshare 설정에 저장되며 CLI와 공유됩니다. 이는 **My Hubs**의 초안과는 별개입니다.
+구독한 Hub Source는 활성 skillshare 설정에 저장되며 CLI와 공유됩니다. 이는 **My hubs**의 초안과는 별개입니다.
 
 기존의 `skillshare hub index` 명령과 `/api/hub/index` 엔드포인트는 로컬 Source 지원을 포함해 이전과 동일하게 index를 생성합니다. 위의 이식 가능한 내보내기 규칙은 대시보드 빌더에도 적용됩니다.
 

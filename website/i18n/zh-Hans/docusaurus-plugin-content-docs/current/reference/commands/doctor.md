@@ -13,7 +13,56 @@ skillshare doctor -g        # Force global mode
 skillshare doctor --json    # Structured JSON output for CI
 ```
 
-![doctor demo](/img/doctor-demo.png)
+```text
+skillshare doctor
+
+Checking environment
+─────────────────────────────────────────
+✓ Config: ~/.config/skillshare/config.yaml
+→ Config directory: ~/.config/skillshare
+→ Data directory:   ~/.local/share/skillshare
+→ State directory:  ~/.local/state/skillshare
+
+✓ Source: ~/.config/skillshare/skills (43 skills)
+✓ Agents source: ~/.config/skillshare/agents (2 agents)
+→ Skillignore: not configured
+✓ Link support: OK
+! Git: not initialized (recommended for backup)
+
+✓ Skill integrity: 27/27 verified
+
+Checking targets
+─────────────────────────────────────────
+claude
+  skills   [merge] merged (43 shared, 0 local)
+  agents   [merge] synced (2/2 linked)
+cursor
+  skills   [merge] merged (43 shared, 1 local)
+  agents   [merge] synced (2/2 linked)
+gemini
+  skills   [merge] merged (43 shared, 0 local)
+…
+! gemini will see content from: universal
+    ~/.agents/skills ← universal
+…
+✗ claude: 1 broken symlink(s): frontend__css-review
+…
+
+Extras
+─────────────────────────────────────────
+✓ rules: 2 files, 2/2 targets OK
+✓ commands: 1 files, 1/1 targets OK
+✓ team: 1 files, 4/4 targets OK
+
+Storage
+─────────────────────────────────────────
+→ Backups: last backup 2026-09-28_12-41-50 (10 minutes ago)
+→ Trash: 1 item(s) (247 B), oldest <1 day
+
+Summary
+─────────────────────────────────────────
+✗ 6 error(s), 4 warning(s)
+```
 
 ## 何时使用
 
@@ -44,10 +93,10 @@ Checking environment
 Checking targets
 claude
   skills   [merge] merged (8 shared, 2 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 cursor
   skills   [copy] copied (8 managed, 0 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 codex
   skills   [merge] needs sync
 
@@ -80,7 +129,7 @@ Summary
 
 每个 target 都会显示 **skills** 和 **agents** 的子项（当配置了 agents 时）：
 - Skills：路径、同步模式、同步状态、共享/本地计数
-- Agents：已链接数量、drift 检测
+- Agents：同步模式、已链接数量、drift 检测。在未开启 Developer Mode 的 Windows 上，`merge` 会显示为 `[copy]`；最新的受管理副本会计为 linked。skillshare 不拥有、但内容相同的本地文件会被保留。在 copy fallback 中，agent 计数会以 `local preserved` 单独显示，例如 `0/1 linked, 1 local preserved`。
 - 没有损坏的 symlinks
 - 针对意外本地冲突的重复 skill 检查：
   - `merge` 模式：跳过（本地 skills 是预期存在的）
@@ -207,10 +256,12 @@ skillshare new my-skill  # Creates proper structure
 
 ### "Link not supported"
 
-在未开启 Developer Mode 的 Windows 上：
+`doctor` 会在系统临时目录（Windows 上是 `%TEMP%`，其他系统是 `$TMPDIR` 或 `/tmp`）中链接一个测试文件夹。在 Windows 上这个链接是 NTFS junction，既不需要管理员权限，也不需要 Developer Mode，所以开启 Developer Mode 无法解决这个错误。消息中的 `junction error:` 一行会显示 Windows 拒绝的原因。请确认临时目录：
 
-1. 在 Settings 中启用 Developer Mode
-2. 或以管理员身份运行
+1. 位于本地 NTFS 磁盘，而不是 FAT32、exFAT 或网络共享（junction 只能在 NTFS 上使用）
+2. 当前账户有写入权限，且没有被杀毒或安全软件拦截
+
+这项检查不会测试文件链接。没有 Developer Mode 时，会链接单个文件的 agents 和 extras 会改为复制；请参阅 [Windows 故障排除](../../troubleshooting/windows.md#file-links-need-windows-developer-mode-copying-instead)。
 
 ## 带有问题的示例输出
 
@@ -229,7 +280,7 @@ Checking environment
 Checking targets
 claude
   skills   [merge] merged (8 shared, 2 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 cursor
   skills   [merge] 2 broken symlink(s): old-skill, removed-skill
 codex

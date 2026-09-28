@@ -26,11 +26,14 @@ irm https://raw.githubusercontent.com/runkids/skillshare/main/install.ps1 | iex
 
 ### skillshare には管理者権限が必要ですか？
 
-**いいえ。** skillshare はシンボリックリンクの代わりに NTFS ジャンクションを使用するため、
-管理者権限は不要です。
+**いいえ。** フォルダー（skills、および `symlink` モードの agents や extras）は NTFS ジャンクションで
+リンクされます。ジャンクションはディレクトリに対してシンボリックリンクのように機能し、管理者権限は不要です。
 
-NTFS ジャンクションはディレクトリに対してシンボリックリンクのように機能しますが、すべてのユーザーが
-利用できます。
+単一のファイルはジャンクションでリンクできません。ファイルをリンクするモード（`merge` モードの agents、
+`merge` モードのディレクトリ Extras 内のファイル、共有 `AGENTS.md` などの単一ファイルの Extras）は
+本物のシンボリックリンクを使うため、[Developer Mode](#file-links-need-windows-developer-mode-copying-instead)
+（または管理者シェル）が必要です。Developer Mode がない場合、skillshare はそれらのファイルを代わりに
+コピーします。
 
 ---
 
@@ -119,12 +122,41 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 2. アンチウイルスがブロックしていないか確認する
 3. PowerShell を管理者として実行する（ほとんど必要ない）
 
+### `file links need Windows Developer Mode; copying instead` {#file-links-need-windows-developer-mode-copying-instead}
+
+**原因:** Windows でファイルのシンボリックリンクを作成できるのは、Developer Mode がオンのとき（または
+管理者シェルから実行したとき）だけです。`merge` モードの agents、`merge` モードのディレクトリ Extras、
+単一ファイルの Extras（共有 `AGENTS.md` など）は単一のファイルをリンクするため、Developer Mode が
+ない場合 `sync` は代わりにそれらをコピーし、この行を表示します。`status`、`doctor`、`extras list` では
+これらの Target が `copy` と表示されます。
+
+コピーは追跡されるため、sync に関してはリンクと同じように動作します。
+
+- ソースが変更されると更新され、ソースが削除されると削除されます。
+- Target 内で自分で作成したファイルは、`merge` モードと同様にそのまま残ります。
+- ファイルのリンクが使えるようになると、次の sync でコピーがリンクに置き換えられます。
+
+**解決策:** 何もする必要はありません。コピーはそのまま機能します。リンクにしたい場合は Developer Mode を
+オンにし（Windows 11: **設定 → システム → 開発者向け → 開発者モード**、Windows 10: **設定 → 更新と
+セキュリティ → 開発者向け**）、もう一度 `skillshare sync --all` を実行してください。`skillshare ui` が
+起動している場合は再起動してください。
+
+内容が同じローカルファイルは `local preserved` と表示され、`sync extras` はそれらに `--force` を提案しません。管理対象のリンクにはならず、ローカルファイルのままです。
+
+### Agent ファイルや AGENTS.md がフォルダーのアイコンで表示され、読み込めない {#agent-files-or-agentsmd-show-a-folder-icon-and-cant-be-read}
+
+**原因:** 以前のバージョンは、単一のファイルをディレクトリジャンクションでリンクしていました。エクスプローラーは
+そのファイルをフォルダーとして表示し、ツールはそれを読み込めません。
+
+**解決策:** `skillshare sync --all`（または `skillshare sync agents` / `skillshare sync extras`）を
+実行してください。sync はこの壊れたリンクを、ファイルのシンボリックリンク、または Developer Mode が
+オフの場合はコピーに置き換えます。ダッシュボードの **AGENTS.md** タブでは、影響を受ける Target に警告が
+表示され、`copy` に切り替えることでも直ります。
+
 ### `symlinks not working`
 
-**原因:** ジャンクションではなくシンボリックリンクが表示されている。
-
-**注記:** skillshare は Windows ではシンボリックリンクではなく NTFS ジャンクションを使用します。
-シンボリックリンクのエラーが表示される場合は、Windows 版の skillshare を使用していることを
+**注記:** Windows では、skillshare はフォルダーを NTFS ジャンクションで、単一のファイルをシンボリック
+リンクでリンクします。シンボリックリンクのエラーが表示される場合は、Windows 版の skillshare を使用していることを
 確認してください。
 
 ### Antigravity での `Incorrect function`

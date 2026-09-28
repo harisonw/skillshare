@@ -54,7 +54,7 @@ func FindLocalSkills(targetPath, sourcePath, syncMode string) ([]LocalSkillInfo,
 
 	// If target is a symlink pointing to source, it's using symlink mode — no local skills.
 	// If it's an external symlink (e.g., dotfiles manager), follow it and scan.
-	if info.Mode()&os.ModeSymlink != 0 {
+	if utils.IsLinkMode(targetPath, info.Mode()) {
 		absLink, err := utils.ResolveLinkTarget(targetPath)
 		if err != nil {
 			return nil, err
@@ -93,7 +93,7 @@ func FindLocalSkills(targetPath, sourcePath, syncMode string) ([]LocalSkillInfo,
 		}
 
 		// Skip symlinks (these are synced from source)
-		if skillInfo.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(skillPath, skillInfo.Mode()) {
 			continue
 		}
 

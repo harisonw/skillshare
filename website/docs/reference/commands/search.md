@@ -52,15 +52,40 @@ Interactive selector → Install selected skill
 
 ## Preview
 
-<p align="center">
-  <img src="/img/search-demo.png" alt="search demo" width="720" />
-</p>
+```text
+$ skillshare search runkids
+
+▸  Searching  runkids
+│
+├─ Found 20 skill(s)  (12.0s)
+
+  Select skills to install (0/20 selected)
+
+▌ [ ] skillshare ★ 2.7k
+▌ runkids/skillshare/skills/skillshare
+▌ [ ] skill-sharing ★ 654
+▌ majiayu000/claude-skill-registry/skills/skills/skill-sharing
+▌ [ ] skillshare-changelog ★ 2.7k
+▌ runkids/skillshare/.skillshare/skills/skillshare-changelog
+  …
+
+  20 skills · Page 1 of 2
+  ─────────────────────────────────────────
+  Description:  Manage skills, agents, extras, plugins, and MCP connection settings with the Skillshare CLI.
+                Use when the user asks to configure or run Skillshare, install or sync resources across AI
+                tools, import MCP settings, manage targets, audit skills, recover backups, or troubleshoot...
+
+  Source:       runkids/skillshare/skills/skillshare
+  Stars:        2.7k
+  ↑↓ navigate  ←→ page  space toggle  a all  enter install  s search again  / filter  esc cancel
+```
 
 **Controls:**
-- `↑` `↓` — Navigate results
-- `Enter` — Install selected skill
-- `Ctrl+C` — Cancel and exit
-- Type to filter results
+- `↑` `↓` — Navigate results; `←` `→` — change page
+- `Space` — Select or clear a skill; `a` — select all visible
+- `Enter` — Install the selected skills (with nothing selected, it cancels)
+- `/` — Filter results; `s` — search again
+- `Esc` or `Ctrl+C` — Cancel and exit
 
 After installing, you can search again or press `Enter` to quit.
 

@@ -215,7 +215,7 @@ export default function LogPage() {
             />
             {stats && stats.total > 0 && (
               <p className="text-[13px] text-ink-3">
-                {t('log.summary.entries', { total: stats.total })}
+                {t(stats.total === 1 ? 'log.summary.entries.one' : 'log.summary.entries.other', { total: stats.total })}
                 {` · ${t('log.summary.success', { rate: Math.round(stats.success_rate * 100) })}`}
                 {stats.last_operation && ` · ${t('log.summary.lastCommand')} ${stats.last_operation.cmd} ${formatRelativeTime(stats.last_operation.ts, locale)}`}
                 {filtered && ` · ${t('log.summary.filtered')}`}

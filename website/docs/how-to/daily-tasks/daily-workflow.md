@@ -62,6 +62,10 @@ Sync is intentionally decoupled from install/update/uninstall. This lets you bat
 skillshare sync --dry-run
 ```
 
+The dashboard's **Sync** page shows the same preview for each target before anything is written:
+
+![Sync page previewing changes per target before writing](/img/web-sync-demo.png)
+
 ### Sync agents only
 
 If you only changed agents (or only want to push agents to agent-capable targets), scope the sync:

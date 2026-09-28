@@ -38,6 +38,10 @@ func cmdExtras(args []string) error {
 		printExtrasHelp()
 		return nil
 	default:
+		if len(rest) == 0 || hasFlag(rest, "--help") || hasFlag(rest, "-h") {
+			printExtraHelp(sub)
+			return nil
+		}
 		return fmt.Errorf("unknown extras subcommand: %s (run 'skillshare extras --help')", sub)
 	}
 }
@@ -70,4 +74,21 @@ Source directory resolution (per extra):
   1. Per-extra "source" field in config.yaml
   2. Global "extras_source" in config.yaml
   3. Default: <skills_source>/extras/<name>/`)
+}
+
+func printExtraHelp(name string) {
+	fmt.Printf(`Usage: skillshare extras %s [options]
+
+Options:
+  --mode <mode>             Change sync mode: merge, copy, symlink, or import
+  --target <path>           Select a target for --mode
+  --add-target <path>       Add a target directory
+  --as <filename>           Target filename for a single-file --add-target
+  --remove-target <path>    Detach a target
+  --prune                  Restore/remove managed files when detaching
+  --flatten / --no-flatten  Change directory-extra flattening
+  --project, -p            Use project mode
+  --global, -g             Use global mode
+  --help, -h               Show this help
+`, name)
 }

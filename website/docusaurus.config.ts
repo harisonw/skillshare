@@ -9,6 +9,8 @@ const config: Config = {
 
   future: {
     v4: true,
+    // Rspack and SWC instead of webpack and Babel: the build takes a sixth of the time.
+    experimental_faster: true,
   },
 
   url: 'https://skillshare.runkids.cc',

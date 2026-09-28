@@ -15,6 +15,10 @@ Extras는 skillshare가 관리하는 추가 리소스 유형입니다 — "skill
 - **source directory** — `extras_source` 또는 extra별 `source`로 설정 가능하며, 기본값은 `~/.config/skillshare/extras/<name>/` (전역) 또는 `.skillshare/extras/<name>/` (프로젝트)
 - 파일이 동기화되는 하나 이상의 **target**
 
+대시보드의 **Extras → Folders**에는 각 extra와 그 Target, 모드가 표시됩니다.
+
+![Extras › Folders: 각 Target에 동기화된 rules와 commands](/img/extras-folders.png)
+
 ## Commands
 
 ### `extras init`
@@ -152,13 +156,14 @@ skillshare extras source ~/company-shared/extras
 
 ### Operating on an existing extra
 
-`extras <name>`에 대한 플래그를 통해 target의 동기화 mode나 flatten 설정을 변경하거나, target을 추가/제거합니다 — 모두 config 전용 작업입니다. 이후 디스크에 변경사항을 적용하려면 `skillshare sync extras`를 실행하세요.
+`extras <name>`으로 target의 sync mode와 flatten 설정을 변경하거나 target을 추가·제거합니다. mode, flatten, target 추가 후 `skillshare sync extras`로 적용하세요. `--remove-target --prune`은 관리 파일을 즉시 복원하거나 제거합니다.
 
 ```bash
 skillshare extras <name> --mode <mode> [--target <path>] [-p|-g]
 skillshare extras <name> --flatten | --no-flatten [--target <path>]
-skillshare extras <name> --add-target <path> [--mode <mode>] [--flatten] [-p|-g]
+skillshare extras <name> --add-target <path> [--as <filename>] [--mode <mode>] [--flatten] [-p|-g]
 skillshare extras <name> --remove-target <path> [--prune] [-p|-g]
+skillshare extras <name> --help
 ```
 
 **Options:**
@@ -169,6 +174,7 @@ skillshare extras <name> --remove-target <path> [--prune] [-p|-g]
 | `--flatten` | flatten 활성화 (하위 디렉터리 파일을 target 루트에 동기화) |
 | `--no-flatten` | flatten 비활성화 |
 | `--add-target <path>` | extra에 새 target 추가 |
+| `--as <filename>` | `--add-target`의 target 파일 이름 (single-file extra 전용, 기본값은 `file`) |
 | `--remove-target <path>` | extra에서 target 제거 (기본적으로 config 전용) |
 | `--prune` | `--remove-target`과 함께: 해당 target 아래의 skillshare 관리 파일도 삭제. single-file extra에서는 대신 target 파일을 복원 |
 | `--target <path>` | target 디렉터리 경로 (multi-target extra에서 `--mode`에 필요; 생략 시 `--flatten`/`--no-flatten`은 모든 target에 적용) |
@@ -191,6 +197,7 @@ skillshare extras agents --no-flatten
 # Add a new target to an existing extra (then sync)
 skillshare extras rules --add-target ~/.cursor/rules
 skillshare extras commands --add-target ~/.config/opencode/commands --mode copy
+skillshare extras personal --add-target ~/.claude --as CLAUDE.md --mode import
 
 # Remove a target (leaves synced files in place)
 skillshare extras rules --remove-target ~/.cursor/rules
@@ -209,7 +216,7 @@ config에서 extra를 제거합니다.
 skillshare extras remove <name> [--force] [-p|-g]
 ```
 
-source 파일과 동기화된 target은 삭제되지 않습니다 — config 항목만 제거됩니다. [single-file extra](#single-file-extras)의 경우 각 target 파일은 skillshare가 교체하기 전 상태로 돌아갑니다.
+source 파일은 유지됩니다. 디렉터리 extra는 동기화된 target을 그대로 둡니다. [single-file extra](#single-file-extras)는 target을 복원한 뒤 config 항목을 제거하며, 복원에 실패하면 재시도할 수 있도록 항목을 유지합니다.
 
 ### `extras collect`
 
@@ -252,6 +259,10 @@ skillshare extras collect rules --force
 | `copy` | 파일별 복사 |
 | `symlink` | 디렉터리 전체 symlink |
 | `import` | [single-file extra](#single-file-extras) 전용: target 파일 안의 `@<source file>` 한 줄 |
+
+Developer Mode가 없는 Windows에서는 `merge`가 각 파일을 링크하는 대신 복사하며, `sync`는 `file links need Windows Developer Mode; copying instead`를 출력합니다. 이때 `extras list`와 `status`는 target을 `copy`로 표시합니다. 복사본은 추적되므로 이후 sync가 업데이트하고 정리하며, 사용자 파일은 유지하고, 파일 링크를 쓸 수 있게 되면 링크로 교체합니다. [Windows 문제 해결](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead)을 참고하세요.
+
+내용이 같은 로컬 파일은 `local preserved`로 표시되며, `sync extras`는 해당 파일에 `--force`를 권하지 않습니다. 관리되는 링크가 아닌 로컬 파일로 유지됩니다.
 
 mode를 전환할 때 (예: `merge`에서 `copy`로), 다음 `sync`는 기존 symlink를 새 mode 형식으로 자동으로 대체합니다. `--force`는 필요하지 않습니다 — symlink는 항상 안전하게 대체됩니다. 로컬에서 생성된 일반 파일을 덮어쓰려면 `--force`가 필요합니다.
 
@@ -448,7 +459,7 @@ extras:
 
 | Mode | Target 파일 |
 |------|-------------|
-| `merge` (기본값) 또는 `symlink` | source 파일에 대한 symlink |
+| `merge` (기본값) 또는 `symlink` | source 파일에 대한 symlink (Developer Mode가 없는 Windows에서는 복사본) |
 | `copy` | source 파일의 복사본 |
 | `import` | 사용자의 파일 그대로, 맨 위 관리 블록에 `@<source file>` 한 줄 추가 |
 
@@ -458,6 +469,7 @@ extras:
 
 규칙:
 
+- 링크 또는 `copy` mode의 target 파일은 공유 파일 하나만 사용할 수 있으며 다른 공유 파일을 동시에 import할 수 없습니다.
 - `file`과 `as`는 `/`나 `\` 없는 단순한 파일 이름이어야 합니다.
 - `as`와 `import`에는 `file`이 필요합니다. `flatten`과 `extension`은 single-file
   extra와 함께 쓸 수 없습니다.
@@ -465,20 +477,22 @@ extras:
   백업한 뒤 교체합니다. 그 자리에 디렉터리가 있으면 건너뜁니다.
 - 링크된 뒤 `modified`가 된 target도 교체됩니다. 편집된 파일은 복원 지점이 아니라
   drift 백업으로 보관됩니다.
-- 링크된 target이 내용이 다른 일반 파일로 바뀌면 `extras list`에 `modified`로
-  표시됩니다.
+- 링크가 내용이 다른 일반 파일로 바뀌거나 관리 중인 복사본이 편집되면 `extras list`에 `modified`로 표시됩니다.
+- target을 `merge`, `symlink`, `copy`에서 `import`로 바꾸면 마지막 `import` mode의 자체 내용
+  (빈 내용 포함)을 복원합니다. 사용한 적이 없다면 연결 전 내용을 사용합니다. import 블록을 추가하며
+  편집된 복사본은 먼저 drift 백업으로 보관합니다.
 - `extras remove`와 `--remove-target --prune`은 각 target 파일을 복원합니다. 링크,
   복사본 또는 import 줄이 사라지고, 첫 sync 전에 있던 파일이나 symlink가 돌아옵니다
   (원래 없었다면 파일도 없습니다). `modified` target은 먼저 drift 백업으로 보관됩니다.
-  `--prune` 없는 `--remove-target`은 파일을 그대로 두고 그 복원 지점을 잊으므로,
-  이후 sync는 그때 있는 파일을 백업합니다.
+  `--prune` 없는 `--remove-target`은 single-file target을 그대로 두고 관리를 중단하며 복원 지점을 잊습니다. 이후 sync는 이를 정리하지 않으며, 다시 연결할 때 새 복원 지점을 기록합니다.
 - `extras collect`는 지원하지 않습니다. target에서 한 편집을 유지하려면 대시보드
   **AGENTS.md** 탭의 **공유 파일에 반영**을 사용하세요.
 
 백업은 skillshare의 state 디렉터리(macOS와 Linux에서는
 `~/.local/state/skillshare/extras/backups/`)에 파일당 최근 10개까지 보관됩니다.
 drift 백업은 그 안의 `extras/backups/<id>/drift/`에 저장되며, `<id>`는 target 파일
-경로에서 만들어집니다. 복원에는 절대 사용되지 않습니다.
+경로에서 만들어집니다. 복원에는 절대 사용되지 않습니다. 저장된 버전을 조회하거나
+복원하려면 [`backup files`](./backup.md#file-history)를 사용하세요.
 
 ---
 

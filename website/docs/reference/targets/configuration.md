@@ -1034,7 +1034,7 @@ targets:
     path: %USERPROFILE%\.claude\skills
 ```
 
-Uses NTFS junctions (no admin required).
+Folders are linked with NTFS junctions (no admin required). Single files — agents and directory extras in `merge` mode, and single-file extras — need file symlinks, which require Developer Mode; without it they are copied instead. See [Windows troubleshooting](/docs/troubleshooting/windows#file-links-need-windows-developer-mode-copying-instead).
 
 ---
 

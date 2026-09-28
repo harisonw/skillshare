@@ -13,7 +13,56 @@ skillshare doctor -g        # global mode 강제
 skillshare doctor --json    # CI용 구조화된 JSON 출력
 ```
 
-![doctor demo](/img/doctor-demo.png)
+```text
+skillshare doctor
+
+Checking environment
+─────────────────────────────────────────
+✓ Config: ~/.config/skillshare/config.yaml
+→ Config directory: ~/.config/skillshare
+→ Data directory:   ~/.local/share/skillshare
+→ State directory:  ~/.local/state/skillshare
+
+✓ Source: ~/.config/skillshare/skills (43 skills)
+✓ Agents source: ~/.config/skillshare/agents (2 agents)
+→ Skillignore: not configured
+✓ Link support: OK
+! Git: not initialized (recommended for backup)
+
+✓ Skill integrity: 27/27 verified
+
+Checking targets
+─────────────────────────────────────────
+claude
+  skills   [merge] merged (43 shared, 0 local)
+  agents   [merge] synced (2/2 linked)
+cursor
+  skills   [merge] merged (43 shared, 1 local)
+  agents   [merge] synced (2/2 linked)
+gemini
+  skills   [merge] merged (43 shared, 0 local)
+…
+! gemini will see content from: universal
+    ~/.agents/skills ← universal
+…
+✗ claude: 1 broken symlink(s): frontend__css-review
+…
+
+Extras
+─────────────────────────────────────────
+✓ rules: 2 files, 2/2 targets OK
+✓ commands: 1 files, 1/1 targets OK
+✓ team: 1 files, 4/4 targets OK
+
+Storage
+─────────────────────────────────────────
+→ Backups: last backup 2026-09-28_12-41-50 (10 minutes ago)
+→ Trash: 1 item(s) (247 B), oldest <1 day
+
+Summary
+─────────────────────────────────────────
+✗ 6 error(s), 4 warning(s)
+```
 
 ## 사용 시점
 
@@ -44,10 +93,10 @@ Checking environment
 Checking targets
 claude
   skills   [merge] merged (8 shared, 2 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 cursor
   skills   [copy] copied (8 managed, 0 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 codex
   skills   [merge] needs sync
 
@@ -80,7 +129,7 @@ Summary
 
 각 target은 **skills**와 **agents**(agent가 구성된 경우)에 대한 하위 항목을 보여줍니다:
 - Skills: 경로, sync 모드, sync 상태, shared/local 개수
-- Agents: linked 개수, drift 탐지
+- Agents: sync mode, linked 개수, drift 탐지. Developer Mode가 없는 Windows에서는 `merge`가 `[copy]`로 표시되며, 최신 상태의 관리되는 복사본은 linked로 집계됩니다. skillshare가 소유하지 않는 내용이 같은 로컬 파일은 유지됩니다. copy fallback에서 agent 개수는 이를 `local preserved`로 따로 표시합니다(예: `0/1 linked, 1 local preserved`).
 - 깨진 symlink 없음
 - 의도치 않은 local 충돌에 대한 중복 skill 검사:
   - `merge` 모드: 건너뜀 (local skill은 예상된 것)
@@ -203,10 +252,12 @@ skillshare new my-skill  # 올바른 구조 생성
 
 ### "Link not supported"
 
-Developer Mode가 없는 Windows에서:
+`doctor`는 시스템 임시 디렉터리(Windows에서는 `%TEMP%`, 그 외에는 `$TMPDIR` 또는 `/tmp`)에 테스트 폴더 링크를 만듭니다. Windows에서 이 링크는 NTFS junction이며 관리자 권한도 Developer Mode도 필요하지 않으므로, Developer Mode를 켜도 이 오류는 해결되지 않습니다. 메시지의 `junction error:` 줄에 Windows가 거부한 이유가 표시됩니다. 임시 디렉터리가 다음 조건을 만족하는지 확인하세요:
 
-1. 설정에서 Developer Mode 활성화
-2. 또는 관리자 권한으로 실행
+1. FAT32, exFAT, 네트워크 공유가 아닌 로컬 NTFS 드라이브에 있을 것 (junction은 NTFS에서만 동작합니다)
+2. 현재 계정에 쓰기 권한이 있고, 백신이나 보안 소프트웨어가 막고 있지 않을 것
+
+이 검사는 파일 링크를 테스트하지 않습니다. Developer Mode가 없으면 단일 파일을 링크하는 agents와 extras는 대신 복사됩니다. 자세한 내용은 [Windows 문제 해결](../../troubleshooting/windows.md#file-links-need-windows-developer-mode-copying-instead)을 참고하세요.
 
 ## 문제가 있는 경우의 출력 예시
 
@@ -225,7 +276,7 @@ Checking environment
 Checking targets
 claude
   skills   [merge] merged (8 shared, 2 local)
-  agents   [merge] merged (8/8 linked)
+  agents   [merge] synced (8/8 linked)
 cursor
   skills   [merge] 2 broken symlink(s): old-skill, removed-skill
 codex

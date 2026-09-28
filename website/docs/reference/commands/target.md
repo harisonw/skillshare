@@ -72,6 +72,8 @@ skillshare target remove cursor --dry-run # Preview
    - **Copy mode:** Removes `.skillshare-manifest.json`. Managed copies and local skills are preserved as regular directories.
 3. Removes target from config
 
+If another target writes to the same skills folder, such as `codex` and `universal` in `~/.agents/skills`, step 2 is skipped: the skills stay linked for that target, and only the removed one leaves the config.
+
 ### target list
 
 List all configured targets.

@@ -68,6 +68,9 @@ func SyncAgents(agents []resource.DiscoveredResource, sourceDir, targetDir, mode
 	case "copy":
 		return syncAgentsCopy(agents, targetDir, dryRun, force)
 	default: // "merge" or ""
+		if !canCreateFileLink() {
+			return syncAgentsMergeCopy(agents, targetDir, dryRun, force)
+		}
 		return syncAgentsMerge(agents, sourceDir, targetDir, dryRun, force, root)
 	}
 }
@@ -96,19 +99,22 @@ func syncAgentsMerge(agents []resource.DiscoveredResource, sourceDir, targetDir 
 		}
 	}
 
+	// Copies made while file links were unavailable are relinked.
+	copies := loadCopyTracker(targetDir)
+
 	for _, agent := range agents {
 		targetPath := filepath.Join(targetDir, agent.FlatName)
 
-		info, err := os.Lstat(targetPath)
+		_, err := os.Lstat(targetPath)
 		if err == nil {
-			if info.Mode()&os.ModeSymlink != 0 {
+			if utils.IsSymlinkOrJunction(targetPath) {
 				absLink, linkErr := utils.ResolveLinkTarget(targetPath)
 				if linkErr != nil {
 					return nil, fmt.Errorf("failed to resolve link for %s: %w", agent.FlatName, linkErr)
 				}
 				absSource, _ := filepath.Abs(agent.AbsPath)
 
-				if linkResolvesToSource(absLink, absSource) {
+				if linkResolvesToSource(absLink, absSource) && fileLinkUsable(targetPath) {
 					dest, _ := os.Readlink(targetPath)
 					if !linkNeedsReformat(dest, relative) {
 						result.Linked = append(result.Linked, agent.FlatName)
@@ -131,12 +137,13 @@ func syncAgentsMerge(agents []resource.DiscoveredResource, sourceDir, targetDir 
 				}
 				result.Updated = append(result.Updated, agent.FlatName)
 			} else {
-				if force {
+				if force || copies.owns(agent.FlatName) {
 					if !dryRun {
 						os.Remove(targetPath)
 						if err := createLink(targetPath, agent.AbsPath, relative); err != nil {
 							return nil, fmt.Errorf("failed to create symlink for %s: %w", agent.FlatName, err)
 						}
+						copies.forget(agent.FlatName)
 					}
 					result.Updated = append(result.Updated, agent.FlatName)
 				} else {
@@ -155,7 +162,100 @@ func syncAgentsMerge(agents []resource.DiscoveredResource, sourceDir, targetDir 
 		}
 	}
 
+	if !dryRun {
+		if err := copies.save(); err != nil {
+			return nil, fmt.Errorf("failed to update agent manifest: %w", err)
+		}
+	}
 	return result, nil
+}
+
+// syncAgentsMergeCopy is merge mode where file links are unavailable: each
+// agent is copied and tracked, so later syncs keep the copies updated and
+// pruned while local agent files stay preserved as in merge mode.
+func syncAgentsMergeCopy(agents []resource.DiscoveredResource, targetDir string, dryRun, force bool) (*AgentSyncResult, error) {
+	result := &AgentSyncResult{}
+
+	if !dryRun {
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create agent target directory: %w", err)
+		}
+	}
+	copies := loadCopyTracker(targetDir)
+
+	for _, agent := range agents {
+		name := agent.FlatName
+		targetPath := filepath.Join(targetDir, name)
+
+		info, err := os.Lstat(targetPath)
+		exists := err == nil
+		switch {
+		case os.IsNotExist(err):
+		case err != nil:
+			return nil, fmt.Errorf("failed to check target path for %s: %w", name, err)
+		case utils.IsSymlinkOrJunction(targetPath):
+			// A merge-mode link, or a junction to a file that cannot be read.
+		case info.IsDir():
+			result.Skipped = append(result.Skipped, name)
+			continue
+		case contentEqual(agent.AbsPath, targetPath):
+			if !copies.owns(name) {
+				result.Skipped = append(result.Skipped, name)
+				continue
+			}
+			result.Linked = append(result.Linked, name)
+			continue
+		case !force && !copies.owns(name):
+			result.Skipped = append(result.Skipped, name)
+			continue
+		}
+
+		if !dryRun {
+			if exists {
+				if err := os.Remove(targetPath); err != nil {
+					return nil, fmt.Errorf("failed to replace %s: %w", name, err)
+				}
+			}
+			if err := copyFile(agent.AbsPath, targetPath); err != nil {
+				return nil, fmt.Errorf("failed to copy %s: %w", name, err)
+			}
+			copies.record(name)
+		}
+		if exists {
+			result.Updated = append(result.Updated, name)
+		} else {
+			result.Linked = append(result.Linked, name)
+		}
+	}
+
+	if !dryRun {
+		if err := copies.save(); err != nil {
+			return nil, fmt.Errorf("failed to update agent manifest: %w", err)
+		}
+	}
+	return result, nil
+}
+
+// SyncedAgentCopies counts regular files matching their source, independently
+// of ownership. Status equality does not authorize overwriting or pruning.
+func SyncedAgentCopies(targetDir string, agents []resource.DiscoveredResource, preserved ...*int) int {
+	copies := loadCopyTracker(targetDir)
+	n := 0
+	for _, a := range agents {
+		if canCreateFileLink() {
+			if _, tracked := copies.m.Managed[a.FlatName]; !tracked {
+				continue
+			}
+		}
+		target := filepath.Join(targetDir, a.FlatName)
+		if info, err := os.Lstat(target); err == nil && info.Mode().IsRegular() && contentEqual(a.AbsPath, target) {
+			if len(preserved) > 0 && !copies.owns(a.FlatName) {
+				*preserved[0]++
+			}
+			n++
+		}
+	}
+	return n
 }
 
 // syncAgentsSymlink creates a single directory symlink from targetDir to sourceDir.
@@ -170,7 +270,7 @@ func syncAgentsSymlink(sourceDir, targetDir string, dryRun, force bool, projectR
 
 	info, err := os.Lstat(targetDir)
 	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
+		if utils.IsLinkMode(targetDir, info.Mode()) {
 			// Already a symlink — check if correct
 			absLink, linkErr := utils.ResolveLinkTarget(targetDir)
 			if linkErr != nil {
@@ -248,6 +348,21 @@ func syncAgentsCopy(agents []resource.DiscoveredResource, targetDir string, dryR
 			return nil, fmt.Errorf("failed to read source %s: %w", agent.FlatName, err)
 		}
 
+		// A link left by merge mode (or an unreadable junction) is replaced;
+		// writing through it would edit the source.
+		if utils.IsSymlinkOrJunction(targetPath) {
+			if !dryRun {
+				if err := os.Remove(targetPath); err != nil {
+					return nil, fmt.Errorf("failed to replace %s: %w", agent.FlatName, err)
+				}
+				if err := os.WriteFile(targetPath, srcData, 0644); err != nil {
+					return nil, fmt.Errorf("failed to write %s: %w", agent.FlatName, err)
+				}
+			}
+			result.Updated = append(result.Updated, agent.FlatName)
+			continue
+		}
+
 		if _, statErr := os.Stat(targetPath); statErr == nil {
 			// File exists — check if content matches
 			tgtData, readErr := os.ReadFile(targetPath)
@@ -308,7 +423,7 @@ func SyncAgentsTransform(agents []resource.DiscoveredResource, sourceDir, target
 
 		tgtFile := filepath.Join(targetDir, name)
 		// Merge-mode leftovers link to the source; drop the link, never write through it.
-		if info, err := os.Lstat(tgtFile); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		if info, err := os.Lstat(tgtFile); err == nil && utils.IsLinkMode(tgtFile, info.Mode()) {
 			if err := os.Remove(tgtFile); err != nil {
 				errs = append(errs, fmt.Errorf("%s: remove symlink: %w", agent.FlatName, err))
 				continue
@@ -372,6 +487,18 @@ func PruneOrphanAgentLinks(targetDir string, agents []resource.DiscoveredResourc
 		expected[a.FlatName] = true
 	}
 
+	// Copies stand in for links when file links are unavailable.
+	copies := loadCopyTracker(targetDir)
+	removed, err = copies.pruneOrphans(expected, dryRun)
+	if err != nil {
+		return removed, err
+	}
+	if !dryRun {
+		if err := copies.save(); err != nil {
+			return removed, fmt.Errorf("failed to update agent manifest: %w", err)
+		}
+	}
+
 	for _, entry := range entries {
 		name := entry.Name()
 
@@ -384,7 +511,7 @@ func PruneOrphanAgentLinks(targetDir string, agents []resource.DiscoveredResourc
 			continue
 		}
 
-		if info.Mode()&os.ModeSymlink == 0 {
+		if !utils.IsLinkMode(filepath.Join(targetDir, name), info.Mode()) {
 			continue
 		}
 
@@ -462,7 +589,7 @@ func FindLocalAgents(targetDir, sourcePath string) ([]LocalAgentInfo, error) {
 		return nil, fmt.Errorf("failed to read agent target directory: %w", err)
 	}
 
-	if info.Mode()&os.ModeSymlink != 0 {
+	if utils.IsLinkMode(targetDir, info.Mode()) {
 		absLink, err := utils.ResolveLinkTarget(targetDir)
 		if err != nil {
 			return nil, err
@@ -485,6 +612,7 @@ func FindLocalAgents(targetDir, sourcePath string) ([]LocalAgentInfo, error) {
 		return nil, fmt.Errorf("failed to read agent target directory: %w", err)
 	}
 
+	copies := loadCopyTracker(targetDir)
 	for _, entry := range entries {
 		name := entry.Name()
 
@@ -494,13 +622,16 @@ func FindLocalAgents(targetDir, sourcePath string) ([]LocalAgentInfo, error) {
 		if utils.IsHidden(name) || resource.ConventionalExcludes[name] {
 			continue
 		}
+		if copies.owns(name) {
+			continue // a copy standing in for a link, not a local agent
+		}
 
 		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
 
-		if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		if info.IsDir() || utils.IsLinkMode(filepath.Join(targetDir, name), info.Mode()) {
 			continue
 		}
 

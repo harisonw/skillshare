@@ -64,13 +64,6 @@ func computeLogStats(entries []oplog.Entry) logStats {
 	return s
 }
 
-// Muted 256-color palette for stats output (less eye-strain than bright ANSI).
-const (
-	statsGreen  = "\033[32m" // green
-	statsRed    = "\033[31m" // red
-	statsYellow = "\033[33m" // yellow
-)
-
 func renderStatsCLI(stats logStats) string {
 	if stats.Total == 0 {
 		return ui.Dim + "No log entries" + ui.Reset + "\n"
@@ -98,9 +91,9 @@ func renderStatsCLI(stats logStats) string {
 	for _, cmd := range cmds {
 		pct := float64(cmd.stats.Total) / float64(stats.Total) * 100
 		okRatio := fmt.Sprintf("✓%d/%d", cmd.stats.OK, cmd.stats.Total)
-		ratioColor := statsGreen
+		ratioColor := ui.Green
 		if cmd.stats.OK < cmd.stats.Total {
-			ratioColor = statsRed
+			ratioColor = ui.Red
 		}
 		b.WriteString(fmt.Sprintf("%s%-10s%s %s%3d%s (%4.1f%%)  %s%s%s\n",
 			ui.Dim, cmd.name, ui.Reset,
@@ -113,11 +106,11 @@ func renderStatsCLI(stats logStats) string {
 	for _, cs := range stats.ByCommand {
 		okTotal += cs.OK
 	}
-	rateColor := statsGreen
+	rateColor := ui.Green
 	if stats.SuccessRate < 0.7 {
-		rateColor = statsRed
+		rateColor = ui.Red
 	} else if stats.SuccessRate < 0.9 {
-		rateColor = statsYellow
+		rateColor = ui.Yellow
 	}
 	b.WriteString(fmt.Sprintf("\n%sOK:%s %s%s%d/%d%s %s(%.1f%%)%s\n",
 		ui.Dim, ui.Reset, rateColor, ui.Bold, okTotal, stats.Total, ui.Reset,

@@ -61,15 +61,17 @@ skillshare backup --list
 ```
 
 **輸出範例：**
-```
-Backups
+```text
+All backups in ~/.local/share/skillshare/backups (56.3 KB total)
 ─────────────────────────────────────────
-  2026-01-20_15-30-00/
-    claude/    5 skills, 2.1 MB
-    cursor/    5 skills, 2.1 MB
-  2026-01-19_10-00-00/
-    claude/    4 skills, 1.8 MB
+  2026-09-28_12-52-50  claude, claude-work, cursor, gemini, opencode, universal   11.3 KB  ~/.local/share/skillshare/backups/2026-09-28_12-52-50
+  2026-09-28_12-41-50  claude, claude-work, cursor, gemini, opencode, universal   11.2 KB  ~/.local/share/skillshare/backups/2026-09-28_12-41-50
+  2026-09-28_12-39-56  claude, claude-work, cursor, gemini, opencode, universal   11.2 KB  ~/.local/share/skillshare/backups/2026-09-28_12-39-56
 ```
+
+在 dashboard 中，**Settings → Backup → Target folders** 會列出同樣的快照：
+
+![Settings › Backup › Target folders：快照清單與還原操作](/img/backup-target-folders.png)
 
 ---
 
@@ -174,6 +176,18 @@ skillshare restore agents claude --from 2026-01-19_10-00-00
 ```
 
 在 Project mode 中，只有 agents 可以備份或還原 — `skillshare backup -p agents` 可以正常執行，但單純的 `skillshare backup -p` 會回傳錯誤。Project mode 的規則請參閱 [backup](/docs/reference/commands/backup#agent-backup)。
+
+### 取回檔案的較早版本
+
+skillshare 也會保留它改寫的單一檔案的較早版本，例如 `AGENTS.md`、`CLAUDE.md` 以及共用檔案的各個位置：
+
+```bash
+skillshare backup files                               # 有保存版本的檔案
+skillshare backup files show ~/.claude/CLAUDE.md      # 選一個版本 ID
+skillshare backup files restore ~/.claude/CLAUDE.md <id>
+```
+
+Dashboard 的 **設定 › 備份 › 檔案** 也提供相同功能，並會在還原前顯示差異。參見[檔案歷史](/docs/reference/commands/backup#file-history)。
 
 ---
 
