@@ -44,28 +44,57 @@ func (s *Source) applyWebRef(w webRef) string {
 	return subdir
 }
 
-// resolveWebRef settles where the ref ends in a web URL's "{ref}/{path}" when
-// the ref may contain "/", as in tree/feature/x/skills/foo. A Branch that
-// already covers more of the tail (from --branch or a saved config) only moves
-// the subdir. Otherwise the remote's branches and tags decide. A URL ref that
+// RemoteRefs caches each remote's branch and tag names, so resolving many web
+// URLs from one repo lists its refs once. The zero value is ready to use.
+type RemoteRefs struct {
+	byURL map[string]map[string]bool
+}
+
+func (r *RemoteRefs) list(s *Source) (map[string]bool, error) {
+	if refs, ok := r.byURL[s.CloneURL]; ok {
+		return refs, nil
+	}
+	refs, err := listRemoteRefs(s)
+	if err != nil {
+		return nil, err
+	}
+	if r.byURL == nil {
+		r.byURL = make(map[string]map[string]bool)
+	}
+	r.byURL[s.CloneURL] = refs
+	return refs, nil
+}
+
+func resolveWebRef(s *Source) error {
+	return (&RemoteRefs{}).Resolve(s)
+}
+
+// Resolve settles where the ref ends in a web URL's "{ref}/{path}" when the
+// ref may contain "/", as in tree/feature/x/skills/foo. A Branch that already
+// covers more of the tail (from --branch or a saved config) only moves the
+// subdir. Otherwise the remote's branches and tags decide. A URL ref that
 // matches none of them fails instead of installing something else, unless an
 // unrelated --branch was given, which then only borrows the URL's subdir.
-func resolveWebRef(s *Source) error {
+// Once settled, the source no longer reports HasAmbiguousWebRef.
+func (r *RemoteRefs) Resolve(s *Source) error {
 	w := s.webRef
 	if !w.ambiguous() {
 		return nil
 	}
 	first, _, _ := strings.Cut(w.tail, "/")
 	if s.Branch != "" && s.Branch != first && w.covers(s.Branch) {
-		return s.setWebRefSubdir(s.Branch)
+		return s.settleWebRef(s.Branch)
 	}
 	if IsCommitSHA(first) {
-		return nil
+		return s.settleWebRef(first)
 	}
 
-	refs, err := listRemoteRefs(s)
-	if err != nil || refs[first] {
-		return nil // on error, let the clone report the real problem
+	refs, err := r.list(s)
+	if err != nil {
+		return nil // let the clone report the real problem
+	}
+	if refs[first] {
+		return s.settleWebRef(first)
 	}
 	override := s.Branch != "" && s.Branch != first
 	segments := strings.Split(w.tail, "/")
@@ -74,7 +103,7 @@ func resolveWebRef(s *Source) error {
 			if !override {
 				s.Branch = ref
 			}
-			return s.setWebRefSubdir(ref)
+			return s.settleWebRef(ref)
 		}
 	}
 	if override {
@@ -84,8 +113,7 @@ func resolveWebRef(s *Source) error {
 }
 
 // HasAmbiguousWebRef reports whether the source's URL ref might contain "/",
-// so its real ref and subdir are only known after resolveWebRef. Callers that
-// group sources by ref before installing should install these on their own.
+// so its real ref and subdir are only known after Resolve.
 func (s *Source) HasAmbiguousWebRef() bool {
 	return s.webRef.ambiguous()
 }
@@ -98,27 +126,28 @@ func (w webRef) covers(ref string) bool {
 	return w.tail == ref || strings.HasPrefix(w.tail, ref+"/")
 }
 
-// setWebRefSubdir moves Subdir, and a Name derived from it, to the path after
-// ref. A repo-root copy (Subdir cleared for a whole-repo clone) keeps its root.
-func (s *Source) setWebRefSubdir(ref string) error {
-	if s.Subdir == "" {
-		return nil
-	}
-	subdir, explicit, _ := s.webRef.split(ref)
-	if subdir != "" {
-		if err := validateRepoSubdir(subdir); err != nil {
-			return err
-		}
-	}
-	if s.Name == path.Base(s.Subdir) {
+// settleWebRef moves Subdir, and a Name derived from it, to the path after ref
+// and marks the web ref resolved. A repo-root copy (Subdir cleared for a
+// whole-repo clone) keeps its root.
+func (s *Source) settleWebRef(ref string) error {
+	if s.Subdir != "" {
+		subdir, explicit, _ := s.webRef.split(ref)
 		if subdir != "" {
-			s.Name = path.Base(subdir)
-		} else {
-			s.Name = strings.TrimSuffix(path.Base(s.CloneURL), ".git")
+			if err := validateRepoSubdir(subdir); err != nil {
+				return err
+			}
 		}
+		if s.Name == path.Base(s.Subdir) {
+			if subdir != "" {
+				s.Name = path.Base(subdir)
+			} else {
+				s.Name = strings.TrimSuffix(path.Base(s.CloneURL), ".git")
+			}
+		}
+		s.Subdir = subdir
+		s.ExplicitSkill = explicit
 	}
-	s.Subdir = subdir
-	s.ExplicitSkill = explicit
+	s.webRef = webRef{}
 	return nil
 }
 
@@ -152,10 +181,16 @@ func listRemoteRefs(s *Source) (map[string]bool, error) {
 // ApplyRecordedBranch sets the branch a skill was installed with, for
 // reinstalling it from its recorded source URL. An empty branch means the
 // remote default even when the URL names a ref: installs from before URL refs
-// were honoured recorded none, and updating them must not switch branch.
+// were honoured recorded none, and updating them must not switch branch. A
+// recorded branch that covers the URL's ref settles the subdir without asking
+// the remote.
 func (s *Source) ApplyRecordedBranch(branch string) {
 	s.Branch = branch
-	if branch == "" {
+	switch {
+	case branch == "":
 		s.webRef = webRef{}
+	case s.webRef.covers(branch):
+		// On a validation error the web ref stays, so install reports it.
+		_ = s.settleWebRef(branch)
 	}
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -172,22 +174,50 @@ func TestRepoSourceForGroupedClone(t *testing.T) {
 	}
 }
 
-func TestGroupByRepo_PinnedWebURLsInstallAlone(t *testing.T) {
-	// tree/feature/x/... and tree/feature/y/... both parse with ref "feature"
-	// until install resolves them, so grouping them could clone the wrong ref.
+func TestGroupByRepo_PinnedWebURLs(t *testing.T) {
+	// Stands in for the remote: "feature/x" is a branch, "nope" is unknown,
+	// and any other first segment is a branch or tag.
+	resolve := func(s *install.Source) error {
+		switch {
+		case strings.Contains(s.Raw, "/tree/feature/x/"):
+			s.ApplyRecordedBranch("feature/x")
+		case strings.Contains(s.Raw, "/tree/nope/"):
+			return errors.New("ref not found")
+		default:
+			s.ApplyRecordedBranch(s.Branch)
+		}
+		return nil
+	}
 	selected := []search.SearchResult{
-		{Name: "a", Source: "github.com/org/skills/tree/feature/x/skills/a"},
-		{Name: "b", Source: "github.com/org/skills/tree/feature/y/skills/b"},
-		{Name: "c", Source: "github.com/org/skills/skills/c"},
-		{Name: "d", Source: "github.com/org/skills/skills/d"},
+		{Name: "a", Source: "github.com/org/skills/tree/v1/skills/a"},
+		{Name: "b", Source: "github.com/org/skills/tree/v1/skills/b"},
+		{Name: "c", Source: "github.com/org/skills/tree/v2/skills/c"},
+		{Name: "d", Source: "github.com/org/skills/tree/feature/x/skills/d"},
+		{Name: "e", Source: "github.com/org/skills/tree/feature/x/skills/e"},
+		{Name: "f", Source: "github.com/org/skills/tree/nope/skills/f"},
+		{Name: "g", Source: "github.com/org/skills/skills/g"},
+		{Name: "h", Source: "github.com/org/skills/skills/h"},
 	}
 
-	groups, singles := groupByRepo(selected)
+	groups, singles := groupByRepo(selected, resolve)
 
-	if len(groups) != 1 || len(groups[0].results) != 2 {
-		t.Fatalf("groups = %+v, want one group holding c and d", groups)
+	var got []string
+	for _, g := range groups {
+		var names []string
+		for _, r := range g.results {
+			names = append(names, r.Name)
+		}
+		got = append(got, g.source.Branch+":"+strings.Join(names, ","))
 	}
-	if len(singles) != 2 || singles[0].Name != "a" || singles[1].Name != "b" {
-		t.Errorf("singles = %+v, want a and b", singles)
+	if want := []string{"v1:a,b", ":g,h"}; !slices.Equal(got, want) {
+		t.Errorf("groups = %v, want %v", got, want)
+	}
+	var single []string
+	for _, sr := range singles {
+		single = append(single, sr.Name)
+	}
+	// c is alone on v2; d and e have a ref containing "/"; f did not resolve.
+	if want := []string{"d", "e", "f", "c"}; !slices.Equal(single, want) {
+		t.Errorf("singles = %v, want %v", single, want)
 	}
 }

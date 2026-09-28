@@ -272,29 +272,37 @@ func repoSourceForGroupedClone(src *install.Source) install.Source {
 	return repoSource
 }
 
-// groupByRepo partitions selected search results by CloneURL.
-// Results that share the same git repo are grouped together for a single clone.
+// groupByRepo partitions selected search results by CloneURL and ref.
+// Results that share the same git repo and ref are grouped together for a single clone.
+// Web URLs whose ref may contain "/" are settled with resolveRef first.
 // Results that cannot be grouped (parse failure, local path, non-subdir singles)
 // are returned in the singles slice to be installed individually.
-func groupByRepo(selected []search.SearchResult) (groups []sourceGroup, singles []search.SearchResult) {
-	buckets := make(map[string]*sourceGroup) // keyed by CloneURL
+func groupByRepo(selected []search.SearchResult, resolveRef func(*install.Source) error) (groups []sourceGroup, singles []search.SearchResult) {
+	buckets := make(map[string]*sourceGroup) // keyed by CloneURL and ref
 	var order []string                       // preserve insertion order
 
 	for _, sr := range selected {
 		src, err := install.ParseSource(sr.Source)
-		if err != nil || !src.IsGit() || src.Subdir == "" || src.HasAmbiguousWebRef() {
-			// Cannot group: parse failure, local path, root-level repo skill, or
-			// a web URL whose ref (which may contain "/") is resolved at install
+		if err == nil && src.HasAmbiguousWebRef() {
+			err = resolveRef(src)
+		}
+		// matchDiscoveredSkill re-parses sr.Source, which only yields the right
+		// subdir when the ref is a single path segment.
+		if err != nil || !src.IsGit() || src.Subdir == "" ||
+			src.HasAmbiguousWebRef() || strings.Contains(src.Branch, "/") {
+			// Cannot group: parse failure, local path, root-level repo skill,
+			// unresolved ref, or a ref containing "/"
 			singles = append(singles, sr)
 			continue
 		}
 
-		key := src.CloneURL
+		// Tab cannot appear in a URL or ref, so keys cannot collide.
+		key := src.CloneURL + "\t" + src.Branch
 		if g, ok := buckets[key]; ok {
 			g.results = append(g.results, sr)
 		} else {
 			buckets[key] = &sourceGroup{
-				cloneURL: key,
+				cloneURL: src.CloneURL,
 				source:   src,
 				results:  []search.SearchResult{sr},
 			}
@@ -479,7 +487,8 @@ func batchInstallFromSearchWithProgress(selected []search.SearchResult, mode run
 	}
 
 	// Group by repo: skills sharing the same CloneURL are cloned once.
-	groups, singles := groupByRepo(selected)
+	var refs install.RemoteRefs
+	groups, singles := groupByRepo(selected, refs.Resolve)
 
 	// Phase 1: grouped install — clone each repo once, install multiple skills.
 	for _, group := range groups {

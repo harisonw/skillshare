@@ -143,3 +143,54 @@ func TestResolveWebRef(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoteRefs_ListsEachRemoteOnce(t *testing.T) {
+	remote := newRefsRemote(t)
+	var refs RemoteRefs
+
+	first := parseWithRemote(t, "github.com/o/r/tree/feature/x/skills/a", remote)
+	if err := refs.Resolve(first); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	// With the remote gone, only the cached refs can resolve the second URL.
+	if err := os.RemoveAll(remote); err != nil {
+		t.Fatal(err)
+	}
+	second := parseWithRemote(t, "github.com/o/r/tree/feature/x/skills/b", remote)
+	if err := refs.Resolve(second); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if second.Branch != "feature/x" || second.Subdir != "skills/b" || second.HasAmbiguousWebRef() {
+		t.Errorf("second = branch %q subdir %q ambiguous %v, want feature/x, skills/b, false",
+			second.Branch, second.Subdir, second.HasAmbiguousWebRef())
+	}
+}
+
+func TestApplyRecordedBranch(t *testing.T) {
+	tests := []struct {
+		name       string
+		raw        string
+		branch     string
+		wantBranch string
+		wantSubdir string
+		ambiguous  bool
+	}{
+		{"legacy install drops the URL ref", "github.com/o/r/tree/v1.0/skills/foo", "", "", "skills/foo", false},
+		{"recorded slash branch settles the subdir", "github.com/o/r/tree/feature/x/skills/foo", "feature/x", "feature/x", "skills/foo", false},
+		{"recorded first segment settles the subdir", "github.com/o/r/tree/v1.0/skills/foo", "v1.0", "v1.0", "skills/foo", false},
+		{"unrelated branch still needs the remote", "github.com/o/r/tree/feature/x/skills/foo", "main", "main", "x/skills/foo", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			source, err := ParseSource(tt.raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			source.ApplyRecordedBranch(tt.branch)
+			if source.Branch != tt.wantBranch || source.Subdir != tt.wantSubdir || source.HasAmbiguousWebRef() != tt.ambiguous {
+				t.Errorf("got branch %q subdir %q ambiguous %v, want %q %q %v",
+					source.Branch, source.Subdir, source.HasAmbiguousWebRef(), tt.wantBranch, tt.wantSubdir, tt.ambiguous)
+			}
+		})
+	}
+}
